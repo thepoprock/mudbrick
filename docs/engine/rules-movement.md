@@ -1,9 +1,9 @@
-# Movement rules
+# Movement allowance
 
-Status: the movement allowance and the step-cost rules are **VERIFIED by decompilation** of the
-original executable (0x00554169 full moves, 0x0055436d moves left, 0x00485e3d / 0x00484325
-go-to weighting; see exe-notes.md). Zones of control and the partial-move gamble are still
-**INFERRED** and marked below. Implemented in `packages/engine/src/movement.ts`.
+Status: VERIFIED by decompilation of the original executable (0x00554169 full moves,
+0x0055436d moves left). The rest of movement — what a step costs, the partial-move gamble, zones
+of control, boarding, landfall, air fuel and trireme loss — was read from the unit move handler
+and lives in [rules-units.md](rules-units.md). Implemented in `packages/engine/src/movement.ts`.
 
 ## Units of measure
 
@@ -28,48 +28,10 @@ movesLeft = max(0, moves − spent)
 So in the default (non-simplified) game a Battleship at a quarter of its hit points still has
 two movement points, and a damaged Armor never drops below one.
 
-## Cost to enter a square (VERIFIED as the weighting the go-to code applies; the move handler itself is still to be read)
+## Go-to pathing (VERIFIED as a weighting, 0x00485e3d / 0x00484325)
 
-| situation                                                                              | cost (thirds)          |
-| -------------------------------------------------------------------------------------- | ---------------------- |
-| air or sea unit, any legal square                                                      | 3                      |
-| ground unit, railroad on both squares (a city counts)                                  | 0                      |
-| ground unit, road on both squares (a city counts), or Alpine flag                      | 1                      |
-| ground unit, river on both squares, step to an **edge-neighbour** (diagonal on screen) | 1                      |
-| ground unit whose full allowance is one MP or less                                     | 3 (any terrain)        |
-| ground unit, otherwise                                                                 | 3 × terrain `moveCost` |
-
-Legal squares: sea units need ocean or a city; ground units cannot enter ocean (boarding a
-transport is a separate action). Trireme-flagged units are steered away from squares whose
-byte-0 bit 6 is set (INFERRED: "no land adjacent"), which is how "must stay near land" is
-weighted rather than forbidden.
-
-## Attempting a step with too little movement left (INFERRED)
-
-A unit with any movement left may attempt a step that costs more than it has and succeeds with
-probability `left / cost`; on failure it stays and its movement is spent. The handler that
-decides this has not been read yet.
-
-## Zones of control (core VERIFIED: 0x005564c0 → 0x00556397)
-
-A square is "in the zone of control" of civilization C when **no city stands on it** and at
-least one of its eight neighbours holds units of another civilization that is **not allied**
-with C (treaty bit 3), and that neighbour is the same kind of square — land next to land, sea
-next to sea. Allied units never exert zones of control; a square with a city is never in one.
-
-The go-to code refuses a step when the start square is in enemy ZOC, the destination is in enemy
-ZOC, and the unit lacks the "ignore zones of control" flag (RULES flag bit 1). Whether a friendly
-unit already standing on the destination lifts the restriction, as the manual says, is INFERRED
-until the move handler itself is read.
-
-## Still to read
-
-The move handler proper (the function that applies a step and decides the partial-move case),
-transport loading, paradrops, pillage, the turn-end reset, terrain transformation.
-
-## See also
-
-The unit move handler itself — step costs including rivers and city squares, the partial-move
-gamble, zones of control, boarding, landfall, air fuel and trireme loss — is VERIFIED and written up
-in [rules-units.md](rules-units.md). Where this file and that one differ, rules-units.md wins: it
-was read from the move handler, this one partly from the go-to weighting code.
+The go-to step chooser weighs each of the eight directions by the step cost of
+[rules-units.md](rules-units.md) plus the remaining distance, steers "stay near land" units away
+from squares flagged as far from land, and refuses zone-of-control violations. A go-to counter
+grows by one per step and by fifteen when the unit reverses; past 47 the player is asked whether
+to give up (LONGMOVE).

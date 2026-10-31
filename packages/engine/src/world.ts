@@ -159,6 +159,8 @@ export interface Unit {
   lastDirection: number | null;
   /** Go-to steps taken toward the current target (the original asks to give up past 47). */
   gotoSteps: number;
+  /** Moved this turn (the original's flag bit 6); such a unit does not heal next turn. */
+  moved?: boolean;
   /** Caravans/freight: RULES @CARAVAN commodity index, or 0xFF for a food caravan. */
   commodity?: number;
 }

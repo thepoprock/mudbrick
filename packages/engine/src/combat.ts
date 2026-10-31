@@ -73,13 +73,25 @@ function note(b: StrengthBreakdown, label: string, factor: number): void {
   b.modifiers.push({ label, factor });
 }
 
-/** 0x0052b404: attack × 8, ×1.5 for veteran. Damage does NOT reduce it. */
-export function attackStrength(rules: EngineRules, attacker: Unit): StrengthBreakdown {
+/**
+ * 0x0052b404: attack × 8, ×1.5 for veteran. Damage does NOT reduce it. The attack handler
+ * (0x0052d472, VERIFIED) then scales a real attack by the moves left, capped at one full move:
+ * `A × min(movesLeft, 3) / 3` — the FATIGUE rule.
+ */
+export function attackStrength(
+  rules: EngineRules,
+  attacker: Unit,
+  movesLeft?: number,
+): StrengthBreakdown {
   const type = rules.units[attacker.type];
   const b: StrengthBreakdown = { value: (type?.attack ?? 0) * 8, modifiers: [] };
   if (attacker.veteran) {
     b.value = halfMore(b.value);
     note(b, 'veteran', 1.5);
+  }
+  if (movesLeft !== undefined && movesLeft < 3) {
+    b.value = Math.trunc((b.value * Math.max(0, movesLeft)) / 3);
+    note(b, 'fatigue', Math.max(0, movesLeft) / 3);
   }
   return b;
 }

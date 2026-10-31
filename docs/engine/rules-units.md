@@ -145,3 +145,57 @@ improvements: founding a city clears them.
   ability); later types win ties.
 - Late-starting AI civilizations (after turn 39) get free irrigation around their first city and,
   after turn 40, a larger first city with Temple, Marketplace and Library — see exe-notes.
+
+## Huts (VERIFIED structure, 0x00537aa0; unit names INFERRED from the shipped rules)
+
+Entering a hut with a ground unit rolls one of five outcomes (`rand() % 5`), then adjusts:
+
+- An AI, or a human with a 1-in-3 roll, that owns at least one city but **none on this
+  continent** gets the **advanced tribe** (outcome 0) when the continent has no AI plan or its
+  nearest city is more than 12 squares away.
+- **Advanced tribe:** refused within 3 squares of your own city (mercenaries instead), and for a
+  civilization with no city before turn 50 while two or more unhomed settlers exist (mercenaries
+  instead). Needs a land value above 11; otherwise nomads. Founds a city for you; after the year
+  1000 it has size 1–4, a Temple, and 50 % / 33 % / 25 % chances of Marketplace, Granary, Library.
+- **Mercenaries (1):** a free unit at the hut, 50 % mounted / 50 % defensive. Mounted: Horsemen
+  (or Chariot 1 in 3) until anyone knows Chivalry, then Knights; Elephants 50 % once Polytheism is
+  known; Crusaders with Monotheism, Dragoons with Leadership, Riflemen with Conscription.
+  Defensive: Archers, then Legion (Iron Working), Musketeers (Gunpowder), Fanatics
+  (Fundamentalism). The checks use "known by any civilization".
+- **Gold (2):** 50; 1 in 3 rolls `rand() % 10 − difficulty + 2 < 5 ? 25 : 100`; doubled after the
+  year 1000.
+- **Barbarians (3):** within 3 squares of your city, or before turn 50 with no city: mercenaries
+  instead. A weak AI (ranked below the leader) turns it into a city with chance `difficulty / 8`.
+  With barbarian activity below Raging: before turn 30 (and 50 % until turn 50) the hut is **empty**
+  when you have a city on the continent within 24 squares. Otherwise barbarian units appear on
+  land squares around the hut: one unit until turn 49 (50 % until turn 74), several after,
+  mounted on open terrain and foot units on rough, types rising with the advances the world knows.
+- **Scrolls (4):** a random advance you could research now (searching upward from a random
+  index); gold instead on turn 0 or once you know advance 38 (Invention in the shipped rules).
+- **Nomads (5):** free Settlers, unless anyone knows advance 28 (Explosives: gold instead) or you
+  already have more unhomed settlers than cities / 8 (scrolls instead).
+
+## Pillage (VERIFIED, 0x0053644e) and disband (VERIFIED, 0x00535725)
+
+- **Pillage** needs a ground unit with attack above 0, outside a city, on a square with
+  irrigation, a mine, a road or railroad, a fortress or an airbase. With more than one, the player
+  chooses: farmland, irrigation, mine, airbase, fortress, railroad (a railroad goes before the
+  road). Pillaging inside another civilization's city radius while at cease-fire, peace or
+  alliance asks whether to break the treaty and sours attitudes.
+- **Disband** asks for confirmation. A unit disbanded inside a city adds half its shield cost
+  (`cost rows × shield-box rows / 2`) to the city's production box.
+
+## Fortify (VERIFIED, 0x00497b7a)
+
+A Fortify order (0) becomes Fortified (1) at the start of the next turn; the unit then defends
+with the fortified bonus of [rules-combat.md](rules-combat.md).
+
+## Healing (VERIFIED, 0x00468f0f)
+
+At the start of its owner's turn a damaged unit that did **not move** last turn heals
+`maxHP / 10 × factor`: factor 1, or 2 on a fortress; +1 for a ground unit within 3 squares of
+one of its own cities (+2 when that city has Barracks); doubled when standing in a city, and
+doubled again — then made a **full** heal — when the city has the unit's building (Barracks for
+ground, Airport for air, Port Facility for sea). An air unit on an airbase heals fully. A sentried
+unit that reaches full health wakes up. A helicopter (air unit with range 0) that moved and is not
+on a city or airbase square loses `maxHP / 10` instead.

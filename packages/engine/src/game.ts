@@ -38,6 +38,7 @@ import {
 } from './research.js';
 import type { Rng } from './rng.js';
 import { ADVANCE, advanceIndex, GOVERNMENT, IMPROVEMENT, type EngineRules } from './rules.js';
+import { beginUnitsTurn, type UnitTurnEvent } from './turnStart.js';
 import { payUpkeep, type UpkeepEvent } from './upkeep.js';
 import { CITY_CENTRE_INDEX, type City, type Civ, type World } from './world.js';
 
@@ -64,6 +65,7 @@ export type CityTurnEvent = CityEvent | ProductionEvent | UpkeepEvent | GrowthNo
 export type TurnEvent =
   | { slot: number; city: number; event: CityTurnEvent }
   | { slot: number; event: ResearchEvent }
+  | { slot: number; event: UnitTurnEvent }
   | { slot: number; event: { kind: 'rates'; science: number; tax: number; luxuries: number } };
 
 /** Advances that end the AI's science: Fusion Power, The Laser, and the spaceship parts' prerequisites. */
@@ -307,6 +309,15 @@ export class Game {
   processCivilization(slot: number): TurnEvent[] {
     const out: TurnEvent[] = [];
     const civ = this.civ(slot);
+    for (const e of beginUnitsTurn(this.world, this.rules, this.rng, civ, {
+      knows: (a) => this.knows(slot, a),
+      nuclearPower: this.knows(slot, ADVANCE.nuclearPower),
+      magellans: this.ownsWonder(slot, IMPROVEMENT.magellans),
+      lighthouse: this.ownsWonder(slot, IMPROVEMENT.lighthouse),
+      damageSlowsUnits: this.state.realisticCombat,
+    })) {
+      out.push({ slot, event: e });
+    }
     const cities = this.citiesOf(slot);
     let anyDisorder = false;
     let anyLargeQuiet = false;
@@ -351,7 +362,6 @@ export class Game {
     for (const civ of this.world.civs) {
       if (civ.slot === 0 || !civ.inPlay) continue;
       civ.treasury = civ.treasury > 30000 ? 30000 : civ.treasury < 0 ? 0 : civ.treasury;
-      for (const u of this.world.units) if (u.owner === civ.slot) u.movesSpent = 0;
       out.push(...this.processCivilization(civ.slot));
     }
     this.state.turn += 1;

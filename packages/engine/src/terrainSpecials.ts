@@ -65,6 +65,7 @@ export function specialAt(world: World, x: number, y: number): Special {
 
 /** Hut on a world square: land, pattern matches, and nothing occupies the square. */
 export function hutAt(world: World, x: number, y: number): boolean {
+  if (world.hasFlag(x, y, SquareFlag.NoSpecial)) return false; // taken, or suppressed by the map
   if (!world.isLand(x, y)) return false;
   if (world.cityAt(x, y) || world.unitsAt(x, y).length > 0) return false;
   return hutPattern(x, y, world.resourceSeed);

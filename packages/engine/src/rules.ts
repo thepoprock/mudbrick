@@ -49,6 +49,8 @@ export interface UnitFlagsRule {
   canAttackAir: boolean;
   destroyedAfterAttack: boolean;
   freeSupportUnderFundamentalism: boolean;
+  /** Carrier: air units may land on it. */
+  carriesAirUnits?: boolean;
 }
 
 export interface UnitTypeRule {

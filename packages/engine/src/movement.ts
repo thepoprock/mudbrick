@@ -251,6 +251,7 @@ export function applyMove(
   unit.fortified = false;
   unit.order = null;
   unit.lastDirection = null;
+  unit.moved = true;
 }
 
 /**
@@ -284,6 +285,7 @@ export function tryMove(
     unit.position = { x: to.x, y: to.y };
     unit.fortified = false;
     unit.order = null;
+    unit.moved = true;
     endUnitMove(rules, unit, ctx);
     return { kind: 'boarded', ship };
   }

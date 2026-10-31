@@ -13,6 +13,7 @@ import {
   stepCost,
   tryMove,
 } from '../src/movement.js';
+import { attackStrength } from '../src/combat.js';
 import { Rng } from '../src/rng.js';
 import { IMPROVEMENT, type EngineRules, type TerrainRule } from '../src/rules.js';
 import {
@@ -325,6 +326,17 @@ describe('step cost (verified)', () => {
     const b = new Rng(5);
     expect(rollPartialMove(a, 6, 2, 1)).toBe(2 > b.nextInt(6));
     expect(rollPartialMove(new Rng(1), 6, 2, 0)).toBe(true);
+  });
+});
+
+describe('attack fatigue (verified)', () => {
+  it('scales attack by the moves left, capped at one full move', () => {
+    const w = land();
+    const u = unit(w, 6, 10, 10); // Alpine Troops: attack 5 → 40
+    expect(attackStrength(rules, u).value).toBe(40);
+    expect(attackStrength(rules, u, 3).value).toBe(40);
+    expect(attackStrength(rules, u, 1).value).toBe(13);
+    expect(attackStrength(rules, u, 2).value).toBe(26);
   });
 });
 

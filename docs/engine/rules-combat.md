@@ -17,6 +17,7 @@ as `x += x >> 1` (integer, rounding down), so the engine does the same.
 ```
 A = attack × 8
 if veteran:                       A += A >> 1          (×1.5)
+real attack (handler 0x0052d472): A = A × min(movesLeft, 3) / 3   — a unit with a third of a move left attacks at a third (VERIFIED; the FATIGUE confirmation asks first)
 if status bit 4 set:              A += A >> 1          (×1.5; meaning of the bit unknown — INFERRED none of the shipped files set it)
 if attacker has less than one full move left: A = A × movesLeft / 3   (thirds; see rules-movement.md)
 ```
