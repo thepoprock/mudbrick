@@ -7,19 +7,8 @@
  * All randomness goes through `Rng`, so a battle is reproducible from the generator state.
  */
 import type { Rng } from './rng.js';
-import { DOMAIN_AIR, DOMAIN_GROUND, DOMAIN_SEA, type EngineRules } from './rules.js';
+import { DOMAIN_AIR, DOMAIN_GROUND, DOMAIN_SEA, IMPROVEMENT, type EngineRules } from './rules.js';
 import { SquareFlag, type Unit, type World } from './world.js';
-
-/** RULES @IMPROVE indices the combat rules refer to. */
-export const IMPROVEMENT = {
-  palace: 1,
-  cityWalls: 8,
-  sdiDefense: 17,
-  samBattery: 27,
-  coastalFortress: 28,
-  greatWall: 45,
-  sunTzu: 46,
-} as const;
 
 /** Unit type indices the original special-cases by position in @UNITS. */
 export const UNIT_TYPE = { archers: 4, legion: 5, partisans: 9 } as const;

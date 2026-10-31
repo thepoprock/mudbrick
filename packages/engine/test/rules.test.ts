@@ -29,6 +29,7 @@ const flags = (over: Partial<EngineRules['units'][number]['flags']> = {}) => ({
   submarine: false,
   canAttackAir: false,
   destroyedAfterAttack: false,
+  freeSupportUnderFundamentalism: false,
   ...over,
 });
 
@@ -42,17 +43,47 @@ const unitType = (name: string, over: Partial<U>): U => ({
   defence: 1,
   hitPointsTens: 1,
   firepower: 1,
+  costRows: 1,
   role: 0,
   flags: flags(),
   ...over,
 });
 
 /** Tiny rule set. Terrain 0 grassland (2), 1 hills (4); the rest grassland; 10 ocean. */
+const special = { food: 0, shields: 0, trade: 0 };
 const rules: EngineRules = {
-  cosmic: { roadMoveMultiplier: 3 },
+  cosmic: {
+    roadMoveMultiplier: 3,
+    foodPerCitizen: 2,
+    foodBoxRows: 10,
+    shieldBoxRows: 10,
+    settlersFoodEarlyGovt: 1,
+    settlersFoodLateGovt: 2,
+    unhappinessCitySizeChieftain: 7,
+    riotFactor: 14,
+    aqueductSize: 8,
+    sewerSize: 12,
+    monarchyFreeUnits: 3,
+    communismFreeUnits: 3,
+    fundamentalismFreeUnits: 10,
+    communismPalaceDistance: 0,
+    fundamentalismSciencePenaltyPct: 50,
+    fundamentalismMaxScienceRate: 5,
+  },
   terrain: Array.from({ length: 11 }, (_, i) => ({
     moveCost: i === 1 ? 2 : 1,
     defenceHalves: i === 1 ? 4 : 2,
+    food: 1,
+    shields: 0,
+    trade: 0,
+    irrigateBonus: 1,
+    mineBonus: 0,
+    specials: [special, special] as [typeof special, typeof special],
+  })),
+  improvements: Array.from({ length: 67 }, (_, i) => ({
+    name: `improvement ${i}`,
+    costRows: 1,
+    upkeep: 0,
   })),
   units: [
     unitType('Warriors', {}),
@@ -199,6 +230,11 @@ describe('movement', () => {
       foodStored: 0,
       shieldsStored: 0,
       inDisorder: false,
+      celebrating: false,
+      worked: 1 << 20,
+      specialists: { entertainers: 0, taxCollectors: 0, scientists: 0 },
+      production: { kind: 'unit', index: 0 },
+      tradeRoutes: [],
     });
     expect(inEnemyZoc(z, 3, 1, 1)).toBe(false); // city squares are never in a zone of control
     const sea = world();

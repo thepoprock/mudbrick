@@ -60,16 +60,31 @@ export function worldFromSave(save: SaveFile, rules: Rules): World {
   }
 
   for (const c of save.cities) {
+    const improvements = [...c.improvements];
+    for (const w of save.wonders) if (w.cityId === c.id) improvements[w.improvementIndex] = true;
+    const specialists = { entertainers: 0, taxCollectors: 0, scientists: 0 };
+    for (const s of c.specialists) {
+      if (s === 1) specialists.entertainers++;
+      else if (s === 2) specialists.taxCollectors++;
+      else if (s === 3) specialists.scientists++;
+    }
     world.cities.push({
       id: c.id,
       position: c.position,
       owner: c.owner,
       name: c.name,
       size: c.size,
-      improvements: c.improvements,
+      improvements,
       foodStored: c.foodStored,
       shieldsStored: c.shieldsStored,
+      worked: c.workedSquaresMask | (1 << 20),
+      specialists,
+      production: c.production,
       inDisorder: c.civilDisorder,
+      celebrating: c.weLoveTheKingDay,
+      tradeRoutes: c.routePartners
+        .slice(0, c.activeTradeRoutes)
+        .map((partner, i) => ({ partner, food: (c.routeCommodities[i] ?? 0) >= 0x80 })),
     });
   }
 

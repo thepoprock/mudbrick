@@ -5,14 +5,8 @@
  * original's selection routine. The score is the defence strength with a few tie-breakers and
  * situational factors; the highest score defends, later units winning ties.
  */
-import {
-  defenceStrength,
-  IMPROVEMENT,
-  maxHitPoints,
-  hitPoints,
-  type CombatContext,
-} from './combat.js';
-import { DOMAIN_AIR, DOMAIN_GROUND, DOMAIN_SEA, type EngineRules } from './rules.js';
+import { defenceStrength, maxHitPoints, hitPoints, type CombatContext } from './combat.js';
+import { DOMAIN_AIR, DOMAIN_GROUND, DOMAIN_SEA, IMPROVEMENT, type EngineRules } from './rules.js';
 import { OCEAN, type Unit, type World } from './world.js';
 
 export interface DefenderChoiceContext extends CombatContext {

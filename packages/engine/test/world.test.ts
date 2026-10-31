@@ -60,6 +60,11 @@ describe('World', () => {
       foodStored: 0,
       shieldsStored: 0,
       inDisorder: false,
+      celebrating: false,
+      worked: 1 << 20,
+      specialists: { entertainers: 0, taxCollectors: 0, scientists: 0 },
+      production: { kind: 'unit', index: 0 },
+      tradeRoutes: [],
     });
     expect(round.cityAt(-2, 2)?.name).toBe('Ur');
     expect(round.unitsAt(6, 2)).toEqual([]);

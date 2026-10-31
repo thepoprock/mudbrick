@@ -35,6 +35,45 @@ export interface Point {
   y: number;
 }
 
+/**
+ * The original's eight-neighbour table (VERIFIED, read from the executable's data at
+ * 0x5b2e18/0x5b2e28): clockwise from north-east. Road segments 1–8 and several other tables
+ * use this order.
+ */
+export const NEIGHBOUR_OFFSETS: readonly Point[] = [
+  { x: 1, y: -1 }, // NE
+  { x: 2, y: 0 }, // E
+  { x: 1, y: 1 }, // SE
+  { x: 0, y: 2 }, // S
+  { x: -1, y: 1 }, // SW
+  { x: -2, y: 0 }, // W
+  { x: -1, y: -1 }, // NW
+  { x: 0, y: -2 }, // N
+];
+
+/**
+ * The 21 squares of a city's radius in the original's order (VERIFIED, 0x5b2e38/0x5b2e68):
+ * the eight neighbours above, the four distance-2 diagonals, the eight outer squares, and
+ * finally the city square itself (index 20). Bit i of a city's worked-squares mask is square i.
+ */
+export const CITY_RADIUS_OFFSETS: readonly Point[] = [
+  ...NEIGHBOUR_OFFSETS,
+  { x: 2, y: -2 },
+  { x: 2, y: 2 },
+  { x: -2, y: 2 },
+  { x: -2, y: -2 },
+  { x: 1, y: -3 },
+  { x: 3, y: -1 },
+  { x: 3, y: 1 },
+  { x: 1, y: 3 },
+  { x: -1, y: 3 },
+  { x: -3, y: 1 },
+  { x: -3, y: -1 },
+  { x: -1, y: -3 },
+  { x: 0, y: 0 },
+];
+export const CITY_CENTRE_INDEX = 20;
+
 export interface Civ {
   /** 0 = barbarians, 1–7 = players. */
   slot: number;
@@ -55,17 +94,32 @@ export interface Civ {
   inPlay: boolean;
 }
 
+export type Production = { kind: 'unit'; index: number } | { kind: 'improvement'; index: number };
+
+export interface Specialists {
+  entertainers: number;
+  taxCollectors: number;
+  scientists: number;
+}
+
 export interface City {
   id: number;
   position: Point;
   owner: number;
   name: string;
   size: number;
-  /** Indexed by RULES.TXT @IMPROVE index. */
+  /** Indexed by RULES.TXT @IMPROVE index; wonders (39–66) are set on the city that holds them. */
   improvements: boolean[];
   foodStored: number;
   shieldsStored: number;
+  /** Bit i = square CITY_RADIUS_OFFSETS[i] is worked (the centre, bit 20, always is). */
+  worked: number;
+  specialists: Specialists;
+  production: Production;
   inDisorder: boolean;
+  celebrating: boolean;
+  /** Owners of outgoing trade routes' partner cities and whether each carries food. */
+  tradeRoutes: { partner: number; food: boolean }[];
 }
 
 export interface Unit {
@@ -209,6 +263,16 @@ export class World {
   directNeighbours(x: number, y: number): (Point | null)[] {
     const n = this.neighbours(x, y);
     return [n[1] ?? null, n[3] ?? null, n[5] ?? null, n[7] ?? null];
+  }
+
+  /** Game coordinates of radius square `i` of a city at (x, y), or null when off the map. */
+  radiusSquare(x: number, y: number, i: number): Point | null {
+    const o = CITY_RADIUS_OFFSETS[i];
+    if (!o) return null;
+    const ny = y + o.y;
+    if (ny < 0 || ny >= this.rows) return null;
+    const nx = this.wrapX(x + o.x, ny);
+    return nx === null ? null : { x: nx, y: ny };
   }
 
   cityAt(x: number, y: number): City | undefined {
