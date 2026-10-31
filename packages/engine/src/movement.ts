@@ -295,5 +295,6 @@ export function tryMove(
     return { kind: 'failed-roll' };
   }
   applyMove(rules, unit, to, verdict.cost, ctx);
+  world.reveal(to.x, to.y, unit.owner);
   return { kind: 'moved', cost: verdict.cost };
 }

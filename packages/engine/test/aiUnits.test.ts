@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { aiMoveUnits, type AiUnitContext } from '../src/aiUnits.js';
+import {
+  aiMoveUnits,
+  chooseDirection,
+  wantedDefenders,
+  type AiUnitContext,
+} from '../src/aiUnits.js';
 import { Rng } from '../src/rng.js';
 import { GOVERNMENT, IMPROVEMENT, type EngineRules } from '../src/rules.js';
 import { ORDER } from '../src/terraform.js';
@@ -161,7 +166,11 @@ function world(): World {
   w.landmass.fill(1);
   return w;
 }
-function ctx(w: World, c: Civ): AiUnitContext {
+function ctx(
+  w: World,
+  c: Civ,
+  atWar: (slot: number) => boolean = (slot) => slot === 0,
+): AiUnitContext {
   let n = 0;
   return {
     rng: new Rng(3),
@@ -169,7 +178,7 @@ function ctx(w: World, c: Civ): AiUnitContext {
     difficulty: 2,
     realisticCombat: true,
     turn: 10,
-    atWar: (slot) => slot === 0,
+    atWar,
     knows: () => false,
     wondersOf: () => Array<boolean>(67).fill(false),
     cityCount: (slot) => w.cities.filter((x) => x.owner === slot).length,
@@ -177,7 +186,7 @@ function ctx(w: World, c: Civ): AiUnitContext {
   };
 }
 
-describe('interim computer-player units (INFERRED)', () => {
+describe('computer-player units', () => {
   it('settlers of a civilization without cities found one at once', () => {
     const w = world();
     const c = civ();
@@ -186,6 +195,18 @@ describe('interim computer-player units (INFERRED)', () => {
     expect(ev.some((e) => e.text.startsWith('founds'))).toBe(true);
     expect(w.cities.length).toBe(1);
     expect(w.cities[0]?.improvements[IMPROVEMENT.palace]).toBe(true);
+  });
+
+  it('the defender quota follows the verified formula', () => {
+    const w = world();
+    const plain = city(w, 10, 10, 2, 3);
+    expect(wantedDefenders(w, plain, 1)).toBe(1); // 3 / (4 + 1) + 1
+    const capital = city(w, 20, 20, 2, 7);
+    capital.improvements[IMPROVEMENT.palace] = true;
+    expect(wantedDefenders(w, capital, 1)).toBe(3); // 7 / 3 + 1
+    const bigEmpire = city(w, 20, 30, 2, 1);
+    bigEmpire.improvements[IMPROVEMENT.palace] = true;
+    expect(wantedDefenders(w, bigEmpire, 12)).toBe(4); // capital minimum with twelve cities
   });
 
   it('one defender stays fortified in a garrisoned city and the spare walks to an empty one', () => {
@@ -219,5 +240,28 @@ describe('interim computer-player units (INFERRED)', () => {
     const ev2 = aiMoveUnits(w, rules, 2, ctx(w, c));
     expect(ev2.some((e) => e.text.includes('caravan adds'))).toBe(true);
     expect(wonderTown.shieldsStored).toBe(50);
+  });
+
+  it('the direction choice never attacks a civilization it is not at war with', () => {
+    const w = world();
+    const c = civ();
+    const legion = unit(w, 4, 10, 10);
+    unit(w, 2, 11, 11, 3); // a neighbour at peace
+    const pick = chooseDirection(w, rules, legion, ctx(w, c));
+    expect(pick === null || !pick.attack).toBe(true);
+    expect(pick === null || !(pick.to.x === 11 && pick.to.y === 11)).toBe(true);
+  });
+
+  it('an unseen world draws a lone unit outward and the step is remembered', () => {
+    const w = world();
+    const c = civ();
+    const legion = unit(w, 4, 20, 20);
+    const pick = chooseDirection(w, rules, legion, ctx(w, c));
+    expect(pick).not.toBeNull();
+    expect(pick?.attack).toBe(false);
+    aiMoveUnits(w, rules, 2, ctx(w, c));
+    expect(legion.position.x !== 20 || legion.position.y !== 20).toBe(true);
+    expect(legion.lastDirection).not.toBeNull();
+    expect(w.isSeen(legion.position.x, legion.position.y, 2)).toBe(true);
   });
 });

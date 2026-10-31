@@ -64,8 +64,8 @@ export interface GameState {
   eliminatePollution?: boolean;
   /** World pollution count (the save header's value), kept for global warming later. */
   pollutionSquares?: number;
-  /** Pairs of slots at war (INFERRED stand-in for the treaty table). */
-  wars?: [number, number][];
+  /** Pairs of slots at peace; every other pair is at war (INFERRED stand-in for the treaty table). */
+  peace?: [number, number][];
 }
 
 export type GrowthNote =
@@ -119,14 +119,24 @@ export class Game {
     return c ? c.id : null;
   }
 
-  /** Are two civilizations at war? INFERRED: barbarians fight everyone; diplomacy is not modelled yet. */
+  /**
+   * Are two civilizations at war? INFERRED: without diplomacy every pair is at war (the
+   * original's state before contact) unless listed in `state.peace`; barbarians always are.
+   */
   atWar(a: number, b: number): boolean {
     if (a === b) return false;
-    return (
-      a === 0 ||
-      b === 0 ||
-      (this.state.wars?.some(([x, y]) => (x === a && y === b) || (x === b && y === a)) ?? false)
+    if (a === 0 || b === 0) return true;
+    return !(
+      this.state.peace?.some(([x, y]) => (x === a && y === b) || (x === b && y === a)) ?? false
     );
+  }
+
+  /** Mark what a civilization's units and cities can see (INFERRED sight radii). */
+  revealFor(slot: number): void {
+    for (const u of this.world.units)
+      if (u.owner === slot) this.world.reveal(u.position.x, u.position.y, slot);
+    for (const c of this.world.cities)
+      if (c.owner === slot) this.world.revealRadius(c.position.x, c.position.y, slot);
   }
 
   /** Wonders held by a civilization, by @IMPROVE index. */
@@ -364,6 +374,7 @@ export class Game {
   processCivilization(slot: number): TurnEvent[] {
     const out: TurnEvent[] = [];
     const civ = this.civ(slot);
+    this.revealFor(slot);
     for (const e of beginUnitsTurn(this.world, this.rules, this.rng, civ, {
       knows: (a) => this.knows(slot, a),
       nuclearPower: this.knows(slot, ADVANCE.nuclearPower),

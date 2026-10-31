@@ -116,6 +116,14 @@ export function foundCity(
     world.setFlag(x, y, f, false);
   }
   world.cities.push(city);
+  // Territory (map byte 2) and sight: the radius squares not yet claimed become the founder's.
+  for (let i = 0; i < 21; i++) {
+    const q = world.radiusSquare(city.position.x, city.position.y, i);
+    if (!q) continue;
+    const k = world.index(q.x, q.y);
+    if ((world.territory[k] ?? 0) === 0) world.territory[k] = city.owner;
+  }
+  world.revealRadius(city.position.x, city.position.y, city.owner);
   world.units.splice(world.units.indexOf(unit), 1);
   return city;
 }

@@ -189,6 +189,10 @@ export class World {
   readonly flags: Uint16Array;
   /** Land-mass / water-body id per square, as the original tracks it. */
   readonly landmass: Uint8Array;
+  /** Per square: bit n = civilization slot n has seen it (map byte 4). */
+  readonly seen: Uint8Array;
+  /** Per square: civilization slot whose city radius claims it, 0 none (map byte 2). */
+  readonly territory: Uint8Array;
   readonly civs: Civ[] = [];
   readonly cities: City[] = [];
   readonly units: Unit[] = [];
@@ -203,6 +207,32 @@ export class World {
     this.terrain = new Uint8Array(area).fill(OCEAN);
     this.flags = new Uint16Array(area);
     this.landmass = new Uint8Array(area);
+    this.seen = new Uint8Array(area);
+    this.territory = new Uint8Array(area);
+  }
+
+  /** Has civilization `slot` seen square (x, y)? Map byte 4 bit n (VERIFIED). */
+  isSeen(x: number, y: number, slot: number): boolean {
+    return ((this.seen[this.index(x, y)] ?? 0) & (1 << slot)) !== 0;
+  }
+
+  /** Mark (x, y) and its eight neighbours seen by `slot` (INFERRED sight radius of one). */
+  reveal(x: number, y: number, slot: number): void {
+    const bit = 1 << slot;
+    const mark = (p: Point | null) => {
+      if (p) this.seen[this.index(p.x, p.y)] = (this.seen[this.index(p.x, p.y)] ?? 0) | bit;
+    };
+    mark({ x, y });
+    for (const n of this.neighbours(x, y)) mark(n);
+  }
+
+  /** Mark the 21 squares of a city radius seen by `slot`. */
+  revealRadius(x: number, y: number, slot: number): void {
+    const bit = 1 << slot;
+    for (let i = 0; i < 21; i++) {
+      const p = this.radiusSquare(x, y, i);
+      if (p) this.seen[this.index(p.x, p.y)] = (this.seen[this.index(p.x, p.y)] ?? 0) | bit;
+    }
   }
 
   /** Width in game coordinates (twice the stored columns). */

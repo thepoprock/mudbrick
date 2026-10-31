@@ -41,6 +41,8 @@ export function saveFromGame(original: Uint8Array, parsed: SaveFile, game: Game)
     if (has(SquareFlag.Fortress) || has(SquareFlag.Airbase)) b1 |= 1 << 6;
     if (has(SquareFlag.Pollution)) b1 |= 1 << 7;
     squares[o + 1] = b1;
+    squares[o + 2] = world.territory[i] ?? 0;
+    squares[o + 4] = world.seen[i] ?? 0;
   }
 
   const units: UnitWrite[] = world.units.map((u) => ({
