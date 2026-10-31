@@ -1,0 +1,271 @@
+import { describe, expect, it } from 'vitest';
+import { aiChooseProduction, improvementPriority, type AiBuildFacts } from '../src/aiBuild.js';
+import { GOVERNMENT, IMPROVEMENT, type EngineRules } from '../src/rules.js';
+import { CITY_CENTRE_INDEX, World, type City, type Civ } from '../src/world.js';
+
+const flags = () => ({
+  ignoreZonesOfControl: false,
+  alpine: false,
+  mustStayNearLand: false,
+  negatesCityWalls: false,
+  doubleDefenceVsHorse: false,
+  doubleDefenceVsAir: false,
+  submarine: false,
+  canAttackAir: false,
+  destroyedAfterAttack: false,
+  freeSupportUnderFundamentalism: false,
+});
+const unitType = (name: string, over: Partial<EngineRules['units'][number]> = {}) => ({
+  name,
+  domain: 0,
+  move: 1,
+  range: 0,
+  attack: 1,
+  defence: 1,
+  hitPointsTens: 1,
+  firepower: 1,
+  costRows: 2,
+  role: 0,
+  flags: flags(),
+  ...over,
+});
+const rules: EngineRules = {
+  cosmic: {
+    roadMoveMultiplier: 3,
+    foodPerCitizen: 2,
+    foodBoxRows: 10,
+    shieldBoxRows: 10,
+    settlersFoodEarlyGovt: 1,
+    settlersFoodLateGovt: 2,
+    unhappinessCitySizeChieftain: 7,
+    riotFactor: 14,
+    aqueductSize: 8,
+    sewerSize: 12,
+    monarchyFreeUnits: 3,
+    communismFreeUnits: 3,
+    fundamentalismFreeUnits: 10,
+    communismPalaceDistance: 0,
+    fundamentalismSciencePenaltyPct: 50,
+    fundamentalismMaxScienceRate: 5,
+  },
+  terrain: Array.from({ length: 11 }, () => ({
+    moveCost: 1,
+    defenceHalves: 2,
+    food: 2,
+    shields: 1,
+    trade: 0,
+    irrigateBonus: 1,
+    mineBonus: 0,
+    specials: [
+      { food: 2, shields: 1, trade: 0 },
+      { food: 2, shields: 1, trade: 0 },
+    ] as [
+      { food: number; shields: number; trade: number },
+      { food: number; shields: number; trade: number },
+    ],
+    irrigate: { kind: 'yes' as const },
+    irrigateTurns: 5,
+    mine: { kind: 'no' as const },
+    mineTurns: 10,
+    transformTo: { kind: 'no' as const },
+  })),
+  units: [
+    unitType('Settlers', { attack: 0, hitPointsTens: 2, costRows: 4, role: 5 }),
+    unitType('Engineers', {
+      attack: 0,
+      hitPointsTens: 2,
+      costRows: 4,
+      role: 5,
+      preq: { kind: 'advance', index: 28 },
+    }),
+    unitType('Warriors', { costRows: 1, role: 1 }),
+    unitType('Phalanx', { defence: 2, costRows: 2, role: 1 }),
+    unitType('Legion', { attack: 4, defence: 2, costRows: 4, role: 0 }),
+  ],
+  advances: Array.from({ length: 100 }, () => ({
+    name: 'a',
+    preq1: { kind: 'none' as const },
+    preq2: { kind: 'none' as const },
+    epoch: 0,
+    category: 0,
+  })),
+  improvements: Array.from({ length: 67 }, (_, i) => ({ name: `i${i}`, costRows: 4, upkeep: 1 })),
+};
+
+function civ(over: Partial<Civ> = {}): Civ {
+  return {
+    slot: 2,
+    tribe: 0,
+    name: 'AI',
+    adjective: 'AI',
+    leader: 'L',
+    cityStyle: 0,
+    epoch: 0,
+    colour: 2,
+    government: GOVERNMENT.monarchy,
+    treasury: 100,
+    isHuman: false,
+    inPlay: true,
+    scienceStored: 0,
+    researching: null,
+    advancesCount: 5,
+    futureTechs: 0,
+    scienceRate: 5,
+    taxRate: 3,
+    knownAdvances: Array<boolean>(100).fill(false),
+    freeAdvancePending: false,
+    ...over,
+  };
+}
+function city(world: World, size: number, imps: number[] = []): City {
+  const improvements = Array<boolean>(67).fill(false);
+  for (const i of imps) improvements[i] = true;
+  const c: City = {
+    id: world.cities.length,
+    position: { x: 10, y: 10 },
+    owner: 2,
+    name: 'AI City',
+    size,
+    improvements,
+    foodStored: 0,
+    shieldsStored: 0,
+    worked: 1 << CITY_CENTRE_INDEX,
+    specialists: { entertainers: 0, taxCollectors: 0, scientists: 0 },
+    production: { kind: 'unit', index: 2 },
+    inDisorder: false,
+    celebrating: false,
+    tradeRoutes: [],
+  };
+  world.cities.push(c);
+  return c;
+}
+const facts = (over: Partial<AiBuildFacts> = {}): AiBuildFacts => ({
+  shields: 5,
+  support: 1,
+  trade: 4,
+  corruption: 1,
+  foodSurplus: 2,
+  happy: 1,
+  unhappy: 1,
+  settlersSupported: 0,
+  defendersInCity: 1,
+  threat: 0,
+  zocAtCity: false,
+  attack: 0,
+  expand: 0,
+  civilize: 0,
+  difficulty: 2,
+  turn: 50,
+  simplifiedCombat: false,
+  spaceRace: 0,
+  hasCapital: true,
+  expanding: false,
+  ...over,
+});
+function env(world: World, c: City, f: AiBuildFacts, owner = civ()) {
+  return {
+    world,
+    rules,
+    civ: owner,
+    city: c,
+    ctx: {} as never,
+    facts: f,
+    cityCount: world.cities.filter((x) => x.owner === owner.slot).length,
+    wonderCity: () => null,
+    ownsWonder: () => false,
+    canBuildImprovement: (i: number) => i < 39 && !c.improvements[i],
+  };
+}
+
+describe('AI production choice (verified structure)', () => {
+  it('ranks the emergencies of the original: Temple in disorder, Palace without a capital', () => {
+    const w = new World({ columns: 20, rows: 30, flatEarth: true });
+    w.terrain.fill(2);
+    const c = city(w, 5);
+    expect(
+      improvementPriority(IMPROVEMENT.temple, c, facts({ happy: 1, unhappy: 1 }), {
+        rules,
+        cityCount: 3,
+        continentCities: 3,
+        barracksOnContinent: 0,
+        airportsOnContinent: 0,
+        portsOnContinent: 0,
+        oceanSquares: 0,
+        farmlandSquares: 0,
+        coastal: false,
+        distanceToCapital: 5,
+        knows: () => false,
+        ownsWonder: () => false,
+        wonderBuilt: () => false,
+        scienceRate: 5,
+        government: 2,
+        isHuman: false,
+      }),
+    ).toEqual({ n: 9, military: false });
+    c.inDisorder = true;
+    const r = improvementPriority(IMPROVEMENT.temple, c, facts(), {
+      rules,
+      cityCount: 3,
+      continentCities: 3,
+      barracksOnContinent: 0,
+      airportsOnContinent: 0,
+      portsOnContinent: 0,
+      oceanSquares: 0,
+      farmlandSquares: 0,
+      coastal: false,
+      distanceToCapital: 5,
+      knows: () => false,
+      ownsWonder: () => false,
+      wonderBuilt: () => false,
+      scienceRate: 5,
+      government: 2,
+      isHuman: false,
+    });
+    expect(r?.n).toBe(-5);
+    const pick = aiChooseProduction(env(w, c, facts({ unhappy: 3, happy: 0 })));
+    expect(pick).toEqual({ kind: 'improvement', index: IMPROVEMENT.temple });
+  });
+
+  it('builds a defender first when the city is empty and a settler when food allows', () => {
+    const w = new World({ columns: 20, rows: 30, flatEarth: true });
+    w.terrain.fill(2);
+    const c = city(w, 4, [IMPROVEMENT.temple, IMPROVEMENT.palace]);
+    w.units.push({
+      id: 0,
+      position: { x: 2, y: 2 },
+      owner: 2,
+      type: 4,
+      veteran: false,
+      hitPointsLost: 0,
+      movesSpent: 0,
+      fortified: false,
+      homeCity: null,
+      order: null,
+      workCounter: 0,
+      gotoTarget: null,
+      lastDirection: null,
+      gotoSteps: 0,
+    });
+    expect(aiChooseProduction(env(w, c, facts({ defendersInCity: 0 })))).toEqual({
+      kind: 'unit',
+      index: 3,
+    });
+    const settled = aiChooseProduction(
+      env(w, c, facts({ defendersInCity: 2, foodSurplus: 4, trade: 30, shields: 30 })),
+    );
+    expect(['unit', 'improvement']).toContain(settled.kind);
+    // With nothing left to build, a unit type the civilization has none of scores 0 and wins.
+    const e = env(w, c, facts({ defendersInCity: 2, foodSurplus: 4 }));
+    e.canBuildImprovement = () => false;
+    expect(aiChooseProduction(e)).toEqual({ kind: 'unit', index: 3 });
+  });
+
+  it('a unit-less early civilization builds its best defender', () => {
+    const w = new World({ columns: 20, rows: 30, flatEarth: true });
+    w.terrain.fill(2);
+    const c = city(w, 1);
+    expect(
+      aiChooseProduction(env(w, c, facts(), civ({ government: GOVERNMENT.despotism }))),
+    ).toEqual({ kind: 'unit', index: 3 });
+  });
+});

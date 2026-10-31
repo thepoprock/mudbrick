@@ -145,8 +145,8 @@ export interface EngineRules {
   improvements: ImprovementRule[];
   /** Indexed by RULES @CIVILIZE row. */
   advances: AdvanceRule[];
-  /** RULES @LEADERS personalities; only `civilize` is used (AI rate policy). */
-  leaders?: { civilize: number }[];
+  /** RULES @LEADERS personalities (−1 … 1): the AI's rate policy and build choice read them. */
+  leaders?: { attack?: number; expand?: number; civilize: number }[];
 }
 
 export const DOMAIN_GROUND = 0;

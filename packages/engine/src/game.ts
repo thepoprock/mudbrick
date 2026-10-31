@@ -40,6 +40,8 @@ import type { Rng } from './rng.js';
 import { ADVANCE, advanceIndex, GOVERNMENT, IMPROVEMENT, type EngineRules } from './rules.js';
 import { beginUnitsTurn, type UnitTurnEvent } from './turnStart.js';
 import { cityPollution, meltdownRoll, pollutionRoll, type PollutionEvent } from './pollution.js';
+import { aiChooseProduction } from './aiBuild.js';
+import { inEnemyZoc } from './movement.js';
 import { payUpkeep, type UpkeepEvent } from './upkeep.js';
 import { CITY_CENTRE_INDEX, type City, type Civ, type World } from './world.js';
 
@@ -248,12 +250,13 @@ export class Game {
       if (e.kind === 'ghost-town') return out;
       if (
         !civ.isHuman &&
-        (e.kind === 'built-improvement' ||
+        (e.kind === 'built-unit' ||
+          e.kind === 'built-improvement' ||
           e.kind === 'built-wonder' ||
           e.kind === 'bad-build' ||
           e.kind === 'bad-space')
       ) {
-        this.aiChooseProduction(city); // INFERRED placeholder for 0x00430b61
+        this.aiChooseProduction(city, t); // the original re-chooses after every completion (0x00430b61 with 99)
       }
     }
     for (const e of disbandForShortage(this.world, this.rules, city, ctx, t.raw.shields)) push(e);
@@ -458,22 +461,98 @@ export class Game {
     civ.researching = pick;
   }
 
-  /** Placeholder AI production choice (INFERRED): the best defensive unit it can build. */
-  aiChooseProduction(city: City): void {
+  /** The AI's production choice (docs/engine/ai-city.md), from the city's current totals. */
+  aiChooseProduction(
+    city: City,
+    totals?: {
+      raw: { food: number; shields: number; trade: number };
+      support: { shields: number; settlers: number; inCity: number };
+      shields: { produced: number };
+      trade: { corruption: number };
+      mood: { happy: number; unhappy: number };
+    },
+  ): void {
     const civ = this.civ(city.owner);
-    let pick = 0;
-    let bestDef = -1;
-    this.rules.units.forEach((u, i) => {
-      const pre = advanceIndex(u.preq);
-      const obs = advanceIndex(u.obsoleteWith);
-      if (pre !== null && !civ.knownAdvances[pre]) return;
-      if (obs !== null && civ.knownAdvances[obs]) return;
-      if (u.role === 1 && u.defence > bestDef) {
-        bestDef = u.defence;
-        pick = i;
-      }
+    const ctx = this.cityContext(city);
+    const leader = this.rules.leaders?.[civ.tribe ?? -1];
+    const homed = this.world.units.filter((u) => u.homeCity === city.id);
+    const t = totals ?? {
+      raw: rawYields(this.world, this.rules, city, ctx),
+      support: unitSupport(this.world, this.rules, city, ctx, homed),
+      shields: { produced: 0 },
+      trade: { corruption: 0 },
+      mood: { happy: 0, unhappy: 0 },
+    };
+    if (!totals) {
+      t.shields = shieldTotals(this.rules, city, ctx, t.raw.shields, t.support.shields);
+      const split = tradeSplit(this.rules, city, ctx, t.raw.trade);
+      t.trade = { corruption: split.corruption };
+      t.mood = mood(this.rules, city, ctx, {
+        luxuries: split.luxuries,
+        militaryInCity: t.support.inCity,
+        militaryAbroad: 0,
+        noMilitaryUnhappiness: true,
+      });
+    }
+    const here = this.world.unitsAt(city.position.x, city.position.y);
+    const defenders = here.filter(
+      (u) => u.owner === city.owner && this.rules.units[u.type]?.role === 1,
+    ).length;
+    let threat = 0;
+    for (let i = 0; i < CITY_CENTRE_INDEX; i++) {
+      const p = this.world.radiusSquare(city.position.x, city.position.y, i);
+      if (p) threat += this.world.unitsAt(p.x, p.y).filter((u) => u.owner !== city.owner).length;
+    }
+    const eaten =
+      city.size * this.rules.cosmic.foodPerCitizen +
+      t.support.settlers * settlersFood(this.rules, civ.government);
+    const cityCount = this.citiesOf(city.owner).length;
+    city.production = aiChooseProduction({
+      world: this.world,
+      rules: this.rules,
+      civ,
+      city,
+      ctx,
+      facts: {
+        shields: t.shields.produced,
+        support: t.support.shields,
+        trade: t.raw.trade,
+        corruption: t.trade.corruption,
+        foodSurplus: t.raw.food - eaten,
+        happy: t.mood.happy,
+        unhappy: t.mood.unhappy,
+        settlersSupported: t.support.settlers,
+        defendersInCity: defenders,
+        threat,
+        zocAtCity: inEnemyZoc(this.world, city.position.x, city.position.y, city.owner),
+        attack: leader?.attack ?? 0,
+        expand: leader?.expand ?? 0,
+        civilize: leader?.civilize ?? 0,
+        difficulty: this.state.difficulty,
+        turn: this.state.turn,
+        simplifiedCombat: !this.state.realisticCombat,
+        spaceRace: 0,
+        hasCapital: this.world.cities.some(
+          (c) => c.owner === city.owner && c.improvements[IMPROVEMENT.palace],
+        ),
+        expanding: cityCount < 4,
+      },
+      cityCount,
+      wonderCity: (i) => this.wonderCity(i),
+      ownsWonder: (i) => this.ownsWonder(city.owner, i),
+      canBuildImprovement: (i) => this.canBuildImprovement(city, i),
     });
-    city.production = { kind: 'unit', index: pick };
+  }
+
+  /** May the city build this improvement: prerequisite known, not built, wonders unclaimed. */
+  canBuildImprovement(city: City, imp: number): boolean {
+    const rule = this.rules.improvements[imp];
+    if (!rule || imp === 0 || rule.preq?.kind === 'never') return false;
+    if (imp >= 39 && this.wonderCity(imp) !== null) return false;
+    if (imp < 39 && city.improvements[imp]) return false;
+    if (imp >= 35 && imp <= 37 && this.wonderCity(IMPROVEMENT.apolloProgram) === null) return false;
+    const pre = advanceIndex(rule.preq);
+    return pre === null || this.knows(city.owner, pre);
   }
 }
 
