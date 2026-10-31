@@ -198,7 +198,56 @@ Then in order, each step recorded for the city screen:
 
 The outcome rules (disorder, celebration) are in the Happiness outcomes section above.
 
+## Production (VERIFIED, 0x004b7e74)
+
+Each turn the city's shield surplus (shields − support, 0 while in disorder) is added to the
+production box, except while producing Capitalization (38), where it becomes gold instead.
+Cost of an item = its RULES cost rows × the shield-box rows (`K₂`, 10 for humans).
+
+### Completing an improvement or wonder (production value < 0, index = −value)
+
+- An improvement the city already has, or a wonder another city has already completed, is
+  flagged BADBUILD (the AI re-chooses; the human is told).
+- Spaceship parts (35–37) need the Apollo Program and a living spaceship; otherwise BADSPACE.
+- On completion the improvement is added, the shield box loses the cost, and **for human players
+  the box is then reset to 0** (overflow is lost; the AI keeps its carry-over for improvements).
+- Building the **Palace** removes it from the owner's other cities and moves the capital.
+- Wonder effects on completion: Manhattan Project halves every civilization's reputation
+  counter and announces itself; Darwin's Voyage grants two advances; Leonardo's Workshop runs
+  the unit upgrade; the Eiffel Tower adjusts attitudes; the Apollo Program reveals the map. Other
+  AI cities building the same wonder re-choose.
+
+### Completing a unit (production value ≥ 0 = unit type)
+
+- **Automatic upgrade:** if the owner knows the advance that obsoletes the type, the completed
+  unit becomes the type with the same role whose prerequisite is that advance (UPGRADED dialog
+  for humans).
+- The shield box loses the cost; for humans it is then reset to 0 (overflow lost).
+- **Settlers-role units (5)** cost one population: a size-1 city cannot build one if it is the
+  civilization's only city; a human size-1 city is asked to confirm (GHOSTTOWN) and the city
+  disbands into the unit when it does; otherwise size − 1.
+- **Veteran status:** Communism makes role-6 units (diplomats/spies) veteran. Otherwise, with
+  simplified combat OFF: ground units need Barracks (2) or Sun Tzu's War Academy; sea units need
+  a Port Facility (34) or the Lighthouse; air units need an Airport (32); missiles never. With
+  simplified combat on, Barracks/Sun Tzu's apply to every non-air, non-missile unit of role < 6.
+- Role-4 units (sea transport) get a home-port marker in the counter field.
+- **Caravans (role 7):** humans choose the commodity from the city's three supplied commodities
+  or food (CARAVANBUILT/CARACONFIRM); the chosen supplied commodity is then marked used. AI
+  caravans get `rand() % 16`.
+- A unit whose attack is 99 (nuclear) resets every other civilization's "last contact" record.
+
+### AI production purchases (VERIFIED, same routine; AI players only)
+
+After the shield box is updated the AI may convert treasury to shields: a fraction of its gold
+(`treasury >> 6` for units matching the continent's plan, `>> 6`/`>> 7`/`>> 8` for wonders
+depending on how many wonders of that era it already has, `>> 7` for spaceship parts, `>> 3` for a
+Palace, for a city in disorder, or for an empty city with a unit in production, `>> 4` for an
+unprotected capital; doubled above 2500 gold, plus `treasury >> 9` extra over 2000), capped at
+the remaining cost. The gold actually paid is reduced by `difficulty × bought / 10 / (8 − rank)`,
+and halved or waived when the AI is already richer than the human leader. This is the AI's
+production advantage.
+
 ## Still to read
 
-Production and the AI build choice (0x004b7e74), the pollution roll (0x004bb7bb), the AI's
-exact content base, and the connected-to-capital test (0x00468c65).
+The AI build choice (0x00430b61), the pollution roll (0x004bb7bb), the AI's exact content base,
+the connected-to-capital test (0x00468c65), and the buy-cost formula for human purchases.

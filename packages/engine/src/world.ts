@@ -133,6 +133,8 @@ export interface Unit {
   movesSpent: number;
   fortified: boolean;
   homeCity: number | null;
+  /** Caravans/freight: RULES @CARAVAN commodity index, or 0xFF for a food caravan. */
+  commodity?: number;
 }
 
 export interface WorldInit {

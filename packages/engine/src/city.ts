@@ -56,7 +56,11 @@ export function settlersFood(rules: EngineRules, government: number): number {
 }
 
 /** Rows per food-box step: @COSMIC[3] for humans, a difficulty ladder for the AI (0x004b3924). */
-export function boxRows(rules: EngineRules, ctx: CityContext, shields: boolean): number {
+export function boxRows(
+  rules: EngineRules,
+  ctx: { isHuman: boolean; difficulty: number },
+  shields: boolean,
+): number {
   const base = shields ? rules.cosmic.shieldBoxRows : rules.cosmic.foodBoxRows;
   if (ctx.isHuman) return base;
   let k = 13 - ctx.difficulty;
