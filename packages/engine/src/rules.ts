@@ -246,6 +246,7 @@ export const ADVANCE = {
   monotheism: 55,
   mysticism: 56,
   nuclearPower: 59,
+  mapMaking: 46,
   plastics: 62,
   railroad: 67,
   sanitation: 74,

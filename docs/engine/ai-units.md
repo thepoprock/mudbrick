@@ -20,26 +20,38 @@ unless marked INFERRED; the engine does not implement this layer yet — see the
    3 up to Fundamentalism, 2 under Republic and Democracy (+1 for Engineers), capped by the number
    of settle objectives on that land mass; surplus settlers lose the flag. A homed settler within 4
    squares of its city marks the city "has a worker nearby".
-5. **Order hygiene for computer units:** a sentried ground unit on land loses the sentry; orders
-   above 15 are cleared; a unit with no order standing in an enemy zone of control gets the AI's
-   hold order (16); a ground unit at sea is marked as cargo. Fortify orders set the "fortified"
-   flag bit. Badly damaged units (half hit points or less) of civilizations at peace create a
-   "heal here" objective.
-6. **City objectives:** every own city without a village square becomes a defend objective
-   (type 5, priority 1). Enemy cities the civilization may act against (seen, or late enough in
-   the game) become attack objectives — type 2 against cities without walls, type 4 against
-   walled ones — plus a type 3 objective when no treaty forbids it.
-7. **Continent plans** (per civilization, per land mass; the city advisor reads them):
-   - compare own units and attack strength on the land mass with every other civilization's;
-   - **plan 0** when an enemy is present there and stronger (or barbarian cities exist, or the
-     civilization has neither units nor cities there and has not been told the mass is friendly);
-   - **plan 1** when the civilization is the stronger party against an enemy there, or a human at
-     peace or cease-fire is much stronger (which also sets the "watch" flag);
-   - otherwise **plan 4** when the land mass is full — land squares fewer than twice the units on
-     it, or its value below `(cities on it) × (expand + 7, or 6 when contested) + 2` — and the
-     civilization knows Map Making; else **plan 5** (room to grow).
-     A changed plan re-plans the cities on that land mass. Plans 0 and 1 are what the city advisor
-     treats as the "military" continent flag.
+5. **Order hygiene for computer units:** a sentried unit wakes unless it is a ground unit at
+   sea; orders above 15 are cleared; a unit with no order standing in a foreign zone of control
+   gets the AI's hold order (16), which keeps it out of this turn's assignment. Fortify orders
+   set the "fortified" flag bit. Under the **bloodlust** option, enemy units at half hit points
+   or less that the civilization can see become attack objectives (type 0 on land, 2 at sea).
+6. **City objectives.** Every own city with no unit on it posts a **defend** objective (type 1,
+   priority 5). Every foreign city the civilization may act against — once
+   `difficulty × turn > 200`, or when it has seen the city, or when the owner is a computer
+   player — posts, when at war with the owner and `(turn + city index) % 3 ≠ 0`, an **attack**
+   objective (type 0) of priority 4, or 2 against City Walls; an empty city of a civilization
+   with no treaty also posts a defend objective of priority 2 and an attack objective of
+   priority 3.
+7. **Continent plans** (per civilization, per land mass; the city advisor reads them). Another
+   civilization counts as present on a land mass when it has combat units there and either its
+   attack total exceeds a quarter of ours or it has cities there. Against each present enemy:
+   when its units are fewer than our attack total, or its attack total below our unit count,
+   or we have no city there, it is **outmatched**; otherwise it **outmatches** us. A present
+   human at peace or cease-fire whose attack total exceeds half ours plus our unit count counts
+   as a strong neighbour. Barbarian cities count as an outmatched enemy.
+   - **plan 0 (attack):** any outmatched enemy is present, or the civilization has neither
+     units nor cities on the land mass (unless only a peace partner's units are there);
+   - **plan 1 (defend):** any enemy outmatches us, or a strong human neighbour is present; the
+     land mass also gets the "watch" flag;
+   - otherwise **plan 4 (full)** when the land squares are fewer than twice the units of every
+     present civilization, or the rated squares (the fertility count) are fewer than
+     `(cities of every present civilization) × d + 2` where `d` is 6 (7 once the leading human
+     has more than four cities after turn 150), plus the leader's expand value plus 1 when no
+     foreigner is present — and only once the civilization knows Map Making; else **plan 5
+     (room to grow)**.
+     Per land mass the civilization also notes whether enemies or peace partners have cities or
+     units there (flags 1, 2, 4, 8). Plans 0 and 1 are what the city advisor treats as the
+     "military" continent flag.
 8. **Lost civilization:** a computer player with no settlers and no cities is removed; every
    eighth turn its diplomacy is revisited.
 9. **Objective assignment.** Each objective has a position, a type and a priority (how many units
@@ -58,8 +70,15 @@ unless marked INFERRED; the engine does not implement this layer yet — see the
     the nearest city's production box for half its cost.
 11. **Scenario special case:** with the "special WWII AI" flag, civilization 3's armour and
     alpine troops in a band of rows receive scripted go-to targets.
-12. Finally the per-unit move loop runs (0x004709d5), and the "worker nearby" and
-    "has objective" city flags are cleared for the next turn.
+12. Finally the objective housekeeping runs (0x004709d5): objectives already consumed
+    (negative priority) are dropped, this turn's priorities are negated (an objective lives for
+    the turn that posted it), and the 16 **persistent goals** (civilization record +0x534, same
+    6-byte layout, added with 0x004707c5 and removed by type within a distance with 0x0046ffe5)
+    are posted again. The objectives table itself is 48 entries of 6 bytes at civilization
+    record +0x414: x, y (i16), type (the AI role wanted: 0 attack, 1 defend, 2 naval, 4
+    transport, 5 settle, 21 work; −1 empty) and priority. Adding (0x004703f8) does nothing when
+    the square and type already carry at least the priority, else inserts before the first
+    lower-priority entry and drops the 48th.
 
 ## The move chooser (0x004f44cc)
 
@@ -232,5 +251,8 @@ improve squares near their cities or explore; caravans deliver their cost to a w
 progress; surplus defenders walk to a city short of its quota in place of "defend" objectives;
 ships and aircraft hold. Barbarians are everyone's enemy; every other pair of civilizations is
 at war unless listed in the game state's peace list, the original's state before contact. The
-objective and plan machinery, the barbarian, air and nuclear choosers and the combat evaluator
-remain to be read and ported.
+strategic layer (`aiStrategy.ts`) is ported: tallies, continent plans, the objectives table with
+its housekeeping and persistent goals, settlers wanted, free upgrades, and the assignment that
+hands ground units go-to orders; aircraft are not assigned yet, hold is modelled as fortify, and
+the immediate go-to for naval and air objectives is left out. The barbarian, air and nuclear
+choosers and the combat evaluator remain to be read.

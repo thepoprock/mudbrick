@@ -41,6 +41,7 @@ import { ADVANCE, advanceIndex, GOVERNMENT, IMPROVEMENT, type EngineRules } from
 import { beginUnitsTurn, type UnitTurnEvent } from './turnStart.js';
 import { cityPollution, meltdownRoll, pollutionRoll, type PollutionEvent } from './pollution.js';
 import { aiChooseProduction } from './aiBuild.js';
+import { runStrategy, type StrategyEvent } from './aiStrategy.js';
 import { aiMoveUnits, type AiUnitEvent } from './aiUnits.js';
 import { releaseCitySite } from './fertility.js';
 import { inEnemyZoc } from './movement.js';
@@ -67,6 +68,8 @@ export interface GameState {
   pollutionSquares?: number;
   /** Pairs of slots at peace; every other pair is at war (INFERRED stand-in for the treaty table). */
   peace?: [number, number][];
+  /** The bloodlust option (damaged enemy units draw attacks). */
+  bloodlust?: boolean;
 }
 
 export type GrowthNote =
@@ -78,6 +81,7 @@ export type TurnEvent =
   | { slot: number; event: ResearchEvent }
   | { slot: number; event: UnitTurnEvent }
   | { slot: number; event: AiUnitEvent }
+  | { slot: number; event: StrategyEvent }
   | { slot: number; event: { kind: 'rates'; science: number; tax: number; luxuries: number } };
 
 /** Advances that end the AI's science: Fusion Power, The Laser, and the spaceship parts' prerequisites. */
@@ -403,8 +407,25 @@ export class Game {
         anyLargeQuiet = true; // INFERRED reading of "happy equals unhappy"
       }
     }
+    // The strategic layer runs for every civilization (tallies, plans; orders for computer players).
+    const humans = this.world.civs.filter((c) => c.isHuman).map((c) => c.slot);
+    for (const e of runStrategy(this.world, this.rules, slot, {
+      turn: this.state.turn,
+      difficulty: this.state.difficulty,
+      atWar: (a, b) => this.atWar(a, b),
+      isHuman: (s) => this.world.civs.find((c) => c.slot === s)?.isHuman ?? false,
+      knows: (s, a) => this.knows(s, a),
+      expand: (s) => {
+        const tribe = this.world.civs.find((c) => c.slot === s)?.tribe ?? 0;
+        return this.rules.leaders?.[tribe]?.expand ?? 0;
+      },
+      strategyOf: (s) => this.world.civs.find((c) => c.slot === s)?.strategy,
+      mainHuman: humans[0] ?? null,
+      ...(this.state.bloodlust !== undefined ? { bloodlust: this.state.bloodlust } : {}),
+    })) {
+      out.push({ slot, event: e });
+    }
     if (!civ.isHuman) {
-      // INFERRED interim behaviour until the original's move chooser is read (docs/engine/ai-units.md).
       let names = this.citiesOf(slot).length;
       for (const e of aiMoveUnits(this.world, this.rules, slot, {
         rng: this.rng,
@@ -417,6 +438,7 @@ export class Game {
         wondersOf: (s) => this.wondersOf(s),
         cityCount: (s) => this.citiesOf(s).length,
         nextCityName: () => `${civ.adjective} City ${++names}`,
+        guerillaWarfareDiscovered: (this.state.firstDiscoveredBy[34] ?? 0) !== 0,
         nuclearPower: this.knows(slot, ADVANCE.nuclearPower),
         magellans: this.ownsWonder(slot, IMPROVEMENT.magellans),
         lighthouse: this.ownsWonder(slot, IMPROVEMENT.lighthouse),

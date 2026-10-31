@@ -584,6 +584,7 @@ export class PlaySession {
       case 'revolt':
         return 'Revolution! The government has fallen into Anarchy.';
       case 'ai-unit':
+      case 'ai-strategy':
         return null;
       case 'polluted':
         return `Pollution near ${cityName}.`;

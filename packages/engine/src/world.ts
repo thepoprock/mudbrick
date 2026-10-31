@@ -1,3 +1,4 @@
+import type { CivStrategy } from './aiStrategy.js';
 /**
  * The world model: the map and everything standing on it.
  *
@@ -106,6 +107,8 @@ export interface Civ {
   knownAdvances: boolean[];
   /** A free advance (Philosophy) is owed and granted at the next discovery check. */
   freeAdvancePending: boolean;
+  /** The AI's strategic state (aiStrategy.ts); created on first use. */
+  strategy?: CivStrategy;
 }
 
 export type Production = { kind: 'unit'; index: number } | { kind: 'improvement'; index: number };
@@ -140,6 +143,8 @@ export interface City {
   celebrating: boolean;
   /** Owners of outgoing trade routes' partner cities and whether each carries food. */
   tradeRoutes: { partner: number; food: boolean }[];
+  /** AI: a wanted settler stands within four squares (city flag 0x40). */
+  workerNearby?: boolean;
 }
 
 export interface Unit {
@@ -167,6 +172,10 @@ export interface Unit {
   moved?: boolean;
   /** Caravans/freight: RULES @CARAVAN commodity index, or 0xFF for a food caravan. */
   commodity?: number;
+  /** AI: a settler the strategic layer wants to found a city (unit flag 0x200). */
+  wanted?: boolean;
+  /** AI: the unit stands on its objective (unit flag 0x80). */
+  arrived?: boolean;
 }
 
 export interface WorldInit {
@@ -195,6 +204,8 @@ export class World {
   readonly territory: Uint8Array;
   /** Per square: fertility rating 0 or 8–15 (map byte 5, low nibble; fertility.ts). */
   readonly fertility: Uint8Array;
+  /** Land and rated squares per land mass, computed on first use (aiStrategy.ts). */
+  landmassStats?: { land: number[]; rated: number[] };
   readonly civs: Civ[] = [];
   readonly cities: City[] = [];
   readonly units: Unit[] = [];

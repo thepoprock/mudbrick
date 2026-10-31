@@ -40,6 +40,8 @@ export interface WorldRenderOptions {
   zoom: number;
   showUnits: boolean;
   showCities: boolean;
+  /** Draw only what this civilization slot has seen (map byte 4); undefined shows everything. */
+  viewer?: number;
 }
 
 const ditherCache = new WeakMap<GameFolder, DitherSet>();
@@ -72,6 +74,7 @@ export function drawWorld(
     }
     for (let i = 0; i < world.area; i++) {
       const p = world.position(i);
+      if (opts.viewer !== undefined && !world.isSeen(p.x, p.y, opts.viewer)) continue;
       const o = squareOrigin((p.x - (p.y & 1)) >> 1, p.y);
       drawSquareTerrain(
         ctx,
@@ -88,6 +91,7 @@ export function drawWorld(
   } else {
     for (let i = 0; i < world.area; i++) {
       const p = world.position(i);
+      if (opts.viewer !== undefined && !world.isSeen(p.x, p.y, opts.viewer)) continue;
       const o = squareOrigin((p.x - (p.y & 1)) >> 1, p.y);
       ctx.fillStyle = (world.terrain[i] ?? 10) === 10 ? '#1f4f9a' : '#6fa84a';
       ctx.fillRect(o.px + 16, o.py + top + 8, 32, 16);
@@ -98,13 +102,19 @@ export function drawWorld(
   const walls = improvementIndex(folder.rules, 'City Walls', 8);
 
   if (opts.showCities && folder.sheets.CITIES) {
-    for (const city of world.cities) drawCity(ctx, world, folder, city, palace, walls, top);
+    for (const city of world.cities) {
+      if (opts.viewer !== undefined && !world.isSeen(city.position.x, city.position.y, opts.viewer))
+        continue;
+      drawCity(ctx, world, folder, city, palace, walls, top);
+    }
   }
   if (opts.showUnits && folder.sheets.UNITS) {
     const drawn = new Set<number>();
     for (const unit of world.units) {
       const key = unit.position.y * world.widthX2 + unit.position.x;
       if (drawn.has(key)) continue; // top unit only; the save's stacking links are not resolved yet
+      if (opts.viewer !== undefined && !world.isSeen(unit.position.x, unit.position.y, opts.viewer))
+        continue;
       if (opts.showCities && world.cityAt(unit.position.x, unit.position.y)) continue;
       drawn.add(key);
       drawUnit(ctx, folder, unit, top);

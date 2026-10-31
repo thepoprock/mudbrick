@@ -8,6 +8,7 @@
  * interim approximations until the objective and plan machinery is ported.
  */
 import { resolveAttack } from './attack.js';
+import { captureCity } from './conquest.js';
 import { distance } from './city.js';
 import { attackStrength, defenceStrength, hitPoints, maxHitPoints } from './combat.js';
 import { chooseDefender } from './defender.js';
@@ -26,6 +27,7 @@ import type { Rng } from './rng.js';
 import { DOMAIN_AIR, DOMAIN_GROUND, IMPROVEMENT, type EngineRules } from './rules.js';
 import { canOrder, doWork, ORDER } from './terraform.js';
 import { hutAt } from './terrainSpecials.js';
+import { gotoStep } from './turnStart.js';
 import {
   NEIGHBOUR_OFFSETS,
   OCEAN,
@@ -53,6 +55,8 @@ export interface AiUnitContext extends MovementContext {
   bloodlust?: boolean;
   /** Scenario flag: computer units do not explore. */
   noExploration?: boolean;
+  /** Has anyone discovered Guerilla Warfare (partisans on capture)? */
+  guerillaWarfareDiscovered?: boolean;
 }
 
 export interface AiUnitEvent {
@@ -156,7 +160,11 @@ export function chooseDirection(
   const nearestIsForeign = nearestAny !== null && nearestAny !== nearestOwn;
   // VERIFIED: exploration terms apply outside foreign zones of control (and, in the original,
   // when the unit has no objective — objectives are not modelled yet).
-  const exploring = !ctx.noExploration && !hereOcean && !foreignUnitAdjacent(world, here, me, here);
+  const exploring =
+    !ctx.noExploration &&
+    !hereOcean &&
+    unit.order !== ORDER.goTo &&
+    !foreignUnitAdjacent(world, here, me, here);
   const roadMult = rules.cosmic.roadMoveMultiplier;
   const left = movesLeft(rules, unit, ctx);
   const ownStack = world.unitsAt(here.x, here.y).filter((u) => u.owner === me);
@@ -491,9 +499,34 @@ function act(
   const r = tryMove(world, rules, ctx.rng, unit, c.to, ctx);
   if (r.kind === 'moved') {
     unit.lastDirection = c.dir;
+    takeCityHere(world, rules, unit, ctx, events);
     return true;
   }
   return false;
+}
+
+/** A unit that stepped into an undefended enemy city takes it (the capture rules of conquest.ts). */
+function takeCityHere(
+  world: World,
+  rules: EngineRules,
+  unit: Unit,
+  ctx: AiUnitContext,
+  events: AiUnitEvent[],
+): void {
+  const city = world.cityAt(unit.position.x, unit.position.y);
+  if (!city || city.owner === unit.owner) return;
+  const loser = world.civs.find((c) => c.slot === city.owner);
+  if (!loser) return;
+  const ev = captureCity(world, rules, ctx.rng, city, ctx.civ, loser, {
+    turn: ctx.turn,
+    difficulty: ctx.difficulty,
+    conquest: true,
+    guerillaWarfareDiscovered: ctx.guerillaWarfareDiscovered ?? false,
+  });
+  events.push({
+    kind: 'ai-unit',
+    text: ev.cityDestroyed ? `destroys ${city.name}` : `captures ${city.name}`,
+  });
 }
 
 /** Move every unit of a computer civilization once. */
@@ -518,6 +551,23 @@ export function aiMoveUnits(
     }
     let guard = 0;
     while (movesLeft(rules, unit, ctx) > 0 && world.units.includes(unit) && guard++ < 12) {
+      // An objective's go-to (aiStrategy.ts) is followed before anything else.
+      if (unit.order === ORDER.goTo && unit.gotoTarget) {
+        const r = gotoStep(world, rules, ctx.rng, unit, ctx);
+        if (r.kind === 'goto-step' && r.arrived) {
+          unit.order = null;
+          unit.arrived = true;
+          takeCityHere(world, rules, unit, ctx, events);
+          continue;
+        }
+        if (r.kind !== 'goto-step') {
+          unit.order = null;
+          unit.gotoTarget = null;
+          continue;
+        }
+        takeCityHere(world, rules, unit, ctx, events);
+        continue;
+      }
       const cityHere = world.cityAt(unit.position.x, unit.position.y);
       if (type.role === ROLE_SETTLE || type.role === ROLE_TRANSFORM) {
         if (!settlersAct(world, rules, unit, ctx, events)) break;

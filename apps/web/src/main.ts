@@ -67,6 +67,8 @@ function renderOptions() {
     zoom: Number(zoomSelect.value),
     showUnits: showUnits.checked,
     showCities: showCities.checked,
+    // Fog of war: while playing, only what the human's civilization has seen is drawn.
+    ...(session ? { viewer: session.humanSlot } : {}),
   };
 }
 
