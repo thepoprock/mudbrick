@@ -7,6 +7,7 @@
  * cases — where a settler founds, how many defenders a city keeps, what caravans do — are
  * interim approximations until the objective and plan machinery is ported.
  */
+import { addGoal, removeGoals, type CivStrategy } from './aiStrategy.js';
 import { resolveAttack } from './attack.js';
 import { captureCity } from './conquest.js';
 import { distance } from './city.js';
@@ -57,6 +58,8 @@ export interface AiUnitContext extends MovementContext {
   noExploration?: boolean;
   /** Has anyone discovered Guerilla Warfare (partisans on capture)? */
   guerillaWarfareDiscovered?: boolean;
+  /** The civilization's strategic state, for settle goals (aiStrategy.ts). */
+  strategy?: CivStrategy;
 }
 
 export interface AiUnitEvent {
@@ -615,6 +618,7 @@ export function aiMoveUnits(
           break;
         }
       }
+      if (type.role < 2) postSettleGoal(world, unit, ctx);
       const c = chooseDirection(world, rules, unit, ctx);
       if (!c) {
         // VERIFIED: a unit that stays fortifies.
@@ -628,6 +632,46 @@ export function aiMoveUnits(
   return events;
 }
 
+/**
+ * VERIFIED: an attacker or defender that finds a neighbouring square of higher land value,
+ * far enough from the nearest city (`value ≥ 15 − distance`), posts a persistent settle goal
+ * there (0x004707c5, type 5, priority 2) for a settler to be sent to.
+ */
+function postSettleGoal(world: World, unit: Unit, ctx: AiUnitContext): void {
+  const s = ctx.strategy;
+  if (!s) return;
+  const here = unit.position;
+  if (world.terrainAt(here.x, here.y) === OCEAN) return;
+  const landmass = world.landmass[world.index(here.x, here.y)];
+  const nearestAny = nearestCity(world, here, () => true);
+  const nearestDist = nearestAny ? distance(world, here, nearestAny.position) : 99;
+  let best = landValue(world, here.x, here.y);
+  if (
+    nearestAny &&
+    nearestDist < 4 &&
+    best > 7 &&
+    world.landmass[world.index(nearestAny.position.x, nearestAny.position.y)] === landmass
+  )
+    best = 8;
+  if (best === 0) return;
+  let bestIndex = -1;
+  for (let i = 0; i < 8; i++) {
+    const q = neighbour(world, here, i);
+    if (!q || world.terrainAt(q.x, q.y) === OCEAN) continue;
+    if (world.landmass[world.index(q.x, q.y)] !== landmass) continue;
+    const v = landValue(world, q.x, q.y);
+    if (v > best) {
+      best = v;
+      bestIndex = i;
+    }
+  }
+  if (bestIndex < 0 || best <= 7) return;
+  if (inEnemyZoc(world, here.x, here.y, unit.owner)) return;
+  if (best < 15 - nearestDist) return;
+  const site = neighbour(world, here, bestIndex);
+  if (site) addGoal(s, { x: site.x, y: site.y, type: 5, priority: 2 });
+}
+
 function settlersAct(
   world: World,
   rules: EngineRules,
@@ -637,6 +681,8 @@ function settlersAct(
 ): boolean {
   const here = unit.position;
   const me = unit.owner;
+  // VERIFIED: a settler clears the settle goal on its own square (0x0046ffe5, type 5, distance 0).
+  if (ctx.strategy) removeGoals(world, ctx.strategy, 5, here, 0);
   const landmass = world.landmass[world.index(here.x, here.y)];
   const nearestAny = nearestCity(world, here, () => true);
   const nearestDist = nearestAny ? distance(world, here, nearestAny.position) : 99;

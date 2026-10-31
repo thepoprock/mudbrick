@@ -49,6 +49,18 @@ export interface AiBuildFacts {
   hasCapital: boolean;
   /** Land-mass flag: expanding continent (INFERRED default: fewer than 4 cities). */
   expanding: boolean;
+  /** Continent plan of the city's land mass (aiStrategy.ts PLAN); undefined before the first pass. */
+  plan?: number;
+  /** Own cities on the city's land mass. */
+  citiesOnContinent?: number;
+  /** Plan 4 only: an enemy at war has no city on this land mass (the advisor's local_34). */
+  warWithoutCitiesHere?: boolean;
+  /** Distance to the nearest other own city (9999 when none). */
+  nearestOwnCityDistance?: number;
+  /** A wanted settler stands near the city (city flag 0x40). */
+  workerNearby?: boolean;
+  /** Knows the advance that doubles the attack personality's pull (INFERRED: unused when absent). */
+  knowsAttackDoubler?: boolean;
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -545,14 +557,72 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
       if (u.role === 3) continue; // INFERRED: air superiority needs the human's air count
       if (u.domain === DOMAIN_SEA && !coastal) continue;
       let n = building * 2 + onContinent;
+      // VERIFIED: with an urgent defence need nothing but a defender is considered.
+      if (need === 2 && u.role !== 1) continue;
+      // VERIFIED: on a full land mass (plan 4) every unit costs `1 − expand` more (twice for
+      // non-settlers), halved when an enemy at war has no city there; attackers then shed the
+      // attack personality + 1 (doubled with the advance) and clamp to 0–99.
+      if (f.plan === 4 && (u.role !== 0 || u.attack !== 0)) {
+        let d = (1 - f.expand) * (u.role === 5 ? 1 : 2);
+        if (f.warWithoutCitiesHere) d = Math.trunc(d / 2);
+        n += d;
+        if (f.warWithoutCitiesHere && u.role === 0) {
+          let pull = f.attack + 1;
+          if (f.knowsAttackDoubler) pull <<= 1;
+          n = clamp(n - pull, 0, 99);
+        }
+      }
       if (u.role === 5) {
         let base =
           city.improvements[IMPROVEMENT.granary] || env.ownsWonder(IMPROVEMENT.pyramids) ? 4 : 6;
         base -= onContinent < (civ.government + 1) >> 1 ? f.civilize : f.expand;
-        n = base * Math.max(1, n);
+        // VERIFIED "expansion room": the nearest other own city more than 8 away counts 1 (unless a
+        // wanted settler is near, settlers are supported, the plan is defend, or size ≤ 2), and
+        // a city above size 6 under Republic or Democracy with settlers food and a plan other
+        // than attack counts 1 more.
+        const roomAllowed =
+          !f.workerNearby && f.settlersSupported === 0 && f.plan !== 1 && city.size > 2;
+        let room = 0;
+        if (roomAllowed && (f.nearestOwnCityDistance ?? 9999) > 8) room = 1;
+        if (
+          roomAllowed &&
+          city.size > 6 &&
+          civ.government > 4 &&
+          settlersFoodFor(rules, civ) > 0 &&
+          f.plan !== 0
+        )
+          room += 1;
+        n = (base - room) * Math.max(1, n);
         for (let s = 0; s < f.settlersSupported; s++) n += (s + 1) * (city.size < 4 ? 16 : 8);
         if (city.size < 2) n <<= 1;
         if (onContinent === 0 && f.foodSurplus === settlersFoodFor(rules, civ)) n -= n >> 1;
+        // VERIFIED continent share: with no urgent defence need, a land mass short of settlers
+        // halves the value (twice under some governments), and with none at all anywhere it
+        // halves again — or drops to 0 (build now) while the land mass has fewer cities than
+        // `expand + 3` (+2 under plan defend, +1 more under plan room), except on a full land mass.
+        const citiesOn = f.citiesOnContinent ?? env.cityCount;
+        if (need < 2) {
+          if (building === 0) {
+            if (civ.government < 5) {
+              if (civ.government > 1) {
+                if (onContinent < clamp(citiesOn >> 1, 1, 3)) n = Math.trunc(n / 2);
+                if (onContinent < Math.trunc(citiesOn / 5)) n = Math.trunc(n / 2);
+              }
+            } else if (onContinent < clamp(citiesOn - 1, 1, 6)) n = Math.trunc(n / 2);
+            if (onContinent < citiesOn >> 2) n = Math.trunc(n / 2);
+          }
+          if (onContinent === 0 && building === 0) {
+            n = Math.trunc(n / 2);
+            if (f.plan !== 4) {
+              let k = f.expand + 3;
+              if (f.plan === 1) k = f.expand + 2;
+              if (f.plan === 5) k += 1;
+              if (citiesOn < k) n = 0;
+            }
+          }
+        } else {
+          n <<= 4;
+        }
       } else if (u.role === 1 && need > 0) {
         n = Math.trunc(2 / need);
         if (need === 2 && !city.inDisorder) n = -1;

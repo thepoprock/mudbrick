@@ -254,10 +254,11 @@ describe('AI production choice (verified structure)', () => {
       env(w, c, facts({ defendersInCity: 2, foodSurplus: 4, trade: 30, shields: 30 })),
     );
     expect(['unit', 'improvement']).toContain(settled.kind);
-    // With nothing left to build, a unit type the civilization has none of scores 0 and wins.
+    // With nothing left to build and the land mass short of cities (fewer than expand + 3), the
+    // settlers' continent-share rule scores 0 and wins (VERIFIED, ai-city.md).
     const e = env(w, c, facts({ defendersInCity: 2, foodSurplus: 4 }));
     e.canBuildImprovement = () => false;
-    expect(aiChooseProduction(e)).toEqual({ kind: 'unit', index: 3 });
+    expect(aiChooseProduction(e)).toEqual({ kind: 'unit', index: 0 });
   });
 
   it('a unit-less early civilization builds its best defender', () => {

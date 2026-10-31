@@ -143,8 +143,10 @@ continent` (humans: halved, +2 for siege types). Settlers only with a food surpl
 
 ## What the engine implements
 
-`aiChooseProduction` follows this order with the inputs the engine has. INFERRED defaults: the
-continent plan is "settled" (not expanding) unless the civilization has fewer than four cities;
+`aiChooseProduction` follows this order with the inputs the engine has. The continent plan comes
+from the ported strategic layer (ai-units.md), so the military flag, the plan-4 unit surcharge and
+the settlers' expansion-room and continent-share terms are the original's; before the first
+strategy pass the INFERRED default "fewer than four cities" stands in for the military flag.
 AI targets, the human's unit counts and war weariness are zero; the airlift and the sale of
 redundant buildings are done; the free irrigation is applied. Each formula above is implemented
 as written where its inputs exist and skipped (candidate = never) where they do not; the code

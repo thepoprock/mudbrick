@@ -439,6 +439,7 @@ export class Game {
         cityCount: (s) => this.citiesOf(s).length,
         nextCityName: () => `${civ.adjective} City ${++names}`,
         guerillaWarfareDiscovered: (this.state.firstDiscoveredBy[34] ?? 0) !== 0,
+        ...(civ.strategy ? { strategy: civ.strategy } : {}),
         nuclearPower: this.knows(slot, ADVANCE.nuclearPower),
         magellans: this.ownsWonder(slot, IMPROVEMENT.magellans),
         lighthouse: this.ownsWonder(slot, IMPROVEMENT.lighthouse),
@@ -458,7 +459,14 @@ export class Game {
         anyDisorder,
         anyLargeContentCity: anyLargeQuiet,
         civilize,
-        expanding: true, // INFERRED: continent plans are not modelled
+        // VERIFIED meaning: a continent plan in the expansion states (5, room to grow) on some
+        // land mass the civilization holds (aiStrategy.ts).
+        expanding: this.citiesOf(slot).some(
+          (c) =>
+            (civ.strategy?.plans[
+              (this.world.landmass[this.world.index(c.position.x, c.position.y)] ?? 0) & 63
+            ] ?? 5) === 5,
+        ),
         knowsAllSpaceAdvances: space.every((a) => a !== null && civ.knownAdvances[a] === true),
       });
       civ.scienceRate = rates.science;
@@ -616,7 +624,46 @@ export class Game {
         hasCapital: this.world.cities.some(
           (c) => c.owner === city.owner && c.improvements[IMPROVEMENT.palace],
         ),
-        expanding: cityCount < 4,
+        // The advisor's "military" continent flag: plans 0 and 1 (aiStrategy.ts); before the first
+        // strategy pass the INFERRED default stands in.
+        ...(() => {
+          const lm =
+            (this.world.landmass[this.world.index(city.position.x, city.position.y)] ?? 0) & 63;
+          const lmOf = (c: City) =>
+            (this.world.landmass[this.world.index(c.position.x, c.position.y)] ?? 0) & 63;
+          const plan = civ.strategy?.plans[lm];
+          const nearest = this.world.cities
+            .filter((c) => c.owner === city.owner && c !== city)
+            .reduce(
+              (best, c) => Math.min(best, distance(this.world, city.position, c.position)),
+              9999,
+            );
+          const warWithoutCitiesHere =
+            plan === 4 &&
+            this.world.civs.some(
+              (o) =>
+                o.slot !== city.owner &&
+                o.slot !== 0 &&
+                this.atWar(city.owner, o.slot) &&
+                !this.world.cities.some((c) => c.owner === o.slot && lmOf(c) === lm),
+            );
+          return {
+            ...(plan !== undefined ? { plan } : {}),
+            citiesOnContinent: this.world.cities.filter(
+              (c) => c.owner === city.owner && lmOf(c) === lm,
+            ).length,
+            warWithoutCitiesHere,
+            nearestOwnCityDistance: nearest,
+            workerNearby: city.workerNearby === true,
+          };
+        })(),
+        expanding: (() => {
+          const plan =
+            civ.strategy?.plans[
+              (this.world.landmass[this.world.index(city.position.x, city.position.y)] ?? 0) & 63
+            ];
+          return plan === undefined ? cityCount < 4 : plan === 0 || plan === 1;
+        })(),
       },
       cityCount,
       wonderCity: (i) => this.wonderCity(i),

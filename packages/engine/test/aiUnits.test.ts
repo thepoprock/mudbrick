@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { emptyStrategy } from '../src/aiStrategy.js';
 import {
   aiMoveUnits,
   chooseDirection,
@@ -265,5 +266,17 @@ describe('computer-player units', () => {
     expect(legion.position.x !== 20 || legion.position.y !== 20).toBe(true);
     expect(legion.lastDirection).not.toBeNull();
     expect(w.isSeen(legion.position.x, legion.position.y, 2)).toBe(true);
+  });
+
+  it('an explorer next to a better site posts a settle goal for a settler', () => {
+    const w = world();
+    const c = civ();
+    const strategy = emptyStrategy();
+    const legion = unit(w, 4, 20, 20);
+    w.fertility.fill(9);
+    w.fertility[w.index(22, 20)] = 13; // the square east of the legion
+    aiMoveUnits(w, rules, 2, { ...ctx(w, c), strategy });
+    expect(strategy.goals.some((g) => g.type === 5 && g.x === 22 && g.y === 20)).toBe(true);
+    expect(legion.movesSpent).toBeGreaterThanOrEqual(0);
   });
 });
