@@ -1,4 +1,11 @@
-import { DEBUG_TERRAIN_COLOURS, decodeSquare, sprites, type MapFile } from '@epochs/formats';
+/**
+ * Draws a parsed `.MP` map onto a canvas: either real 64×32 terrain tiles from a loaded
+ * TERRAIN1.GIF sheet or flat debug colours, plus rivers and starting positions. Also the
+ * diamond-exact hit test used by the hover inspector.
+ *
+ * Coordinate system: docs/formats/map-format.md. Tile rectangles: docs/formats/assets.md.
+ */
+import { DEBUG_TERRAIN_COLOURS, decodeSquare, sprites, type MapFile } from '@mudbrick/formats';
 import type { TerrainSheet } from './terrainSheet.js';
 
 const { TILE_W, TILE_H } = sprites;

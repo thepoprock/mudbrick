@@ -2,7 +2,8 @@
 
 Everything here was derived from one specific edition of the original game, recorded in
 [research/inventory.md](research/inventory.md) with SHA-256 hashes of every file, so anyone can
-confirm they are looking at the same bytes.
+confirm they are looking at the same bytes. The legal basis for this work is in
+[../LEGAL.md](../LEGAL.md).
 
 Labels: **VERIFIED** = checked against the files, the game or a test; **INFERRED** = not yet.
 
@@ -11,7 +12,7 @@ Labels: **VERIFIED** = checked against the files, the game or a test; **INFERRED
 | document                                   | covers                                                                             | parser                            |
 | ------------------------------------------ | ---------------------------------------------------------------------------------- | --------------------------------- |
 | [rules-format.md](formats/rules-format.md) | `RULES.TXT`: constants, advances, improvements, wonders, units, terrain, leaders … | `packages/formats/src/rules.ts`   |
-| [textdata.md](formats/textdata.md)         | The seven families of text files: dialogs, labels, civilopedia, city names, menus  | `packages/formats/src/text.ts`    |
+| [textdata.md](formats/textdata.md)         | The seven families of text files: dialogs, labels, encyclopedia, city names, menus | `packages/formats/src/text.ts`    |
 | [map-format.md](formats/map-format.md)     | `.MP` map files: header, start positions, 6-byte square records                    | `packages/formats/src/map.ts`     |
 | [assets.md](formats/assets.md)             | Sprite-sheet layout: every rectangle in the GIF sheets, marker pixels, palette     | `packages/formats/src/sprites.ts` |
 

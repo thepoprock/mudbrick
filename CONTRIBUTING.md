@@ -14,7 +14,10 @@ Thank you for helping. This page is short on purpose; please read all of it.
 3. **Describe behaviour, don't transcribe it.** Findings from the executable go into
    `docs/engine/` as prose, tables and formulas ("city growth needs (rows × (size+1)) food,
    rows from cosmic constant 3"). The code is then written from the document.
-4. **Do not use the original trademarks** in names, titles or identifiers.
+4. **Keep the original trademarks out of names.** _Civilization_, _Civ_, _Sid Meier's_,
+   _MicroProse_ and the game's coined feature names belong to their owners. They may appear
+   in plain text to identify the product we are compatible with, never in identifiers, file
+   names, package names, UI labels, logos or release names. See [LEGAL.md](LEGAL.md).
 
 If you are unsure whether something crosses a line, open an issue before writing code.
 
@@ -33,8 +36,8 @@ guess as VERIFIED is the fastest way to waste someone else's week.
 ## Tests
 
 - Unit tests use inline fixtures and always run.
-- Conformance tests read the original files from `CIV2_DIR` and are skipped when it is unset.
-  CI does not have the files, so unit coverage must stand on its own.
+- Conformance tests read the original files from `ORIGINAL_GAME_DIR` and are skipped when it is
+  unset. CI does not have the files, so unit coverage must stand on its own.
 - A format parser is done when it parses every shipped instance of that file type (all 42
   saves/scenarios, all 11 maps, …) and the test says so.
 
@@ -43,10 +46,11 @@ guess as VERIFIED is the fastest way to waste someone else's week.
 - TypeScript strict mode, `noUncheckedIndexedAccess` on. If the compiler complains, the
   code is unclear, not the compiler.
 - `packages/engine` and `packages/formats` import nothing from the DOM or Node. Put platform
-  code in `apps/`.
+  code in `apps/` or `scripts/`.
 - Row order in the original tables is identity (units, advances, terrain are addressed by
   index). Parsers never reorder; the engine never renumbers.
 - Randomness only through `Rng`; its state is part of the game state.
+- Every source file starts with a comment saying what it is for and which spec it implements.
 - Prefer a small named function over a comment explaining a block.
 - `npm run check` must pass before you open a pull request.
 

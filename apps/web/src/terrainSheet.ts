@@ -1,4 +1,10 @@
-import { sprites } from '@epochs/formats';
+/**
+ * Loads the player's own TERRAIN1.GIF into an offscreen canvas and turns the magenta colour key
+ * into real transparency, so tiles can be drawn with `drawImage`.
+ *
+ * Which colour is the key, and why: docs/formats/assets.md ("Common conventions").
+ */
+import { sprites } from '@mudbrick/formats';
 
 /** TERRAIN1.GIF decoded once, with the magenta key turned into real transparency. */
 export interface TerrainSheet {

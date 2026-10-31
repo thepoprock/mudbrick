@@ -8,7 +8,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
-import { DEBUG_TERRAIN_COLOURS, decodeSquare, hexToRgb, parseMap } from '@epochs/formats';
+import { DEBUG_TERRAIN_COLOURS, decodeSquare, hexToRgb, parseMap } from '@mudbrick/formats';
 
 const [, , inPath, outPath, scaleArg] = process.argv;
 if (!inPath || !outPath) {

@@ -1,4 +1,4 @@
-# RULES.TXT — format specification (Civ2 MGE, English)
+# RULES.TXT — format specification (original game, Multiplayer Gold Edition, English)
 
 Source of truth: the comment headers inside RULES.TXT itself plus parsing of the shipped file (`tools/parse_rules.py` → `docs/rules-data.json`). Everything below is VERIFIED against the shipped file unless marked INFERRED.
 

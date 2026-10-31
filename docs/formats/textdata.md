@@ -1,4 +1,4 @@
-# Text data files — formats (Civ2 MGE, English)
+# Text data files — formats (original game, Multiplayer Gold Edition, English)
 
 All text files are CP1252 (Windows-1252) with CRLF line endings. `;` begins a comment line. A line beginning `@NAME` opens a section; sections run to the next `@`-line. Counts below are VERIFIED against the shipped files.
 
@@ -31,7 +31,7 @@ Each section describes one dialog box. Directives (all start with `@` inside the
 
 50 sections, one per civilization plural (`@ROMANS`, `@BABYLONIANS`, …) plus extras; one city name per line, max 15 characters (stated in the file header). Indexed by the civ's plural name from RULES.TXT @LEADERS (INFERRED: lookup is by name since the section is named).
 
-## Family 5 — Describe.txt (Civilopedia long descriptions, 213 KB, 7 top-level sections)
+## Family 5 — Describe.txt (in-game encyclopedia long descriptions, 213 KB, 7 top-level sections)
 
 Per category (@ADVANCE_DESCRIPTIONS, improvements, wonders, units, concepts…): an `@@<CAT>_INDEX` list mapping rules-order → description-order, one integer per line terminated with a comma, `-1` = no description, list terminates with `-2`; then the descriptions themselves, each beginning with `@@`. The index exists because the descriptions are in alphabetical order while RULES.TXT is not. Multi-line prose, `^` indentation as in Family 1.
 

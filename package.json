@@ -1,5 +1,5 @@
 {
-  "name": "epochs",
+  "name": "mudbrick",
   "private": true,
   "version": "0.0.1",
   "description": "A free, open, browser-based re-creation of the classic 1996 turn-based civilization-building game, written from a clean-room specification. Codename only; final name to be chosen.",

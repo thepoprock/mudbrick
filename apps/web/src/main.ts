@@ -1,4 +1,11 @@
-import { decodeSquare, parseMap, toGameCoords, type MapFile } from '@epochs/formats';
+/**
+ * Entry point of the browser map viewer.
+ *
+ * Wires the file pickers, zoom control and hover inspector to the parsers in `@mudbrick/formats`
+ * and the drawing code in `mapRenderer.ts`. Files chosen by the player are read in the browser
+ * and never leave the machine. Contains no game rules.
+ */
+import { decodeSquare, parseMap, toGameCoords, type MapFile } from '@mudbrick/formats';
 import { drawMap, hitTest } from './mapRenderer.js';
 import { loadTerrainSheet, type TerrainSheet } from './terrainSheet.js';
 

@@ -1,4 +1,4 @@
-# Civ2 MGE — Phase 1 inventory (2026-10-31)
+# Inventory of the original game files (Multiplayer Gold Edition, English) — research record, 2026-10-31
 
 Source: Civilization II Multiplayer Gold Edition, English, disc image (bin/cue). ISO label `Civ2:MGE v1.0`, mastered 1998-11-17. Game files were inside the InstallShield cabinet `data1.cab` (954 files, 86 MB); extracted with unshield. Flattened install layout rebuilt at `game/civ2/` (root + SOUND/ + SCENARIO/). SHA-256 of every file: `docs/inventory.sha256`.
 

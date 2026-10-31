@@ -15,3 +15,6 @@ game/
 *.exe
 *.dll
 *.wav
+
+# Type-check output of apps and scripts
+dist-types/

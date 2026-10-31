@@ -1,4 +1,4 @@
-# Sprite sheets — layout specification (Civ2 MGE)
+# Sprite sheets — layout specification (original game, Multiplayer Gold Edition)
 
 All measurements VERIFIED against the shipped GIFs with `tools/sprites.py` (edge-uniformity and marker-pixel checks; contact sheets in `docs/assets/*.png`, palettes in `docs/assets/*_palette.txt`, machine-readable report `docs/assets/sprite_report.json`). The rectangle table was seeded from the axx0 clone and then checked pixel by pixel; one correction found (roads row).
 
@@ -28,7 +28,7 @@ Slot i = row i÷9, col i%9, in RULES.TXT @UNITS order (slot 0 Settlers … slot 
 
 ## TERRAIN2.GIF — overlays, 64×32, 8 columns × 2 rows per group, x=1+65·c
 
-Coast/land connection y=1,34 · Rivers y=67,100 · Forest y=133,166 · Mountains y=199,232 · Hills y=265,298 · River mouths (4) y=331. Each 16-tile group is indexed by the 4-bit N/E/S/W neighbour mask (INFERRED; standard Civ2 scheme, to confirm in exe). Coastline quarter-tiles 32×16: eight columns at x=1+66·i, rows y=429 (N), 446 (S), 463 (W) and x=34+66·i, y=463 (E).
+Coast/land connection y=1,34 · Rivers y=67,100 · Forest y=133,166 · Mountains y=199,232 · Hills y=265,298 · River mouths (4) y=331. Each 16-tile group is indexed by the 4-bit N/E/S/W neighbour mask (INFERRED; the original game's standard scheme, to confirm in the executable). Coastline quarter-tiles 32×16: eight columns at x=1+66·i, rows y=429 (N), 446 (S), 463 (W) and x=34+66·i, y=463 (E).
 
 ## ICONS.GIF (no green grid; magenta and light-pink backgrounds)
 
@@ -36,7 +36,7 @@ Improvement icons 36×20 at (343+37·c, 1+21·r), 8 per row, 39 total in RULES @
 
 ## PEOPLE.GIF — citizen faces 27×30, 11 columns × 4 rows at (2+28·c, 6+31·r)
 
-Rows = era (INFERRED: Ancient, Renaissance, Industrial, Modern). Columns (INFERRED, standard Civ2): 0–1 happy, 2–3 content, 4–5 unhappy (male/female alternating), 6–7 ?, 8 entertainer, 9 tax collector, 10 scientist. Black 1-px frame around each face instead of a green grid.
+Rows = era (INFERRED: Ancient, Renaissance, Industrial, Modern). Columns (INFERRED, the original game's standard layout): 0–1 happy, 2–3 content, 4–5 unhappy (male/female alternating), 6–7 ?, 8 entertainer, 9 tax collector, 10 scientist. Black 1-px frame around each face instead of a green grid.
 
 ## CITY.GIF (640×480) — city-screen wallpaper; the clone uses the 636×421 top-left region. EDITOR*.GIF — map-editor toolbars. SCREDITS.GIF (600×400) — credits background.
 

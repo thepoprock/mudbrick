@@ -1,5 +1,5 @@
 {
-  "name": "@epochs/web",
+  "name": "@mudbrick/web",
   "private": true,
   "version": "0.0.1",
   "description": "Browser front end. Currently: a map viewer for the original .MP files.",
@@ -11,7 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@epochs/engine": "*",
-    "@epochs/formats": "*"
+    "@mudbrick/engine": "*",
+    "@mudbrick/formats": "*"
   }
 }

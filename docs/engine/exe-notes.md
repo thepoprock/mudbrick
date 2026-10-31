@@ -1,6 +1,6 @@
 # civ2.exe — engine notes (Ghidra project tools/ghidra-proj/civ2mge)
 
-Binary: civ2.exe MGE, sha256 f5196e31a6bc1331e503064b38feafc1353141735650079d90f95079edb04c40, PE32 i386, MSVC linker 4.20, link time 1998-11-16 21:31:32 UTC. Image base 0x400000, entry 0x5969b0. 5,179 functions after auto-analysis (541 carry names: CRT, imports, FID matches). Full table: functions.tsv (address, size, name, callers, callees, thunk).
+Binary: civ2.exe (Multiplayer Gold Edition), sha256 f5196e31a6bc1331e503064b38feafc1353141735650079d90f95079edb04c40, PE32 i386, MSVC linker 4.20, link time 1998-11-16 21:31:32 UTC. Image base 0x400000, entry 0x5969b0. 5,179 functions after auto-analysis (541 carry names: CRT, imports, FID matches). Full table: functions.tsv (address, size, name, callers, callees, thunk).
 
 Workflow: `. tools/ghidra-env.sh` → `analyzeHeadless tools/ghidra-proj civ2mge -process civ2.exe -noanalysis -scriptPath tools/ghidra-scripts -postScript DecompileOne.java <addr> <out.c>`.
 Rule: read the C, write the behaviour down in words and formulas here. Never copy decompiled code into the new engine.

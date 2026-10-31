@@ -1,5 +1,5 @@
 {
-  "name": "@epochs/engine",
+  "name": "@mudbrick/engine",
   "version": "0.0.1",
   "description": "The game simulation: rules, world state, turn processing, AI. Pure TypeScript, deterministic, no DOM, no Node APIs.",
   "license": "MIT",
