@@ -65,3 +65,17 @@ describe('World', () => {
     expect(round.unitsAt(6, 2)).toEqual([]);
   });
 });
+
+describe('World.directNeighbours', () => {
+  it('returns NE, SE, SW, NW in mask-bit order', () => {
+    const w = new World({ columns: 4, rows: 4, flatEarth: true });
+    expect(w.directNeighbours(2, 2)).toEqual([
+      { x: 3, y: 1 },
+      { x: 3, y: 3 },
+      { x: 1, y: 3 },
+      { x: 1, y: 1 },
+    ]);
+    // Top-left corner of a flat world: only SE (1, 1) exists.
+    expect(w.directNeighbours(0, 0)).toEqual([null, { x: 1, y: 1 }, null, null]);
+  });
+});

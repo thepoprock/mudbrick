@@ -195,6 +195,16 @@ export class World {
     });
   }
 
+  /**
+   * The four edge-sharing neighbours of an isometric square, in the order the original art
+   * expects for 4-bit variant masks: NE (x+1, y−1), SE (x+1, y+1), SW (x−1, y+1), NW (x−1, y−1).
+   * Bit 0 of such a mask is NE, bit 3 is NW. Off-map neighbours are null.
+   */
+  directNeighbours(x: number, y: number): (Point | null)[] {
+    const n = this.neighbours(x, y);
+    return [n[1] ?? null, n[3] ?? null, n[5] ?? null, n[7] ?? null];
+  }
+
   cityAt(x: number, y: number): City | undefined {
     const wx = this.wrapX(x, y);
     return this.cities.find((c) => c.position.x === wx && c.position.y === y);

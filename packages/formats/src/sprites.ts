@@ -27,8 +27,13 @@ export const GRID_LINE: Rgb = [0, 255, 0];
 export const FLAG_MARKER: Rgb = [0, 0, 255];
 /** Orange marker pixel on a cell's top/left grid line: city size-box anchor. */
 export const SIZE_MARKER: Rgb = [255, 155, 0];
-/** Purple: fills the corners outside the diamond footprint in UNITS.GIF cells. */
+/** Purple: fills the corners outside the diamond footprint in UNITS.GIF cells. Transparent. */
 export const UNIT_CORNER_FILL: Rgb = [135, 83, 135];
+/**
+ * Grey: fills the corners outside the diamonds in TERRAIN1, TERRAIN2 and CITIES. Transparent
+ * there, but a real colour inside UNITS and ICONS art, so key it per sheet.
+ */
+export const SHEET_FILL: Rgb = [135, 135, 135];
 
 export const TILE_W = 64;
 export const TILE_H = 32;

@@ -1,0 +1,16 @@
+{
+  "name": "Mudbrick",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:1-20-bookworm",
+  "postCreateCommand": "npm ci",
+  "forwardPorts": [5173],
+  "portsAttributes": { "5173": { "label": "Mudbrick viewer", "onAutoForward": "openBrowser" } },
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode", "vitest.explorer"],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+      }
+    }
+  }
+}

@@ -5,6 +5,7 @@ All measurements VERIFIED against the shipped GIFs with `tools/sprites.py` (edge
 ## Common conventions
 
 - GIF87a, 640×480, 256-colour palette, single frame, no extensions. Palette index **253 = magenta (255,0,255) = transparent** in every sheet. Index **254 = green (0,255,0) = grid separator** in UNITS, CITIES, TERRAIN1, TERRAIN2. Index **250 = blue (0,0,255)** and **249 = orange (255,155,0)** are marker pixels placed on the separator line above/left of a cell: blue marks the flag/shield anchor, orange the city-size-box anchor. ICONS additionally uses index 255 = light pink (255,159,163) as a second transparent colour.
+- Grey (135,135,135), index 255, is the sheet's fill colour outside the 64×32 diamonds in TERRAIN1, TERRAIN2 and CITIES and must be transparent too — VERIFIED by pixel census: every base tile has ~960 grey pixels in its four corners and none inside the diamond (Jungle: 5). UNITS and ICONS use that grey sparingly inside real art, so it is NOT keyed there.
 - Cells sit inside a 1-pixel green grid: a 64-wide cell at x=1+65·col, a 48-high cell at y=1+49·row, a 32-high tile at y=1+33·row.
 - Unit/city cells are 64×48; terrain tiles are 64×32 isometric diamonds (the diamond occupies the full 64×32; corners are magenta).
 
@@ -56,3 +57,15 @@ Tiles.dll, Intro.dll, pv.dll, cv.dll, Wonder.dll, Civ2Art.dll carry bitmaps as W
 - Column by size: rows 0–3: ≤3 → 0, ≤5 → 1, ≤7 → 2, else 3. Row 4: ≤4, ≤7, ≤10, else 3. Row 5: ≤4, ≤10, ≤18, else 3. A city holding the Palace moves one column up (max 3).
 - Walled variant (x = 334 + 65·col) when the city has City Walls.
 - The blue marker gives the flag anchor (flag drawn with its bottom 5 px below the anchor), the orange marker the size-box anchor.
+
+## Compositing a square (rules from the community reimplementation, VERIFIED by rendering WWII.SCN with `apps/web/src/terrainCompositor.ts`: coastlines, dithered land edges, river courses, forest/hill/mountain groups and road networks all join correctly across squares)
+
+Edge-neighbours of (x, y) in the isometric grid are NE (x+1, y−1), SE (x+1, y+1), SW (x−1, y+1), NW (x−1, y−1); a 4-bit mask uses NE as bit 0 … NW as bit 3. All eight neighbours clockwise from north: N (x, y−2), NE, E (x+2, y), SE, S (x, y+2), SW, W (x−2, y), NW.
+
+1. Base tile from TERRAIN1 column x=1 for the square's terrain.
+2. Land squares: for each edge-neighbour of a different terrain (ocean counts as grassland), draw that terrain's base tile through the dither mask (1,447): black mask pixels show the neighbour, magenta/grey hide it. The mask's four 32×16 quadrants map to the edge-neighbours NE (32,0), SE (32,16), SW (0,16), NW (0,0).
+3. Ocean squares: four coastline quarter tiles, one per side, each chosen by a 3-bit code of the three land neighbours on that side — N side: NW=1, N=2, NE=4 drawn at (16,0); S side: SE=1, S=2, SW=4 at (16,16); W side: SW=1, W=2, NW=4 at (0,8); E side: NE=1, E=2, SE=4 at (32,8). Then a river mouth (TERRAIN2 y=331, variant = edge-neighbour index) for each edge-neighbour that carries a river.
+4. Forest, Hills, Mountains: overlay from TERRAIN2 with variant = mask of edge-neighbours of the same terrain.
+5. River: TERRAIN2 river variant = mask of edge-neighbours that have a river or are ocean.
+6. Irrigation / farmland / mine, then roads: for each of the eight neighbours with a road, segment 1–8 toward NE, E, SE, S, SW, W, NW, N (railroad segment when both squares have rail); segment 0 (isolated) only when no neighbour has one and no city stands here. Pollution last.
+   Special resources and huts are placed by a formula the original computes from the resource seed; the save's bit 6 is not authoritative. Not drawn yet.

@@ -49,8 +49,25 @@ const [TR, TG, TB] = sprites.TRANSPARENT;
 const [PR, PG, PB] = sprites.TRANSPARENT_ALT;
 
 const [UR, UG, UB] = sprites.UNIT_CORNER_FILL;
+const [GR, GG, GB] = sprites.SHEET_FILL;
 
-async function loadSheet(file: Blob, keyPink: boolean, keyPurple: boolean): Promise<Sheet> {
+/** Which non-sprite colours to make transparent, besides magenta (always). */
+interface ColourKeys {
+  pink?: boolean;
+  purple?: boolean;
+  grey?: boolean;
+}
+
+/** Per docs/formats/assets.md "Common conventions" and "Palette and fill colours". */
+const SHEET_KEYS: Record<SheetName, ColourKeys> = {
+  TERRAIN1: { grey: true },
+  TERRAIN2: { grey: true },
+  CITIES: { grey: true },
+  UNITS: { purple: true },
+  ICONS: { pink: true },
+};
+
+async function loadSheet(file: Blob, keys: ColourKeys): Promise<Sheet> {
   const bitmap = await createImageBitmap(file);
   const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
   const ctx = canvas.getContext('2d');
@@ -65,8 +82,9 @@ async function loadSheet(file: Blob, keyPink: boolean, keyPurple: boolean): Prom
     const b = d[i + 2];
     if (
       (r === TR && g === TG && b === TB) ||
-      (keyPink && r === PR && g === PG && b === PB) ||
-      (keyPurple && r === UR && g === UG && b === UB)
+      (keys.pink === true && r === PR && g === PG && b === PB) ||
+      (keys.purple === true && r === UR && g === UG && b === UB) ||
+      (keys.grey === true && r === GR && g === GG && b === GB)
     ) {
       d[i + 3] = 0;
     }
@@ -98,7 +116,7 @@ async function loadFrom(source: FileSource): Promise<GameFolder> {
   const sheets: Partial<Record<SheetName, Sheet>> = {};
   for (const name of SHEETS) {
     const f = await source(`${name}.GIF`);
-    if (f) sheets[name] = await loadSheet(f, name === 'ICONS', name === 'UNITS');
+    if (f) sheets[name] = await loadSheet(f, SHEET_KEYS[name]);
   }
 
   const unitFlag: Anchor[] = [];
