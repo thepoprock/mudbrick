@@ -1,0 +1,14 @@
+{
+  "name": "@epochs/formats",
+  "version": "0.0.1",
+  "description": "Parsers for the original game's data files (rules text, maps, sprite-sheet layout, saves). Pure TypeScript, no DOM, no Node APIs.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc -b"
+  }
+}

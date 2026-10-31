@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Map viewer</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font:
+          14px/1.4 system-ui,
+          sans-serif;
+      }
+      body {
+        margin: 0;
+        background: #14161a;
+        color: #ddd;
+      }
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: center;
+        padding: 0.75rem 1rem;
+        background: #1e2228;
+        border-bottom: 1px solid #333;
+      }
+      header label {
+        display: inline-flex;
+        gap: 0.4rem;
+        align-items: center;
+      }
+      main {
+        padding: 1rem;
+        overflow: auto;
+      }
+      canvas {
+        image-rendering: pixelated;
+        background: #000;
+        display: block;
+      }
+      #info {
+        font-family: ui-monospace, monospace;
+        white-space: pre;
+        margin: 0 0 0.75rem;
+        min-height: 3.5em;
+        color: #9fb;
+      }
+      .hint {
+        color: #888;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <strong>Map viewer</strong>
+      <label>Map file (.MP) <input id="mapFile" type="file" accept=".mp,.MP" /></label>
+      <label
+        >TERRAIN1.GIF (optional) <input id="terrainFile" type="file" accept=".gif,.GIF"
+      /></label>
+      <label
+        >Zoom
+        <select id="zoom">
+          <option value="0.25">¼</option>
+          <option value="0.5" selected>½</option>
+          <option value="1">1</option>
+        </select></label
+      >
+      <span class="hint">Files are read in your browser only. Nothing is uploaded.</span>
+    </header>
+    <main>
+      <p id="info">Choose a .MP file from your own copy of the game (for example WORLD.MP).</p>
+      <canvas id="map" width="0" height="0"></canvas>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

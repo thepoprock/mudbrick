@@ -1,0 +1,17 @@
+{
+  "name": "@epochs/web",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Browser front end. Currently: a map viewer for the original .MP files.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@epochs/engine": "*",
+    "@epochs/formats": "*"
+  }
+}

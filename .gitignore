@@ -1,0 +1,17 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.DS_Store
+# Original game files must never be committed. Point CIV2_DIR at your own copy instead.
+game/
+*.GIF
+*.gif
+*.SAV
+*.sav
+*.SCN
+*.scn
+*.MP
+*.mp
+*.exe
+*.dll
+*.wav
