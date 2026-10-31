@@ -13,6 +13,7 @@ export function worldFromSave(save: SaveFile, rules: Rules): World {
     columns: save.map.columns,
     rows: save.map.rows,
     flatEarth: save.map.header.flatEarth,
+    resourceSeed: save.map.header.resourceSeed,
   });
 
   for (let i = 0; i < save.map.header.area; i++) {
@@ -29,6 +30,7 @@ export function worldFromSave(save: SaveFile, rules: Rules): World {
     if (s.fortress) f |= SquareFlag.Fortress;
     if (s.airbase) f |= SquareFlag.Airbase;
     if (s.pollution) f |= SquareFlag.Pollution;
+    if (s.resourceFlag) f |= SquareFlag.NoSpecial;
     world.flags[i] = f;
   }
 

@@ -50,12 +50,17 @@ A unit with any movement left may attempt a step that costs more than it has and
 probability `left / cost`; on failure it stays and its movement is spent. The handler that
 decides this has not been read yet.
 
-## Zones of control (INFERRED; the check function 0x005564c0 exists and takes (x, y, civ))
+## Zones of control (core VERIFIED: 0x005564c0 → 0x00556397)
 
-A ground unit may not move from a square adjacent to an enemy ground unit directly into another
-square adjacent to an enemy ground unit, unless it ignores zones of control (RULES flag bit 1),
-starts inside a city, or the destination holds a friendly unit or city. Sea and air units
-neither exert nor suffer zones of control.
+A square is "in the zone of control" of civilization C when **no city stands on it** and at
+least one of its eight neighbours holds units of another civilization that is **not allied**
+with C (treaty bit 3), and that neighbour is the same kind of square — land next to land, sea
+next to sea. Allied units never exert zones of control; a square with a city is never in one.
+
+The go-to code refuses a step when the start square is in enemy ZOC, the destination is in enemy
+ZOC, and the unit lacks the "ignore zones of control" flag (RULES flag bit 1). Whether a friendly
+unit already standing on the destination lifts the restriction, as the manual says, is INFERRED
+until the move handler itself is read.
 
 ## Still to read
 

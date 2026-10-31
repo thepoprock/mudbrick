@@ -120,7 +120,24 @@ When the handler is called in preview mode (the "attack odds" display) it return
 `hitPoints + firepower × 8` when the relevant option bit is set, and after halving both sides
 while A ≥ 4000.
 
+## Which unit defends (VERIFIED: 0x0052b823)
+
+Every unit on the attacked square is scored and the highest score defends (ties go to the unit
+examined later). Ground units standing on an ocean square (passengers) are skipped. The score is:
+
+```
+score = DefenceStrength(unit, attacker)              (the function above, before the handler's adjustments)
+if simplified combat is off: score = score × hitPointsLeft / maxHitPoints
+if unit has the pikemen flag: score += 1
+if unit has the AEGIS flag: no attacker → +1; air attacker → ×3, or ×5 for a missile
+if unit can attack air and the attacker is an air unit that can attack air: ×2
+if unit is a sea unit inside a city: ×2 against an air attacker when the city has no SAM battery, otherwise ÷2
+```
+
+Note that damage influences _who_ defends even though it does not reduce the strength used in
+the rounds.
+
 ## Still to read
 
-Best-defender selection (0x0052b823), the attack-cost condition, the Legion-vs-barbarian
+The attack-cost condition, the Legion-vs-barbarian
 condition, nuclear attacks (attack 99), and what status bit 4 means.

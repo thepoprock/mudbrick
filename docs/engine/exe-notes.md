@@ -71,6 +71,18 @@ Terrain record: 24 bytes at 0x5b2a08 + 24·terrain; byte +1 = defence halves.
 
 Step cost as weighted by the go-to code (ground units): railroad on both squares → ¼ third (treated as free); road on both squares → 1 third; river on both squares **when the step is to an edge-neighbour (diagonal)** → 1 third; otherwise terrain cost × 3 thirds, except that a unit whose full allowance is one MP or less pays exactly one MP for any terrain. Non-ground units pay one MP per square. Units with the "stay near land" flag (triremes) get an extra MP of weight on squares whose byte-0 bit 6 is set (INFERRED: "no land adjacent"). Terrain record: 24 bytes at 0x5b2a08 + 24·terrain, byte 0 = movement cost, byte 1 = defence halves.
 
+### Map and square helpers (VERIFIED)
+
+| address                 | what                                                                                                                                                                                                                |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0x00402780(x, y)        | in map bounds (width at 0x62e660, height at 0x62e662)                                                                                                                                                               |
+| 0x00558e51(x, y)        | pointer to the 6-byte square record: `mapBase + (widthX2 & ~1) × 3 × y + (x & ~1) × 3`; out of bounds → a dummy record                                                                                              |
+| 0x00558edb(x, y)        | terrain = byte 0 & 0x0F · 0x00558f04 is ocean · 0x00558fa1 land-mass id (byte 3)                                                                                                                                    |
+| 0x00558f3d(x, y)        | owner nibble (byte 5 >> 4; 15 → −1) · 0x00559282 unit owner (needs byte 1 bit 0) · 0x005591c6 city owner (bit 1 set, bit 6 clear) · 0x00559235 airbase owner (bits 1 and 6) · 0x005592c4 city owner else unit owner |
+| 0x005599f5(x, y)        | improvement byte (byte 1) · 0x00559085(x, y, civ) seen-by bit (byte 4) · 0x005595ff(x, y) pollute: sets bit 7 of byte 1, tells every civ, increments the global pollution count (0x5da732)                          |
+| 0x00559401(x, y)        | special resource 0/1/2 from the seed (rules-map.md) · 0x0055951a hut · 0x00558b1e new seed                                                                                                                          |
+| 0x005b2e18 / 0x005b2e28 | dx / dy of the eight neighbours; 0x005b2e38 / 0x005b2e68 the 21-square city radius                                                                                                                                  |
+
 ## Largest functions (candidates for the big game-logic routines; INFERRED, not yet read)
 
 0x004f44cc (44 KB) · 0x00474edb (20 KB) · 0x00539099 (18 KB) · 0x00449c70 (16 KB) · 0x0052d472 (15 KB) · 0x004ed2dd (15 KB) · 0x004a224f (13 KB) · 0x004c42e6 (13 KB)

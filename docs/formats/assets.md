@@ -68,4 +68,4 @@ Edge-neighbours of (x, y) in the isometric grid are NE (x+1, y−1), SE (x+1, y+
 4. Forest, Hills, Mountains: overlay from TERRAIN2 with variant = mask of edge-neighbours of the same terrain.
 5. River: TERRAIN2 river variant = mask of edge-neighbours that have a river or are ocean.
 6. Irrigation / farmland / mine, then roads: for each of the eight neighbours with a road, segment 1–8 toward NE, E, SE, S, SW, W, NW, N (railroad segment when both squares have rail); segment 0 (isolated) only when no neighbour has one and no city stands here. Pollution last.
-   Special resources and huts are placed by a formula the original computes from the resource seed; the save's bit 6 is not authoritative. Not drawn yet.
+   Special resources and huts are placed by the formulas in docs/engine/rules-map.md (VERIFIED) and drawn from TERRAIN1 columns x=131/x=196 and the hut tile.

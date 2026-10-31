@@ -33,7 +33,7 @@ export interface Square {
   /** Index into RULES.TXT @TERRAIN (0 Desert … 10 Ocean). */
   terrain: number;
   river: boolean;
-  /** Bit 6 of byte 0. Marked in the file but NOT authoritative: the game places specials by formula. */
+  /** Bit 6 of byte 0: the special-resource formula is SUPPRESSED on this square (VERIFIED). */
   resourceFlag: boolean;
   unit: boolean;
   city: boolean;

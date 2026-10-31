@@ -8,7 +8,14 @@
  * docs/formats/assets.md ("Compositing a square"); the viewer exists so they can be judged by
  * eye against the original. Sprite rectangles come from `@mudbrick/formats`.
  */
-import { OCEAN, SquareFlag, type World } from '@mudbrick/engine';
+import {
+  grasslandShieldAt,
+  hutAt,
+  OCEAN,
+  specialAt,
+  SquareFlag,
+  type World,
+} from '@mudbrick/engine';
 import { sprites } from '@mudbrick/formats';
 import type { Sheet } from './gameFiles.js';
 
@@ -152,6 +159,13 @@ export function drawSquareTerrain(
     });
     blit(ctx, terrain2.canvas, sprites.overlay('river', mask), px, py);
   }
+
+  const special = specialAt(world, x, y);
+  if (special !== 0)
+    blit(ctx, terrain1.canvas, sprites.terrainSpecial(t, special === 1 ? 0 : 1), px, py);
+  if (t === 2 && grasslandShieldAt(x, y))
+    blit(ctx, terrain1.canvas, sprites.GRASSLAND_SHIELD, px, py);
+  if (hutAt(world, x, y)) blit(ctx, terrain1.canvas, sprites.HUT, px, py);
 
   if (flags & SquareFlag.Irrigation) blit(ctx, terrain1.canvas, sprites.IRRIGATION, px, py);
   if (flags & SquareFlag.Farmland) blit(ctx, terrain1.canvas, sprites.FARMLAND, px, py);

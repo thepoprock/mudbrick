@@ -25,7 +25,8 @@ export const SquareFlag = {
   Fortress: 1 << 6,
   Airbase: 1 << 7,
   Pollution: 1 << 8,
-  Hut: 1 << 9,
+  /** Map square byte 0 bit 6: the special-resource formula is suppressed on this square. */
+  NoSpecial: 1 << 9,
 } as const;
 export type SquareFlag = (typeof SquareFlag)[keyof typeof SquareFlag];
 
@@ -84,12 +85,16 @@ export interface WorldInit {
   columns: number;
   rows: number;
   flatEarth: boolean;
+  /** Resource seed from the map header; drives the special-resource and hut patterns. */
+  resourceSeed?: number;
 }
 
 export class World {
   readonly columns: number;
   readonly rows: number;
   readonly flatEarth: boolean;
+  /** Resource seed (map header +8). See docs/engine/rules-map.md. */
+  readonly resourceSeed: number;
   /** One terrain id per square. */
   readonly terrain: Uint8Array;
   /** `SquareFlag` bits per square. */
@@ -105,6 +110,7 @@ export class World {
     this.columns = init.columns;
     this.rows = init.rows;
     this.flatEarth = init.flatEarth;
+    this.resourceSeed = init.resourceSeed ?? 1;
     const area = init.columns * init.rows;
     this.terrain = new Uint8Array(area).fill(OCEAN);
     this.flags = new Uint16Array(area);

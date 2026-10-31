@@ -103,10 +103,41 @@ export function stepCost(
   return (rules.terrain[toTerrain]?.moveCost ?? 1) * THIRDS;
 }
 
+/** Facts about diplomacy the zone-of-control rule needs. */
+export interface ZocContext {
+  /** Are these two civilization slots allied (treaty bit 3)? Allies never exert zones of control. */
+  isAllied?: (a: number, b: number) => boolean;
+}
+
 /**
- * Zone of control (INFERRED): a ground unit may not move from a square next to an enemy ground
- * unit into another square next to an enemy ground unit, unless the destination holds a
- * friendly unit or city, the unit ignores zones of control, or it starts in a city.
+ * Is square (x, y) inside an enemy zone of control for `civ`? VERIFIED (0x005564c0 → 0x00556397):
+ * never when a city stands on the square; otherwise when a neighbour of the same kind (land next
+ * to land, sea next to sea) holds units of another, non-allied civilization.
+ */
+export function inEnemyZoc(
+  world: World,
+  x: number,
+  y: number,
+  civ: number,
+  ctx: ZocContext = {},
+): boolean {
+  if (world.cityAt(x, y)) return false;
+  const ocean = !world.isLand(x, y);
+  for (const n of world.neighbours(x, y)) {
+    if (!n) continue;
+    if (!world.isLand(n.x, n.y) !== ocean) continue;
+    const owner = world.unitsAt(n.x, n.y)[0]?.owner;
+    if (owner === undefined || owner === civ) continue;
+    if (ctx.isAllied?.(owner, civ)) continue;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * The go-to code refuses a step from an enemy zone of control into another unless the unit
+ * ignores zones of control (VERIFIED). The manual's exception for a destination already holding
+ * a friendly unit is kept as INFERRED until the move handler is read.
  */
 export function blockedByZoc(
   world: World,
@@ -114,24 +145,15 @@ export function blockedByZoc(
   unit: Unit,
   from: Point,
   to: Point,
+  ctx: ZocContext = {},
 ): boolean {
   const type = rules.units[unit.type];
   if (!type || type.domain !== DOMAIN_GROUND || type.flags.ignoreZonesOfControl) return false;
-  if (world.cityAt(from.x, from.y)) return false;
-  const toCity = world.cityAt(to.x, to.y);
-  if (toCity?.owner === unit.owner) return false;
   if (world.unitsAt(to.x, to.y).some((u) => u.owner === unit.owner)) return false;
-  const enemyGroundAdjacent = (p: Point) =>
-    world
-      .neighbours(p.x, p.y)
-      .some(
-        (n) =>
-          n !== null &&
-          world
-            .unitsAt(n.x, n.y)
-            .some((u) => u.owner !== unit.owner && rules.units[u.type]?.domain === DOMAIN_GROUND),
-      );
-  return enemyGroundAdjacent(from) && enemyGroundAdjacent(to);
+  return (
+    inEnemyZoc(world, from.x, from.y, unit.owner, ctx) &&
+    inEnemyZoc(world, to.x, to.y, unit.owner, ctx)
+  );
 }
 
 export type MoveVerdict =

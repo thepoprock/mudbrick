@@ -10,9 +10,11 @@ import {
   blockedByZoc,
   checkMove,
   fullMoves,
+  inEnemyZoc,
   partialMoveChance,
   stepCost,
 } from '../src/movement.js';
+import { chooseDefender } from '../src/defender.js';
 import { Rng } from '../src/rng.js';
 import type { EngineRules } from '../src/rules.js';
 import { SquareFlag, World, type Unit } from '../src/world.js';
@@ -180,6 +182,31 @@ describe('movement', () => {
     expect(stepCost(c, rules, armor, { x: 2, y: 2 }, { x: 3, y: 3 })).toBe(1);
   });
 
+  it('zones of control ignore allies, cities and squares of the other kind', () => {
+    const z = world();
+    z.units.push(unit(9, 0, 4, 2, 2)); // enemy ground unit
+    expect(inEnemyZoc(z, 3, 1, 1)).toBe(true);
+    expect(
+      inEnemyZoc(z, 3, 1, 1, { isAllied: (a, b) => (a === 2 && b === 1) || (a === 1 && b === 2) }),
+    ).toBe(false);
+    z.cities.push({
+      id: 0,
+      position: { x: 3, y: 1 },
+      owner: 1,
+      name: 'Fort',
+      size: 1,
+      improvements: [],
+      foodStored: 0,
+      shieldsStored: 0,
+      inDisorder: false,
+    });
+    expect(inEnemyZoc(z, 3, 1, 1)).toBe(false); // city squares are never in a zone of control
+    const sea = world();
+    sea.terrain[sea.index(6, 4)] = 10;
+    sea.units.push(unit(8, 3, 6, 4, 2)); // enemy trireme at sea
+    expect(inEnemyZoc(sea, 5, 3, 1)).toBe(false); // land square next to a ship: different kind
+  });
+
   it('checks a move end to end', () => {
     const c = world();
     const u = unit(0, 0, 2, 2);
@@ -196,6 +223,37 @@ describe('movement', () => {
     expect(checkMove(c, rules, u, { x: 3, y: 3 })).toEqual({ ok: false, reason: 'no-moves' });
     expect(partialMoveChance(6, 3)).toBeCloseTo(0.5);
     expect(partialMoveChance(3, 3)).toBe(1);
+  });
+});
+
+describe('best defender (verified)', () => {
+  it('prefers the strongest scorer, skips passengers, and applies the tie-breakers', () => {
+    const c = world();
+    const knights = unit(0, 1, 2, 2, 1);
+    const warriors = unit(1, 0, 3, 3, 2);
+    const pikemen = unit(2, 2, 3, 3, 2);
+    expect(
+      chooseDefender(c, rules, [warriors, pikemen], knights, { defenderFortified: false })?.id,
+    ).toBe(2);
+    const hurtPikemen = unit(3, 2, 3, 3, 2, { hitPointsLost: 9 });
+    expect(
+      chooseDefender(c, rules, [warriors, hurtPikemen], knights, { defenderFortified: false })?.id,
+    ).toBe(3); // simplified combat: damage ignored
+    expect(
+      chooseDefender(c, rules, [warriors, hurtPikemen], knights, {
+        defenderFortified: false,
+        damageMatters: true,
+      })?.id,
+    ).toBe(1);
+    const atSea = world();
+    atSea.terrain[atSea.index(6, 4)] = 10;
+    const passenger = unit(4, 6, 6, 4, 2); // armor aboard
+    const trireme = unit(5, 3, 6, 4, 2);
+    expect(
+      chooseDefender(atSea, rules, [passenger, trireme], unit(6, 7, 5, 3, 1), {
+        defenderFortified: false,
+      })?.id,
+    ).toBe(5);
   });
 });
 
