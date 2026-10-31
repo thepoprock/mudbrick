@@ -7,9 +7,56 @@ Rule: read the C, write the behaviour down in words and formulas here. Never cop
 
 ## Identified so far (VERIFIED by decompilation unless marked)
 
+### Rules loading (civ2.exe, MGE)
+
+| address                                                        | what                                                                                                                   |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| 0x00410603                                                     | `LoadCosmic` — reads @COSMIC into 22 consecutive bytes at 0x5d08e8…0x5d08fd, each clamped to a range (table below).    |
+| 0x00410929                                                     | `LoadAdvances` (@CIVILIZE)                                                                                             |
+| 0x00410d05                                                     | `LoadWonderExpiry` (@ENDWONDER)                                                                                        |
+| 0x00410ea7                                                     | `LoadUnits` (@UNITS) — fills 62 records of 20 bytes at 0x5cfdd8 (layout below), then names the unused slots "Unit %d". |
+| 0x004113fb                                                     | `LoadGovernments`                                                                                                      |
+| 0x004118f4                                                     | `LoadLists` (@CARAVAN, @DIFFICULTY, @ATTITUDES)                                                                        |
+| 0x0047c669 / 0x0047c6ec / 0x0047c7a1 / 0x0047c824 / 0x0047c8c5 | section seek (`@NAME`), next line, next string field, next integer field, bitstring field                              |
+| 0x00487c00                                                     | advance abbreviation → index (0xFE = none, −3 = unknown → error dialog)                                                |
+
+**Unit-type record, 20 bytes, base 0x5cfdd8 + 20·type (VERIFIED):**
+`+0` u32 name pointer · `+4` u32 flags (15-bit) · `+8` obsoleted-by advance (0xFE none) · `+9` domain · `+10` **movement × cosmic[0] (road multiplier) — the game stores movement in thirds** · `+11` range · `+12` attack · `+13` defence · `+14` **hit points = file value × 10** · `+15` firepower · `+16` cost (clamped 1–200) · `+17` holds · `+18` role · `+19` prerequisite advance (0xFE none). Unused slots: obsolete = 0xFE, defence 1, cost 1, everything else 0.
+
+**@COSMIC clamps (VERIFIED):** road multiplier 1–10 · trireme loss 1–100 · food/citizen 0–10 · food box rows 4–20 **and forced even (odd values get +1)** · shield rows 4–20 · settlers food ×2 0–10 · first-unhappy size 4–12 · riot factor 10–100 · aqueduct 4–50 · sewer 4–50 · tech paradigm 3–10 · transform base 5–100 · free units ×3 0–8 · communism palace distance 1–20 · fundamentalism science loss 0–100 % · production change penalty 0–100 % · paradrop range 4–100 · mass/thrust 25–200 · fundamentalism max science 0–10.
+
 | address    | name (ours)     | evidence                                                                                                                                                                                                                                                                           |
 | ---------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 0x0041bc9c | GetLabel(index) | Walks a global string heap at DAT_005c5308 skipping `index` NUL-terminated strings and returns a pointer to the next. 166 call sites. This is the Labels.txt @LABELS accessor: labels are stored back-to-back, addressed by position — confirms "index = identity" for Labels.txt. |
+
+### Power rating and ranking — 0x00465607 (VERIFIED by decompilation)
+
+Runs once per turn. For each civilization slot 1–7 in play: `score = citizens×3 + (something at civ+0x6c as i16)×8 + (civ+0x02 as i32) >> 5 + Σ over unit types (units owned × unitValue)`, where `unitValue` = `cost/2` for role ≥ 5 (settlers, diplomats, caravans), else `attack × k + defence/2` with `k = (firepower + 1 + hitPoints)/2` for ground units and `k = 1` otherwise. In the first 600 turns `clamp(score >> 3, 0, 255)` is stored in the power-graph history at `graph[((turn >> 2) % 150) × 8 + slot]` — which is exactly the 1200-byte block the save format carries (docs/formats/save-format.md), so that block is now VERIFIED as "one byte per civ every 4 turns, 150 records". The function then sorts civs into a ranking table and runs the "gang up on the leader" diplomacy: once the leader has > 4 cities and turn > 200 (or on higher difficulty), other civs may be pushed toward war with it, using `rand() % 32 <= difficulty`.
+
+### Memory layout confirmed from the same function
+
+- Civilization records in memory: stride **0x594 = 1428 bytes** from about 0x5d12c0 — the same 1428 bytes the save file stores per civilization (v40/v44). The save is a memory image of these structures.
+- City records: stride **0x58 = 88 bytes** from about 0x5d3f60, city count at 0x5da738 — the MGE city record size the save spec listed as INFERRED is therefore VERIFIED as 88.
+- Unit records in memory: stride **0x20 = 32 bytes** from 0x5dad10 (seen in 0x4f2dd3: `+6` type, `+7` owner, `+13` counter/commodity) — so the 32-byte MGE unit record in the save spec is VERIFIED.
+- The game's random numbers come from the C runtime `rand()` (0x591da0, MSVC LCG: `seed = seed × 214013 + 2531011`, result `(seed >> 16) & 0x7fff`), used as `rand() % n`.
+
+### Combat (VERIFIED by decompilation) — full rules in rules-combat.md
+
+| address                       | what                                                                                                                                                                                                                                                               |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 0x0052d472                    | `AttackUnit(attacker, direction, forReal)` — the attack handler: picks the defender, applies every situational multiplier, runs the round loop, handles promotion, barbarian handicaps and the odds preview (`forReal == 0` returns `(A×8)/(D+1)` capped at 1024). |
+| 0x0052b404                    | `AttackStrength(unit)` = attack × 8, `+= >>1` if unit status word bit 13 (veteran) and again if bit 4. No damage scaling.                                                                                                                                          |
+| 0x0052b47b                    | `DefenceStrength(unit, recomputeCity, attacker)` = (terrain halves + river bit) × defence × 4, × position multiplier/2 (fortify order 3, fortress 4, walls/Great Wall 6, fighter-in-city ×4/×2), `+= >>1` if veteran.                                              |
+| 0x0052b823                    | best-defender selection on the target square (not yet read)                                                                                                                                                                                                        |
+| 0x0052bd2e                    | promote to veteran                                                                                                                                                                                                                                                 |
+| 0x0042c259(city, improvement) | city has improvement                                                                                                                                                                                                                                               |
+| 0x0043e361(civ, wonder)       | civilization owns wonder n (0-based within the 28 wonders)                                                                                                                                                                                                         |
+| 0x00554169(unit)              | full movement allowance (thirds) · 0x0055436d(unit) moves left · 0x005540da(unit) max hit points · 0x00554107(unit) hit points left                                                                                                                                |
+| 0x00558e51(x, y)              | pointer to the square's 6-byte record (byte 0 bit 7 = river) · 0x005599f5(x, y) improvement byte · 0x00558f04(x, y) city here?                                                                                                                                     |
+
+Unit record (32 bytes at 0x5dad10 + 32·unit): `+0` i16 x, `+2` i16 y, `+4` u16 status (bit 13 veteran, bit 4 = +50 % attack, meaning unknown), `+6` type, `+7` owner, `+8` moves spent (thirds), `+10` damage taken, `+15` order (2 = Fortify). These match the save-file unit record field for field, so the save really is a memory image.
+
+Terrain record: 24 bytes at 0x5b2a08 + 24·terrain; byte +1 = defence halves.
 
 ## Largest functions (candidates for the big game-logic routines; INFERRED, not yet read)
 

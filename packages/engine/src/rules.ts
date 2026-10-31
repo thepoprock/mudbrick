@@ -30,11 +30,15 @@ export interface UnitTypeRule {
   /** 0 ground, 1 air, 2 sea. */
   domain: number;
   move: number;
+  /** Turns of fuel for air units; 0 otherwise. */
+  range: number;
   attack: number;
   defence: number;
   /** Hit points in tens: 2 = 20 HP. */
   hitPointsTens: number;
   firepower: number;
+  /** AI role 0–7; role 3 (air superiority) matters to combat. */
+  role: number;
   flags: UnitFlagsRule;
 }
 

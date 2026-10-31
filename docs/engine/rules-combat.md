@@ -1,45 +1,126 @@
 # Combat rules
 
-Status: **INFERRED** throughout, from the original manual and community documentation, and
-implemented in `packages/engine/src/combat.ts`. The "to confirm" list at the end is the work
-order for the executable analysis.
+Status: **VERIFIED by decompilation** of the original executable (Multiplayer Gold Edition):
+the attack handler at 0x0052d472, attack strength at 0x0052b404, defence strength at
+0x0052b47b (see exe-notes.md). Implemented in `packages/engine/src/combat.ts`. Items still
+marked INFERRED are named as such.
 
-## Strengths
+Several widely repeated community claims turned out to be wrong and are called out below.
 
-Attack strength starts from the unit type's `attack`; defence from the defender type's
-`defence`. Multipliers are applied in this order:
+## Strengths are integers
 
-| applies to | condition                                                              | factor  |
-| ---------- | ---------------------------------------------------------------------- | ------- |
-| defence    | terrain: RULES @TERRAIN `defence` halves ÷ 2 (hills 2.0, forest 1.5 …) | ×0.5…   |
-| defence    | river on the defender's square (ground units)                          | ×1.5    |
-| both       | veteran                                                                | ×1.5    |
-| defence    | fortified, or inside a city (ground units)                             | ×1.5    |
-| defence    | in a fortress, not in a city (ground units)                            | ×2      |
-| defence    | city walls, attacker is a ground unit without the "negates walls" flag | ×3      |
-| defence    | coastal fortress against a sea attacker                                | ×2      |
-| defence    | SAM battery against an air attacker                                    | ×2      |
-| defence    | "double vs horse" flag (pikemen) against a ground attacker with move 2 | ×2      |
-| defence    | "double vs air" flag (AEGIS) against an air attacker                   | ×2      |
-| both       | damage: × remaining HP ÷ maximum HP                                    | ×hp/max |
+The original works in eighths of a combat point. Veteran and similar "×1.5" steps are computed
+as `x += x >> 1` (integer, rounding down), so the engine does the same.
+
+### Attack strength `A`
+
+```
+A = attack × 8
+if veteran:                       A += A >> 1          (×1.5)
+if status bit 4 set:              A += A >> 1          (×1.5; meaning of the bit unknown — INFERRED none of the shipped files set it)
+if attacker has less than one full move left: A = A × movesLeft / 3   (thirds; see rules-movement.md)
+```
+
+**Damage does not reduce strength.** A unit at 1 hit point attacks and defends at full strength;
+it simply has fewer hit points to lose. The "fights at reduced strength when damaged" claim is
+false for this edition.
+
+### Defence strength `D`
+
+```
+D = (terrainDefenceHalves + river) × defence × 4
+```
+
+`terrainDefenceHalves` is the RULES @TERRAIN defence field (grassland 2, forest 3, hills 4,
+mountains 6). A river on the defender's square **adds 1 to the halves**: grassland with river
+is ×1.5, hills with river ×2.5. (Not a flat ×1.5 multiplier.)
+
+Then one terrain-position multiplier `m`, in halves, default 2 (×1); only one of these applies,
+in this order of precedence:
+
+| condition                                                                                                                                                                                 | m         |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| defender is a ground unit under the **Fortify order** (order code 2)                                                                                                                      | 3         |
+| square has a fortress and no city, attacker is not air and does not negate walls (howitzer flag)                                                                                          | 4         |
+| in a city: defender is an air unit with the "can attack air" flag (fighter), attacker is air and not a missile: ×4 of the current `m` if the attacker cannot attack air (bomber), else ×2 | m×4 / m×2 |
+| in a city with City Walls, or defender's civilization owns the Great Wall; defender is ground; attacker is ground and does not negate walls                                               | 6         |
+| defender is not a ground unit (and not the fighter case above)                                                                                                                            | 2         |
+
+```
+D = D × m / 2
+if veteran: D += D >> 1
+```
+
+Note: being inside a city does **not** by itself grant the fortified ×1.5; the unit must carry
+the Fortify order. (Whether the game auto-fortifies units in cities is a separate, unverified,
+question for the orders code.)
+
+### Situational multipliers applied by the attack handler
+
+| condition                                                                                                   | effect                                                                       |
+| ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| attacker role 3 (air superiority) vs air defender with range 0 (helicopter)                                 | D −= D >> 1; defender firepower = 1                                          |
+| defender has the "×2 vs horse" flag (pikemen) vs ground attacker whose full move is 2 and max HP is 10      | D += D >> 1 (**+50 %**, not ×2)                                              |
+| defender has the "×2 vs air" flag (AEGIS) vs air attacker                                                   | D ×5 if the attacker is a missile (destroyed-after-attack flag), else **×3** |
+| defender's city has Coastal Fortress (improvement 28), attacker is sea, defender is not sea                 | D ×2                                                                         |
+| attacker is air, defender's city has SDI Defense (17), attacker is a missile with attack < 99 (not nuclear) | D ×2                                                                         |
+| attacker is air, defender's city has SAM Missile Battery (27)                                               | D ×2                                                                         |
+| attacker is unit type 9 (Partisans) vs a defender with attack 0                                             | A ×8                                                                         |
+| attacker is sea, defender is ground (shore bombardment)                                                     | both firepowers = 1                                                          |
+| defender has the submarine flag                                                                             | defender firepower = 1                                                       |
+| defender is sea, not in a city, attacker is not sea                                                         | defender firepower = 1, attacker firepower ×2                                |
+| **barbarian attacker** vs AI civilization                                                                   | A = A / 2                                                                    |
+| barbarian attacker vs human                                                                                 | A = A × (difficulty + 1) / 4                                                 |
+| barbarian attacker vs a civilization with fewer than 2 cities                                               | A = 0                                                                        |
+| barbarian attacker vs a city holding the Palace                                                             | A = A / 2 and the defender gets the double-roll (below)                      |
+| barbarian attacker vs a civilization with fewer than 8 cities                                               | defender gets the double-roll                                                |
+| barbarian attacker vs a civilization owning the Great Wall                                                  | A = A / 2                                                                    |
+| barbarian defender that is unit type 4 (Archers), or type 5 (Legion) under a condition not yet read         | D = max(1, D / 2)                                                            |
+| attacker's civilization owns the Great Wall vs a barbarian defender                                         | A ×2                                                                         |
+
+Improvement and wonder numbers are RULES @IMPROVE indices (Palace 1, City Walls 8, SDI 17,
+Coastal Fortress 28, SAM 27; wonders 39+n: Great Wall = 45, Sun Tzu's War Academy = 46).
 
 ## Rounds
 
-Hit points are `hitPointsTens × 10`. Each round the attacker wins with probability
-A ÷ (A + D). The round's loser loses hit points equal to the winner's `firepower`. Rounds repeat
-until one unit reaches zero; that unit is destroyed. The survivor keeps its remaining hit points.
+Hit points are `hitPointsTens × 10`. Each round:
 
-The implementation scales A and D by 8 and rounds to integers before drawing, so that the
-comparison is integer like the original's; the exact scale the original uses is unknown.
+```
+a = A > 1 ? rand() % A : 0
+d = D > 1 ? rand() % D : 0
+attackerWinsRound = d < a                      (strictly less)
+if defender has the double-roll:               (barbarian cases above)
+    a2 = rand() % A ; d2 = rand() % D
+    if a2 < d2: attackerWinsRound = false
+if attackerWinsRound: defender.hp -= attackerFirepower
+else:                 attacker.hp -= defenderFirepower
+```
 
-## To confirm in the executable (highest value first)
+until one side has no hit points left. This is **not** `rand(A + D) < A`: two independent draws
+are compared, which gives the stronger side slightly better odds than the simple ratio. The
+original's `rand()` is the C runtime generator (15-bit); the engine uses its own uniform
+generator over the same ranges.
 
-1. The round formula: is it `random(A + D) < A`, and in what units are A and D held?
-2. Damage per round: firepower, or firepower × 10, or something else?
-3. The river bonus value (×1.5 is the usual claim; ×1.25 also appears in guides).
-4. Whether units inside a city are always treated as fortified.
-5. The "shore bombardment" and "ship vs land" firepower adjustments.
-6. How "horse" is recognised for the pikemen bonus (movement 2? a type list?).
-7. Veteran promotion chance after winning (50 % is the usual claim).
-8. Great Wall, SDI, submarines, missiles, air superiority and fighters vs bombers.
-9. The random number generator itself.
+## After the battle
+
+- The winner's hit points stay as they are. The loser is destroyed.
+- **Veteran promotion:** if the attacker lost, the defender is promoted when
+  `rand() % (A + D) <= A` or its civilization owns Sun Tzu's War Academy; if the attacker won, it
+  is promoted when `rand() % (A + D) <= D` or its civilization owns Sun Tzu's. So beating a
+  stronger opponent promotes more often, and the chance is never zero.
+- The attacker spends one movement point (3 thirds) on the attack (INFERRED from one branch;
+  the exact condition is not yet read).
+- A per-civilization-pair "losses" counter is incremented when the attacker loses and reset
+  when it wins; the AI reads it.
+
+## Odds preview
+
+When the handler is called in preview mode (the "attack odds" display) it returns
+`(A × 8) / (D + 1)`, capped at 1024, after optionally weighting each side by
+`hitPoints + firepower × 8` when the relevant option bit is set, and after halving both sides
+while A ≥ 4000.
+
+## Still to read
+
+Best-defender selection (0x0052b823), the attack-cost condition, the Legion-vs-barbarian
+condition, nuclear attacks (attack 99), and what status bit 4 means.

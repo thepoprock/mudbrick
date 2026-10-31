@@ -7,13 +7,13 @@ Source of truth: the comment headers inside RULES.TXT itself plus parsing of the
 - `;` starts a comment to end of line. Blank lines ignored.
 - `@NAME` on its own line starts a section. Twelve sections, in this order: COSMIC, CIVILIZE, IMPROVE, ENDWONDER, UNITS, TERRAIN, GOVERNMENTS, LEADERS, CARAVAN, ORDERS, DIFFICULTY, ATTITUDES.
 - Data rows are comma-separated. Whitespace around fields is ignored. Trailing commas occur (IMPROVE, CARAVAN).
-- Numeric fields may carry a unit-letter suffix that the game ignores: `1.` (move), `0a` `1d` (attack/defense), `2h` (hitpoints), `1f` (firepower). Parser strips them.
+- Numeric fields may carry a unit-letter suffix that the game ignores: `1.` (move), `0a` `1d` (attack/defense), `2h` (hitpoints), `1f` (firepower). Parser strips them. VERIFIED in the executable: movement is stored multiplied by the road multiplier (thirds) and hit points multiplied by 10; the 20-byte unit record layout is in docs/engine/exe-notes.md.
 - Advances are referenced by a fixed 3-letter abbreviation (`Alp`, `Bro`, `Rad`…), written in the `;` comment of the CIVILIZE row. Special tokens: `nil` = none/no prerequisite, `no` = disabled/never.
 - Row ORDER is the identity: the executable addresses advances, improvements, units and terrain by index, not by name. Renaming is safe; reordering changes the game. (INFERRED from the fixed-slot comments; to be confirmed in the exe.)
 - The file ships two typos where a comment line begins with `:` instead of `;`: `:               0 = Ground` (lands in @ENDWONDER's data) and `: Extra1.wav through extra8.wav for the 8 test units.` (lands in @UNITS). The game evidently tolerates them; parsers must skip rows that are not well-formed data, with a warning. VERIFIED.
 - Custom sounds: CUSTOM1–3.WAV for the three extra units, EXTRA1–8.WAV for the eight test units (8-bit mono 22050 Hz), per the @UNITS comment block.
 
-## @COSMIC — 22 engine constants, one integer per line (order is the identity)
+## @COSMIC — 22 engine constants, one integer per line (order is the identity). The executable clamps each value to a range and forces the food-box rows even; see docs/engine/exe-notes.md (VERIFIED by decompilation).
 
 | #   | value | meaning (from the file's own comment)                                         |
 | --- | ----- | ----------------------------------------------------------------------------- |

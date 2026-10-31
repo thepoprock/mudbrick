@@ -49,7 +49,7 @@ version 44, so the MGE-specific record sizes are INFERRED from the community rea
 where `T` = 93 for version 39 and 100 from version 40; `W` = 66 + 2T (252 / 266);
 `C` = W + 56 + 1694 (2264 / 2278); `S` = 1396 (v39) / 1428 (v40, v44);
 `M` = C + 8S (13432 / 13702); `a` = map area; `lx`, `ly` = minimap size from the map header;
-`Oo` = 48 × humans + 1314; unit record 26 bytes for v ≤ 40 and 32 for v44; city record 84 / 88.
+`Oo` = 48 × humans + 1314; unit record 26 bytes for v ≤ 40 and 32 for v44; city record 84 / 88 (88 VERIFIED: the executable's in-memory city stride is 0x58; the 32-byte unit record likewise matches the in-memory unit stride 0x20).
 
 ### Options (offset 12), bit = set unless noted
 
