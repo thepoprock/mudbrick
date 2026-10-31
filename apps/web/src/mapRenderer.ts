@@ -1,20 +1,5 @@
-import { decodeSquare, sprites, type MapFile } from '@epochs/formats';
+import { DEBUG_TERRAIN_COLOURS, decodeSquare, sprites, type MapFile } from '@epochs/formats';
 import type { TerrainSheet } from './terrainSheet.js';
-
-/** Fallback colours per terrain index when no sprite sheet is loaded. */
-const TERRAIN_COLOURS = [
-  '#d9c27a', // Desert
-  '#b8a84a', // Plains
-  '#6fa84a', // Grassland
-  '#2f6b2f', // Forest
-  '#8f7a3f', // Hills
-  '#8a8a8a', // Mountains
-  '#a9a98a', // Tundra
-  '#e8eef5', // Glacier
-  '#5d7a4a', // Swamp
-  '#3f7a3a', // Jungle
-  '#1f4f9a', // Ocean
-];
 
 const { TILE_W, TILE_H } = sprites;
 
@@ -50,7 +35,7 @@ export function drawMap(
         const r = sprites.terrainBase(s.terrain);
         ctx.drawImage(sheet.image, r.x, r.y, r.w, r.h, px, py, TILE_W, TILE_H);
       } else {
-        ctx.fillStyle = TERRAIN_COLOURS[s.terrain] ?? '#f0f';
+        ctx.fillStyle = DEBUG_TERRAIN_COLOURS[s.terrain] ?? '#f0f';
         ctx.beginPath();
         ctx.moveTo(px + TILE_W / 2, py);
         ctx.lineTo(px + TILE_W, py + TILE_H / 2);

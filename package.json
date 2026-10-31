@@ -14,17 +14,19 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
-    "typecheck": "tsc -b packages/formats packages/engine apps/web",
+    "typecheck": "tsc -b packages/formats packages/engine apps/web scripts",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "dev": "npm run dev --workspace apps/web",
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm run test"
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run test",
+    "render-map": "vite-node scripts/render-map.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
+    "@types/node": "^26.6.6",
     "eslint": "^9.0.0",
     "prettier": "^3.0.0",
     "typescript": "^5.6.0",

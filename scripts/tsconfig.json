@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist-types",
+    "emitDeclarationOnly": true,
+    "lib": ["ES2022"],
+    "types": ["node"]
+  },
+  "include": ["."],
+  "references": [{ "path": "../packages/formats" }]
+}
