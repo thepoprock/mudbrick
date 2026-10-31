@@ -19,6 +19,8 @@ export interface Section {
 }
 
 const SECTION_HEADER = /^@([A-Z][A-Z0-9_]*)\s*$/;
+/** `@end` closes the current section early (used in CITY.TXT and DEBUG.TXT). */
+const SECTION_END = /^@end\s*$/i;
 
 /**
  * Windows-1252 differs from ISO-8859-1 only in 0x80–0x9F. Five of those slots (0x81, 0x8D,
@@ -58,6 +60,8 @@ export function splitSections(text: string): Section[] {
     if (m?.[1] !== undefined) {
       current = { name: m[1], lines: [], startLine: i + 1 };
       sections.push(current);
+    } else if (SECTION_END.test(line)) {
+      current = undefined;
     } else if (current) {
       current.lines.push(line);
     }

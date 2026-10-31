@@ -1,8 +1,8 @@
 # Text data files — formats (original game, Multiplayer Gold Edition, English)
 
-All text files are CP1252 (Windows-1252) with CRLF line endings. `;` begins a comment line. A line beginning `@NAME` opens a section; sections run to the next `@`-line. Counts below are VERIFIED against the shipped files.
+All text files are CP1252 (Windows-1252) with CRLF line endings. `;` begins a comment line. A line beginning `@NAME` (upper-case) opens a section; sections run to the next such line or to an `@end` line. Counts below are VERIFIED against the shipped files.
 
-## Family 1 — "popup" files: Game.txt (802 sections), PEDIA.TXT (87), HELP.TXT (36), TUTORIAL.TXT (31), ADVICE.TXT (5), DEBUG.TXT, HERALD.TXT, scenario *.TXT
+## Family 1 — "popup" files: Game.txt (700 sections), PEDIA.TXT (83), HELP.TXT (36), TUTORIAL.TXT (31), ADVICE.TXT (5), DEBUG.TXT, HERALD.TXT, scenario *.TXT — parsed by `parsePopups`; VERIFIED: Game.txt uses no directive outside the table below
 
 Each section describes one dialog box. Directives (all start with `@` inside the section, VERIFIED census from Game.txt):
 
@@ -23,17 +23,17 @@ Each section describes one dialog box. Directives (all start with `@` inside the
 
 - `@STRINGHEAP` then one integer: heap size (50000).
 - `@POPUPS`: 4 lines — the standard button labels OK / Help / Cancel / Custom.
-- `@LABELS`: first line is the declared count (**873**), followed by the strings; the engine addresses them by zero-based index. Shipped file has 874 non-blank lines after the count line (one more than declared — the tail line is INFERRED to be ignored or a terminator; check in exe).
+- `@LABELS`: first line is the declared count (**873**), followed by exactly 873 strings; the engine addresses them by zero-based index. VERIFIED by `parseLabels`.
 
 ## Family 3 — RULES.TXT → see rules-format.md. LEADERS.TXT = a copy of the @LEADERS table rows alone (no header), 21 rows.
 
 ## Family 4 — CITY.TXT (city-name lists)
 
-50 sections, one per civilization plural (`@ROMANS`, `@BABYLONIANS`, …) plus extras; one city name per line, max 15 characters (stated in the file header). Indexed by the civ's plural name from RULES.TXT @LEADERS (INFERRED: lookup is by name since the section is named).
+26 sections, one per civilization plural (`@ROMANS`, `@BABYLONIANS`, …), each closed by an `@end` line; one city name per line, max 15 characters (stated in the file header). VERIFIED by `parseCityNames`: every civilization in RULES.TXT has a list. Indexed by the civ's plural name from RULES.TXT @LEADERS (INFERRED: lookup is by name since the section is named).
 
-## Family 5 — Describe.txt (in-game encyclopedia long descriptions, 213 KB, 7 top-level sections)
+## Family 5 — Describe.txt (in-game encyclopedia long descriptions, 213 KB) — VERIFIED by `parseDescriptions` against the shipped file
 
-Per category (@ADVANCE_DESCRIPTIONS, improvements, wonders, units, concepts…): an `@@<CAT>_INDEX` list mapping rules-order → description-order, one integer per line terminated with a comma, `-1` = no description, list terminates with `-2`; then the descriptions themselves, each beginning with `@@`. The index exists because the descriptions are in alphabetical order while RULES.TXT is not. Multi-line prose, `^` indentation as in Family 1.
+Seven top-level sections in this order: `@ADVANCE_DESCRIPTIONS`, `@IMPROVEMENT_DESCRIPTIONS`, `@WONDER_DESCRIPTIONS`, `@UNIT_DESCRIPTIONS`, `@TERRAIN_AND_RESOURCE_DESCRIPTIONS`, `@GOVERNMENT_DESCRIPTIONS`, `@CONCEPT_DESCRIPTIONS`, followed by a dummy header line `@This must be here to terminate search!!!` that the original's search loop needs. Every section except CONCEPT opens with an `@@<CATEGORY>_INDEX` list: one integer per line with a trailing comma, in RULES.TXT row order, giving the position of that row's description among the `@@Title` entries that follow (entries are alphabetical, the rules are not); `-1` = no description, `-2` = end of list. Shipped lengths: ADVANCE 100 (89 described + 11 user slots), IMPROVEMENT 39 (38 + "Nothing"), WONDER 28, UNIT 62 (51 + 11 extras), TERRAIN 33 (11 + 22 specials), GOVERNMENT 7. Entries: `@@Title` then paragraph lines (long, unwrapped) until the next `@@` or `@`.
 
 ## Family 6 — menus: Menu.txt (9 sections: GAME KINGDOM VIEW ORDERS ADVISORS WORLD CHEAT EDITOR PEDIA) and MAPMENU.TXT (5: EDITOR VIEW MAP BRUSH TOOLS)
 
