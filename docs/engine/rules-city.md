@@ -272,7 +272,19 @@ the remaining cost. The gold actually paid is reduced by `difficulty × bought /
 and halved or waived when the AI is already richer than the human leader. This is the AI's
 production advantage.
 
+## Pollution roll and meltdown (VERIFIED, 0x004bb7bb)
+
+Once per city turn (for human cities in the original): `threshold = advances × difficulty / 2`
+(halved repeatedly below 256 when the city has a Solar Plant; 0 when the scenario eliminates
+pollution, which also zeroes the city's value). The city pollutes when `rand() % (256 −
+threshold) < 2 × pollution value`: a random one of the 20 radius squares (not the centre) that
+is land, has no city and is clean gets pollution and the world count rises.
+
+A city **in disorder** with a **Nuclear Plant** whose owner lacks Fusion Power melts down with
+probability `1 / (6 − difficulty)`: the plant is destroyed and the square suffers a nuclear blast
+(0x0052c788, not yet read).
+
 ## Still to read
 
-The AI build choice (0x00430b61), the pollution roll (0x004bb7bb), the AI's exact content base,
+The AI build choice (0x00430b61), the nuclear blast (0x0052c788), the AI's exact content base,
 the connected-to-capital test (0x00468c65), and the buy-cost formula for human purchases.

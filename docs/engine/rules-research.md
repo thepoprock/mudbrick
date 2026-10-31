@@ -74,6 +74,16 @@ At the start of its turn, after its cities are processed, an AI civilization set
    Superconductor (everything the spaceship needs), science drops to 0.
 5. `tax = 10 − (science + lux)`.
 
+## The AI's research choice (VERIFIED shape, 0x00494f3a; value 0x004920ac partly read)
+
+Every researchable advance (unknown, prerequisites known, reachable) scores `rand() % value`,
+and the highest score is researched (the earliest index on ties). The value starts from the RULES
+columns, `civilized modifier × leader civilize + AI value`, and the original adds situational
+bonuses (advances leading to units the AI wants, expansion room, Railroad, the spaceship, the
+human's known advances…) that are not yet modelled. For a human the science advisor suggests
+`value + rand() % 3 − 1`; at Chieftain the research list hides every advance for which
+`(index − advances known) % 3 == 0` except the first.
+
 ## Civilization turn order (VERIFIED, 0x00467c61)
 
 Cities are processed from the **last** city slot to the first. Then the AI rate policy runs,

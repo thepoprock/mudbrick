@@ -19,3 +19,4 @@ export * from './huts.js';
 export * from './calendar.js';
 export * from './attack.js';
 export * from './conquest.js';
+export * from './pollution.js';

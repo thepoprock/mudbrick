@@ -12,6 +12,7 @@ export function gameFromSave(save: SaveFile, rules: Rules, world: World): Game {
     difficulty: save.parameters.difficulty,
     realisticCombat: !save.options.simplifiedCombat,
     firstDiscoveredBy: [...save.techs.firstDiscoveredBy],
+    pollutionSquares: save.parameters.pollutionSquares,
     ...(save.scenario
       ? {
           scenario: {
@@ -19,6 +20,7 @@ export function gameFromSave(save: SaveFile, rules: Rules, world: World): Game {
             fixedCost: save.scenario.yearsPerTurn !== 0,
           },
           forbidGovernmentChange: save.scenario.forbidGovernmentSwitching,
+          eliminatePollution: save.scenario.eliminatePollution,
         }
       : {}),
     ...(save.options.raw[8] !== undefined && (save.options.raw[8] & 4) !== 0

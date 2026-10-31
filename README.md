@@ -51,7 +51,9 @@ Requires Node 20 or newer. `ORIGINAL_GAME_DIR` is the folder of your own install
 
 ## Playing (alpha)
 
-Load your game folder and a `.SAV`/`.SCN`, then press **Play** to take over the human
+The Pages workflow (`.github/workflows/pages.yml`, run by hand once GitHub Pages is enabled for the
+repository) publishes the app at https://thepoprock.github.io/mudbrick/; it ships no game data — you
+point it at your own copy. Load your game folder and a `.SAV`/`.SCN`, then press **Play** to take over the human
 civilization. Click a unit to select it; the side panel lists the keys (arrows or the number pad
 to move, `f` fortify, `s` sleep, `g` go to, `b` build or join a city, `r`/`i`/`m`/`o` for roads,
 irrigation, mines and transforming, `F` fortress, `E` airbase, `p` clean pollution, `P` pillage,

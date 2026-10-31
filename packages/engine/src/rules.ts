@@ -105,8 +105,9 @@ export interface AdvanceRule {
   /** 0 Ancient … 3 Modern. */
   epoch: number;
   category: number;
-  /** RULES AI value, used when an advance is taken from a conquered civilization. */
+  /** RULES AI value and civilized modifier: the AI's research desirability is modifier × civilize + value. */
   aiValue?: number;
+  civilizedModifier?: number;
 }
 
 export interface CosmicRule {
@@ -233,6 +234,7 @@ export const IMPROVEMENT = {
 /** RULES @CIVILIZE indices the rules refer to by position (alphabetical in the shipped file). */
 export const ADVANCE = {
   automobile: 5,
+  fusionPower: 32,
   ceremonialBurial: 9,
   communism: 15,
   electronics: 24,

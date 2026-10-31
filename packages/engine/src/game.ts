@@ -39,6 +39,7 @@ import {
 import type { Rng } from './rng.js';
 import { ADVANCE, advanceIndex, GOVERNMENT, IMPROVEMENT, type EngineRules } from './rules.js';
 import { beginUnitsTurn, type UnitTurnEvent } from './turnStart.js';
+import { cityPollution, meltdownRoll, pollutionRoll, type PollutionEvent } from './pollution.js';
 import { payUpkeep, type UpkeepEvent } from './upkeep.js';
 import { CITY_CENTRE_INDEX, type City, type Civ, type World } from './world.js';
 
@@ -56,11 +57,15 @@ export interface GameState {
   researchCheaper?: boolean;
   /** Scenario: governments may not change. */
   forbidGovernmentChange?: boolean;
+  /** Scenario: no pollution at all. */
+  eliminatePollution?: boolean;
+  /** World pollution count (the save header's value), kept for global warming later. */
+  pollutionSquares?: number;
 }
 
 export type GrowthNote =
   { kind: 'grew' | 'starved' | 'destroyed' } | { kind: 'growth-blocked'; blockedBy: number };
-export type CityTurnEvent = CityEvent | ProductionEvent | UpkeepEvent | GrowthNote;
+export type CityTurnEvent = CityEvent | ProductionEvent | UpkeepEvent | GrowthNote | PollutionEvent;
 
 export type TurnEvent =
   | { slot: number; city: number; event: CityTurnEvent }
@@ -291,7 +296,29 @@ export class Game {
       if (e.kind === 'choose-research' && !civ.isHuman) this.aiChooseResearch(civ);
     }
 
-    // 7. Upkeep (the original does this here for humans; where the AI pays is not yet read — INFERRED same).
+    // 7. Pollution roll and meltdown (the original rolls for human cities here; INFERRED for the AI).
+    if (this.world.cities.includes(city)) {
+      const pctx = {
+        knows: (a: number) => this.knows(slot, a),
+        advancesCount: civ.advancesCount,
+        difficulty: this.state.difficulty,
+        ...(this.state.eliminatePollution ? { eliminatePollution: true } : {}),
+      };
+      const counter = { value: this.state.pollutionSquares ?? 0 };
+      const value = cityPollution(
+        city,
+        t.shields.produced,
+        pctx,
+        this.ownsWonder(slot, IMPROVEMENT.hooverDam),
+      );
+      const dirty = pollutionRoll(this.world, this.rng, city, value, pctx, counter);
+      this.state.pollutionSquares = counter.value;
+      if (dirty) push(dirty);
+      const melt = meltdownRoll(this.rng, city, pctx);
+      if (melt) push(melt);
+    }
+
+    // 8. Upkeep (the original does this here for humans; where the AI pays is not yet read — INFERRED same).
     for (const e of payUpkeep(this.rules, civ, city, {
       difficulty: this.state.difficulty,
       ownsWonder: (i) => this.ownsWonder(slot, i),
@@ -408,10 +435,27 @@ export class Game {
     else city.specialists.entertainers += 1;
   }
 
-  /** Placeholder AI research choice (INFERRED): the first researchable advance. */
+  /**
+   * The AI's research choice (VERIFIED shape, 0x00494f3a): every researchable advance scores
+   * `rand() % value` and the highest wins, where the value is the RULES civilized modifier ×
+   * the leader's civilize trait + the AI value (the base of 0x004920ac; its situational bonuses
+   * are not yet modelled).
+   */
   aiChooseResearch(civ: Civ): void {
     const options = researchableAdvances(this.rules, civ);
-    civ.researching = options[0] ?? null;
+    const civilize = this.rules.leaders?.[civ.tribe ?? -1]?.civilize ?? 0;
+    let best = -1;
+    let pick: number | null = null;
+    for (const a of options) {
+      const adv = this.rules.advances[a];
+      const value = Math.max(1, (adv?.civilizedModifier ?? 0) * civilize + (adv?.aiValue ?? 1));
+      const score = value > 1 ? this.rng.nextInt(value) : 0;
+      if (score > best) {
+        best = score;
+        pick = a;
+      }
+    }
+    civ.researching = pick;
   }
 
   /** Placeholder AI production choice (INFERRED): the best defensive unit it can build. */

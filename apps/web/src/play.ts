@@ -582,6 +582,10 @@ export class PlaySession {
           : null;
       case 'revolt':
         return 'Revolution! The government has fallen into Anarchy.';
+      case 'polluted':
+        return `Pollution near ${cityName}.`;
+      case 'meltdown':
+        return `Nuclear meltdown in ${cityName}! The Nuclear Plant is destroyed.`;
       case 'disbanded-for-shortage':
         return `${cityName} cannot support ${this.unitName(ev.unit)}; it is disbanded.`;
       default:
