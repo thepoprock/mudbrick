@@ -78,6 +78,19 @@ checked). Please keep that honesty when you add to them.
 3. Rules engine: movement, combat, cities, trade, research, government, diplomacy.
 4. AI, then multiplayer, then a free replacement art set so no original files are needed.
 
+## Developing
+
+`npm run dev` starts the viewer with hot reload. To avoid re-picking files after every reload,
+create a symlink to your own copy of the game at `apps/web/dev-game` (it is gitignored):
+
+```sh
+ln -s /path/to/your/copy apps/web/dev-game
+```
+
+The dev build then shows a "Load dev-game folder" button and an input for a game file, and
+`http://localhost:5173/?game=WWII.SCN` loads both straight away, which is handy for screenshots
+and browser tests. None of this exists in the production build.
+
 ## License
 
 MIT. See [LICENSE](LICENSE). The original game and its trademarks belong to their owners; see

@@ -164,7 +164,8 @@ describe.skipIf(!hasGameFiles)('parseSave (all shipped saves and scenarios)', ()
         // Fan-made scenarios contain one city with an empty name (Santa) and sizes of 59 and
         // 127 (Atolon, Zeus) set in the editor, so only printability and the byte range are checked.
         // Names are Windows-1252 ("España" in Zeus), so only control characters are rejected.
-        expect(c.name).toMatch(/^[^\x00-\x1f\x7f]*$/);
+        const codes = Array.from(c.name, (ch) => ch.charCodeAt(0));
+        expect(codes.every((code) => code >= 0x20 && code !== 0x7f)).toBe(true);
         expect(c.size).toBeLessThanOrEqual(127);
       }
       for (let i = 0; i < s.map.header.area; i++) {

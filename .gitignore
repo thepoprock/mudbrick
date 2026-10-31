@@ -18,3 +18,6 @@ game/
 
 # Type-check output of apps and scripts
 dist-types/
+
+# Developer symlink to your own copy of the original game (see README "Developing")
+apps/web/dev-game

@@ -47,5 +47,12 @@ Tiles.dll, Intro.dll, pv.dll, cv.dll, Wonder.dll, Civ2Art.dll carry bitmaps as W
 ## Palette and fill colours (VERIFIED)
 
 - The six sprite sheets share one palette to within 3–7 entries (UNITS vs CITIES 253/256 identical, TERRAIN1/2 249/256, ICONS and PEOPLE 252/256). CITY.GIF (wallpaper) has its own palette (71/256 shared). A new engine can treat the sheets as true-colour and ignore palette indices entirely; only the three special colours matter.
-- UNITS cells: outside the 64×32 magenta diamond footprint the corners are filled with purple (135,83,135), index 255. Both magenta and this purple are non-sprite fill (purple = transparent is INFERRED; magenta = transparent is VERIFIED by the clone and by the sheet design).
+- UNITS cells: outside the 64×32 magenta diamond footprint the corners are filled with purple (135,83,135), index 255. Both magenta and this purple are non-sprite fill and must be keyed out — VERIFIED by rendering: with only magenta keyed, every unit sits in a purple box.
 - Dither mask tile (1,447): black (0,0,0), magenta and gray (135,135,135) — the game blends neighbouring terrain across tile edges using this mask. Blank tile (131,447): black diamond on gray.
+
+## Choosing a city sprite (INFERRED, from the community reimplementation; drawn by the viewer so it can be judged by eye)
+
+- Row = the civilization's style 0–3 from RULES.TXT @LEADERS, replaced by row 4 once the civilization is in the Industrial era and row 5 in the Modern era (era = highest epoch among known advances).
+- Column by size: rows 0–3: ≤3 → 0, ≤5 → 1, ≤7 → 2, else 3. Row 4: ≤4, ≤7, ≤10, else 3. Row 5: ≤4, ≤10, ≤18, else 3. A city holding the Palace moves one column up (max 3).
+- Walled variant (x = 334 + 65·col) when the city has City Walls.
+- The blue marker gives the flag anchor (flag drawn with its bottom 5 px below the anchor), the orange marker the size-box anchor.
