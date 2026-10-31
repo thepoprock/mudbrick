@@ -97,6 +97,8 @@ export interface CivNames {
 }
 
 export interface Treaty {
+  /** The whole 32-bit word (bits documented in docs/formats/save-format.md). */
+  raw: number;
   contact: boolean;
   ceaseFire: boolean;
   peace: boolean;
@@ -136,6 +138,8 @@ export interface CivRecord {
   patience: number;
   treaties: Treaty[];
   attitudes: number[];
+  /** 7 × i16 at +980: the AI's government preference scores (VERIFIED, 0x0051278c). */
+  governmentScores: number[];
   /** Indexed by advance index. */
   knownAdvances: boolean[];
   militaryUnits: number;
@@ -479,6 +483,7 @@ export function parseSave(bytes: Uint8Array): SaveFile {
       treaties: Array.from({ length: 8 }, (_, n) => {
         const t = o + 32 + 4 * n;
         return {
+          raw: r.i32(t) >>> 0,
           contact: r.bit(t, 0),
           ceaseFire: r.bit(t, 1),
           peace: r.bit(t, 2),
@@ -498,7 +503,8 @@ export function parseSave(bytes: Uint8Array): SaveFile {
       unitsInProduction: Array.from({ length: UNIT_TYPES }, (_, t) =>
         r.u8(o + 216 + 2 * UNIT_TYPES + t),
       ),
-      lastContact: Array.from({ length: 8 }, (_, n) => r.u16(X + 2 * n)),
+      governmentScores: Array.from({ length: 7 }, (_, n) => r.i16(o + 980 + 2 * n)),
+      lastContact: Array.from({ length: 8 }, (_, n) => r.i16(X + 2 * n)),
       throneRoom: Array.from({ length: 9 }, (_, n) => r.u8(X + 17 + n)),
       spaceship: {
         launched: r.bit(X + 30, 0),

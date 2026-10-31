@@ -106,32 +106,34 @@ ruler title under each of the 7 governments (24 each). Empty = use RULES.TXT. IN
 
 ### Civilization record (8 × S bytes, slot 0 = barbarians)
 
-| +    | size      | field                                                                                                                        |
-| ---- | --------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| 1    | 1         | gender (0 male, 2 female)                                                                                                    |
-| 2    | i32       | treasury (the executable reads 32 bits) — VERIFIED                                                                           |
-| 6    | u16       | tribe id (RULES @LEADERS index; the executable reads 16 bits) — VERIFIED                                                     |
-| 8    | i16       | research progress (beakers) — VERIFIED                                                                                       |
-| 10   | i16       | advance being researched, −1 none — VERIFIED (16-bit in the executable)                                                      |
-| 16   | 1         | advances discovered (drives research cost) — VERIFIED                                                                        |
-| 17   | 1         | future techs discovered — VERIFIED (shown in the discovery popup)                                                            |
-| 18   | 1         | added to byte 16 in the research-cost formula; the executable only ever zeroes it (vestigial) — VERIFIED                     |
-| 19   | 1         | science rate (tenths) — VERIFIED (AI rate policy)                                                                            |
-| 20   | 1         | tax rate (tenths); luxuries = 10 − science − tax — VERIFIED                                                                  |
-| 21   | 1         | government 0–6 — VERIFIED (Anarchy discards science)                                                                         |
-| 30   | 1         | reputation                                                                                                                   |
-| 31   | 1         | patience                                                                                                                     |
-| 32   | 8 × 4     | treaty with slot n: byte0 bits 0 contact, 1 cease-fire, 2 peace, 3 alliance, 4 vendetta, 7 embassy; byte1 bit 5 war          |
-| 64   | 8         | attitude toward slot n (RULES @ATTITUDES index)                                                                              |
-| 88   | 13        | known advances, bit per advance (100 bits)                                                                                   |
-| 102  | u16       | military units                                                                                                               |
-| 104  | u16       | cities                                                                                                                       |
-| 108  | u16       | sum of city sizes                                                                                                            |
-| 216  | 3 × 62    | per unit type: active, casualties, in production                                                                             |
-| X    | 8 × u16   | last contact turn with slot n, X = 216 + 3·62 + 592 = 994                                                                    |
-| X+17 | 9         | throne room pieces                                                                                                           |
-| X+30 | 1         | bit 0: has launched a spaceship                                                                                              |
-| X+32 | u16 … u16 | spaceship: estimated arrival, launch year, (gap), structural, propulsion, fuel, habitation, life support, solar at +38 … +48 |
+| +    | size      | field                                                                                                                                                                                                                                                         |
+| ---- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | 1         | gender (0 male, 2 female)                                                                                                                                                                                                                                     |
+| 2    | i32       | treasury (the executable reads 32 bits) — VERIFIED                                                                                                                                                                                                            |
+| 6    | u16       | tribe id (RULES @LEADERS index; the executable reads 16 bits) — VERIFIED                                                                                                                                                                                      |
+| 8    | i16       | research progress (beakers) — VERIFIED                                                                                                                                                                                                                        |
+| 10   | i16       | advance being researched, −1 none — VERIFIED (16-bit in the executable)                                                                                                                                                                                       |
+| 16   | 1         | advances discovered (drives research cost) — VERIFIED                                                                                                                                                                                                         |
+| 17   | 1         | future techs discovered — VERIFIED (shown in the discovery popup)                                                                                                                                                                                             |
+| 18   | 1         | added to byte 16 in the research-cost formula; the executable only ever zeroes it (vestigial) — VERIFIED                                                                                                                                                      |
+| 19   | 1         | science rate (tenths) — VERIFIED (AI rate policy)                                                                                                                                                                                                             |
+| 20   | 1         | tax rate (tenths); luxuries = 10 − science − tax — VERIFIED                                                                                                                                                                                                   |
+| 21   | 1         | government 0–6 — VERIFIED (Anarchy discards science)                                                                                                                                                                                                          |
+| 30   | 1         | reputation                                                                                                                                                                                                                                                    |
+| 31   | 1         | patience                                                                                                                                                                                                                                                      |
+| 32   | 8 × 4     | treaty word toward slot n — all bits in docs/engine/diplomacy.md (0 contact, 1 cease-fire, 2 peace, 3 alliance, 4 vendetta, 7 embassy, 9 attacked, 10 met this turn, 11 grudge, 13 war, 14 first contact, 18 tech gift, 21 war declared this turn) — VERIFIED |
+| 64   | 8         | attitude toward slot n (RULES @ATTITUDES index)                                                                                                                                                                                                               |
+| 88   | 13        | known advances, bit per advance (100 bits)                                                                                                                                                                                                                    |
+| 102  | u16       | military units                                                                                                                                                                                                                                                |
+| 980  | 7 × i16   | the AI's government preference scores (0x0051278c reads, the city and civilization turns write) — VERIFIED                                                                                                                                                    |
+| 994  | 8 × i16   | turn slot n last attacked or declared war on this civilization, −1 none (the combat routine and 0x00510871 write it) — VERIFIED                                                                                                                               |
+| 104  | u16       | cities                                                                                                                                                                                                                                                        |
+| 108  | u16       | sum of city sizes                                                                                                                                                                                                                                             |
+| 216  | 3 × 62    | per unit type: active, casualties, in production                                                                                                                                                                                                              |
+| X    | 8 × u16   | last contact turn with slot n, X = 216 + 3·62 + 592 = 994                                                                                                                                                                                                     |
+| X+17 | 9         | throne room pieces                                                                                                                                                                                                                                            |
+| X+30 | 1         | bit 0: has launched a spaceship                                                                                                                                                                                                                               |
+| X+32 | u16 … u16 | spaceship: estimated arrival, launch year, (gap), structural, propulsion, fuel, habitation, life support, solar at +38 … +48                                                                                                                                  |
 
 Rows marked VERIFIED were confirmed by reading the executable (its civilization record is a memory image of this one, stride 0x594); the rest are INFERRED. The 62-entry unit-type arrays are known for version 40/44; version 39 has a
 smaller record and may differ.

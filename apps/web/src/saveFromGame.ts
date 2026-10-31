@@ -100,6 +100,12 @@ export function saveFromGame(original: Uint8Array, parsed: SaveFile, game: Game)
     taxRate: civ.taxRate,
     government: civ.government,
     knownAdvances: civ.knownAdvances,
+    ...(civ.treaties ? { treaties: Array.from(civ.treaties) } : {}),
+    ...(civ.attitudes ? { attitudes: Array.from(civ.attitudes) } : {}),
+    ...(civ.reputation !== undefined ? { reputation: civ.reputation } : {}),
+    ...(civ.patience !== undefined ? { patience: civ.patience } : {}),
+    ...(civ.lastWarTurns ? { lastContact: Array.from(civ.lastWarTurns) } : {}),
+    ...(civ.governmentScores ? { governmentScores: Array.from(civ.governmentScores) } : {}),
     cities: world.cities.filter((c) => c.owner === civ.slot).length,
     sumCitySizes: world.cities.filter((c) => c.owner === civ.slot).reduce((s, c) => s + c.size, 0),
   }));

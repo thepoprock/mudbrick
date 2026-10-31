@@ -35,6 +35,7 @@ import {
   reachableAdvanceCount,
   researchCost,
   type ResearchEvent,
+  grantAdvance,
 } from './research.js';
 import type { Rng } from './rng.js';
 import { ADVANCE, advanceIndex, GOVERNMENT, IMPROVEMENT, type EngineRules } from './rules.js';
@@ -49,6 +50,23 @@ import {
   type BarbarianContext,
   type BarbarianEvent,
 } from './barbarians.js';
+import {
+  atPeace as treatyAtPeace,
+  atWar as treatyAtWar,
+  canAttack as treatyCanAttack,
+  contactSweep,
+  diplomacyTurn,
+  type DiplomacyContext,
+  type DiplomacyEvent,
+} from './diplomacy.js';
+import {
+  aiPickGovernment,
+  anarchyTurn,
+  cityGovernmentScores,
+  civGovernmentScores,
+  resetGovernmentScores,
+  type GovernmentEvent,
+} from './government.js';
 import { aiMoveUnits, type AiUnitEvent } from './aiUnits.js';
 import { releaseCitySite } from './fertility.js';
 import { inEnemyZoc } from './movement.js';
@@ -73,8 +91,6 @@ export interface GameState {
   eliminatePollution?: boolean;
   /** World pollution count (the save header's value), kept for global warming later. */
   pollutionSquares?: number;
-  /** Pairs of slots at peace; every other pair is at war (INFERRED stand-in for the treaty table). */
-  peace?: [number, number][];
   /** Header barbarian activity: 0 villages only, 1 roving, 2 restless, 3 raging. */
   barbarianActivity?: number;
 }
@@ -90,6 +106,8 @@ export type TurnEvent =
   | { slot: number; event: AiUnitEvent }
   | { slot: number; event: StrategyEvent }
   | { slot: number; event: BarbarianEvent }
+  | { slot: number; event: DiplomacyEvent }
+  | { slot: number; event: GovernmentEvent }
   | { slot: number; event: { kind: 'rates'; science: number; tax: number; luxuries: number } };
 
 /** Advances that end the AI's science: Fusion Power, The Laser, and the spaceship parts' prerequisites. */
@@ -132,16 +150,49 @@ export class Game {
     return c ? c.id : null;
   }
 
-  /**
-   * Are two civilizations at war? INFERRED: without diplomacy every pair is at war (the
-   * original's state before contact) unless listed in `state.peace`; barbarians always are.
-   */
+  /** Are two civilizations at war (the treaty rules of diplomacy.ts)? */
   atWar(a: number, b: number): boolean {
-    if (a === b) return false;
-    if (a === 0 || b === 0) return true;
-    return !(
-      this.state.peace?.some(([x, y]) => (x === a && y === b) || (x === b && y === a)) ?? false
-    );
+    return treatyAtWar(this.world, a, b);
+  }
+
+  /** The human's answer to a computer proposal; unset accepts peace and declines alliances. */
+  humanAccepts?: (kind: 'peace' | 'alliance', human: number, other: number) => boolean;
+
+  diplomacyContext(): DiplomacyContext {
+    const humans = this.world.civs.filter((c) => c.isHuman).map((c) => c.slot);
+    const civ = (s: number) => this.world.civs.find((c) => c.slot === s);
+    return {
+      rules: this.rules,
+      turn: this.state.turn,
+      difficulty: this.state.difficulty,
+      isHuman: (s) => civ(s)?.isHuman ?? false,
+      inPlay: (s) => civ(s)?.inPlay ?? false,
+      ownsWonder: (s, i) => this.ownsWonder(s, i),
+      knows: (s, a) => this.knows(s, a),
+      cityCount: (s) => this.citiesOf(s).length,
+      advancesOf: (s) => civ(s)?.advancesCount ?? 0,
+      attackPersonality: (s) => this.rules.leaders?.[civ(s)?.tribe ?? -1]?.attack ?? 0,
+      control: (s) => (civ(s)?.isHuman ? 7 : this.state.difficulty),
+      tallies: (s) => {
+        const st = civ(s)?.strategy;
+        return st
+          ? {
+              unitsOn: st.unitsOn,
+              attackOn: st.attackOn,
+              citiesOn: st.citiesOn,
+              strength: st.strengthSum,
+            }
+          : undefined;
+      },
+      grantAdvance: (s, a) => {
+        const c = civ(s);
+        if (c && c.knownAdvances[a] !== true) grantAdvance(c, a, 'other');
+      },
+      spaceshipLaunched: () => false,
+      mainHuman: humans[0] ?? null,
+      nextInt: (n) => this.rng.nextInt(n),
+      ...(this.humanAccepts ? { humanAccepts: this.humanAccepts } : {}),
+    };
   }
 
   /** Mark what a civilization's units and cities can see (INFERRED sight radii). */
@@ -381,6 +432,30 @@ export class Game {
     })) {
       push(e);
     }
+    // Government preference scores (0x004bc513): the cities' share.
+    if (this.world.cities.includes(city)) {
+      const tt = totals();
+      const leader = this.rules.leaders?.[civ.tribe ?? -1];
+      const settlersFood =
+        civ.government <= GOVERNMENT.monarchy
+          ? this.rules.cosmic.settlersFoodEarlyGovt
+          : this.rules.cosmic.settlersFoodLateGovt;
+      cityGovernmentScores(
+        this.rules,
+        civ,
+        city,
+        {
+          foodProduced: tt.raw.food,
+          foodEaten:
+            city.size * this.rules.cosmic.foodPerCitizen + settlers().length * settlersFood,
+          unitsSupported: homed().length,
+          unitsAway: tt.support.abroad,
+        },
+        (i) => this.ownsWonder(slot, i),
+        { attack: leader?.attack ?? 0, civilize: leader?.civilize ?? 0 },
+        this.wonderCity(IMPROVEMENT.shakespeares) === city.id,
+      );
+    }
     return out;
   }
 
@@ -389,6 +464,12 @@ export class Game {
     const out: TurnEvent[] = [];
     const civ = this.civ(slot);
     this.revealFor(slot);
+    resetGovernmentScores(civ);
+    {
+      const events: DiplomacyEvent[] = [];
+      contactSweep(this.world, slot, this.diplomacyContext(), events);
+      for (const e of events) out.push({ slot, event: e });
+    }
     for (const e of beginUnitsTurn(this.world, this.rules, this.rng, civ, {
       knows: (a) => this.knows(slot, a),
       nuclearPower: this.knows(slot, ADVANCE.nuclearPower),
@@ -414,6 +495,60 @@ export class Game {
       ) {
         anyLargeQuiet = true; // INFERRED reading of "happy equals unhappy"
       }
+    }
+    // Diplomacy and government (0x0051326d) run after the cities and before the strategic layer.
+    {
+      const leader = this.rules.leaders?.[civ.tribe ?? -1];
+      const human = this.world.civs.find((c) => c.isHuman);
+      civGovernmentScores(civ, {
+        isHuman: civ.isHuman,
+        knows: (a) => this.knows(slot, a),
+        ownsWonder: (i) => this.ownsWonder(slot, i),
+        personality: { attack: leader?.attack ?? 0, civilize: leader?.civilize ?? 0 },
+        control: civ.isHuman ? 7 : this.state.difficulty,
+        advances: civ.advancesCount,
+        treasury: civ.treasury,
+        mainHuman: human
+          ? {
+              diplomatsAndSpies: this.world.units.filter(
+                (u) => u.owner === human.slot && (u.type === 46 || u.type === 47),
+              ).length,
+              advances: human.advancesCount,
+              treasury: human.treasury,
+              government: human.government,
+              control: 7,
+            }
+          : null,
+        spaceshipLaunched: false,
+        anyHumanSpaceshipLaunched: false,
+        difficulty: this.state.difficulty,
+        bloodlust: false,
+        scienceRate: civ.scienceRate,
+      });
+      const govEvents: GovernmentEvent[] = [];
+      anarchyTurn(
+        this.world,
+        civ,
+        { turn: this.state.turn, isHuman: civ.isHuman, ownsStatue: this.ownsWonder(slot, 58) },
+        govEvents,
+      );
+      if (!civ.isHuman && ((this.state.turn + slot) & 7) === 0 && civ.government !== 0) {
+        const picked = aiPickGovernment(this.world, civ, {
+          knows: (a) => this.knows(slot, a),
+          ownsStatue: this.ownsWonder(slot, 58),
+          nextInt: (n) => this.rng.nextInt(n),
+        });
+        if (picked !== null)
+          govEvents.push({
+            kind: 'government',
+            text: `${civ.name} adopt government ${picked}`,
+            slot,
+          });
+      }
+      for (const e of govEvents) out.push({ slot, event: e });
+      const dipEvents: DiplomacyEvent[] = [];
+      diplomacyTurn(this.world, slot, this.diplomacyContext(), dipEvents);
+      for (const e of dipEvents) out.push({ slot, event: e });
     }
     // The strategic layer runs for every civilization (tallies, plans; orders for computer players).
     const humans = this.world.civs.filter((c) => c.isHuman).map((c) => c.slot);
@@ -442,6 +577,8 @@ export class Game {
         realisticCombat: this.state.realisticCombat,
         turn: this.state.turn,
         atWar: (other) => this.atWar(slot, other),
+        canAttack: (other) => treatyCanAttack(this.world, slot, other),
+        atPeace: (other) => treatyAtPeace(this.world, slot, other),
         knows: (a) => this.knows(slot, a),
         wondersOf: (s) => this.wondersOf(s),
         cityCount: (s) => this.citiesOf(s).length,

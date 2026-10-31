@@ -33,3 +33,5 @@ Coming next: menus (Menu.txt), `EVNT` scenario events, the images stored inside 
 | --------------------------------------------- | ----------------------------------------------------------- |
 | [inventory.md](research/inventory.md)         | The edition, every file, sizes, executables, sheets, sounds |
 | [inventory.sha256](research/inventory.sha256) | Hash of every file in that edition                          |
+
+- [engine/diplomacy.md](engine/diplomacy.md) — treaties, contact, the AI's war and peace reviews, governments

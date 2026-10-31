@@ -109,6 +109,22 @@ export interface Civ {
   freeAdvancePending: boolean;
   /** The AI's strategic state (aiStrategy.ts); created on first use. */
   strategy?: CivStrategy;
+  /** Treaty words toward each slot (diplomacy.ts TREATY bits; civilization record +32). */
+  treaties?: Uint32Array;
+  /** Attitude toward each slot, 0–100 (record +64). */
+  attitudes?: Uint8Array;
+  /** Reputation 0–100 (record +30). */
+  reputation?: number;
+  /** A per-turn random 0–99 the original keeps at record +22 (patience, INFERRED name). */
+  patience?: number;
+  /** A counter at record +31 that falls every third turn (INFERRED name). */
+  restraint?: number;
+  /** Per slot: the turn that slot last attacked or declared war on us, −1 none (record +994). */
+  lastWarTurns?: Int16Array;
+  /** Government preference scores, 7 × i16 (record +980). */
+  governmentScores?: Int16Array;
+  /** The record's leading flag word (+0): bit 0 revolution pending, bit 2 a per-turn toggle. */
+  civFlags?: number;
 }
 
 export type Production = { kind: 'unit'; index: number } | { kind: 'improvement'; index: number };

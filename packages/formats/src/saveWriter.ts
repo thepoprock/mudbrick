@@ -86,6 +86,16 @@ export interface CivWrite {
   knownAdvances: boolean[];
   cities?: number;
   sumCitySizes?: number;
+  /** Treaty words toward each slot (8 × u32 at +32). */
+  treaties?: number[];
+  /** Attitudes (8 bytes at +64). */
+  attitudes?: number[];
+  reputation?: number;
+  patience?: number;
+  /** Turn each slot last attacked us (8 × i16 at +994). */
+  lastContact?: number[];
+  /** Government scores (7 × i16 at +980). */
+  governmentScores?: number[];
 }
 
 export interface SavePatch {
@@ -261,6 +271,13 @@ export function writeSave(original: Uint8Array, save: SaveFile, patch: SavePatch
   for (const c of patch.civs) {
     const b = o.civs + o.civRecordSize * c.slot;
     w.i32(b + 2, c.treasury);
+    if (c.treaties) for (let n = 0; n < 8; n++) w.i32(b + 32 + 4 * n, (c.treaties[n] ?? 0) | 0);
+    if (c.attitudes) for (let n = 0; n < 8; n++) w.u8(b + 64 + n, c.attitudes[n] ?? 0);
+    if (c.reputation !== undefined) w.u8(b + 30, c.reputation);
+    if (c.patience !== undefined) w.u8(b + 31, c.patience);
+    if (c.governmentScores)
+      for (let n = 0; n < 7; n++) w.i16(b + 980 + 2 * n, c.governmentScores[n] ?? 0);
+    if (c.lastContact) for (let n = 0; n < 8; n++) w.i16(b + 994 + 2 * n, c.lastContact[n] ?? -1);
     w.i16(b + 8, c.researchProgress);
     w.i16(b + 10, c.researching ?? -1);
     w.u8(b + 16, c.advancesCount);

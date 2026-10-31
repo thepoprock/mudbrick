@@ -47,8 +47,12 @@ export interface AiUnitContext extends MovementContext {
   difficulty: number;
   realisticCombat: boolean;
   turn: number;
-  /** Is the acting civilization at war with `slot`? INFERRED stand-in for the treaty table. */
+  /** Is the acting civilization at war with `slot` (0x0044e123)? */
   atWar: (slot: number) => boolean;
+  /** May it attack `slot`'s units: no cease-fire or peace (defaults to `atWar`). */
+  canAttack?: (slot: number) => boolean;
+  /** A cease-fire or peace partner that is not an ally (defaults to never). */
+  atPeace?: (slot: number) => boolean;
   knows: (advance: number) => boolean;
   wondersOf: (slot: number) => boolean[];
   cityCount: (slot: number) => number;
@@ -170,6 +174,8 @@ export function chooseDirection(
   const roadMult = rules.cosmic.roadMoveMultiplier;
   const left = movesLeft(rules, unit, ctx);
   const ownStack = world.unitsAt(here.x, here.y).filter((u) => u.owner === me);
+  const canAttack = ctx.canAttack ?? ctx.atWar;
+  const atPeace = ctx.atPeace ?? (() => false);
 
   let best: Candidate | null = null;
   let bestRaw = FLOOR;
@@ -284,7 +290,7 @@ export function chooseDirection(
       // 5. Treaties around an empty square.
       if (!ocean && role < ROLE_SETTLE) {
         let movingAway = false;
-        if (nearestAny && nearestAnyDist < 4 && nearestIsForeign && !ctx.atWar(nearestAny.owner)) {
+        if (nearestAny && nearestAnyDist < 4 && nearestIsForeign && atPeace(nearestAny.owner)) {
           const d = distance(world, to, nearestAny.position);
           if (nearestAnyDist < d && nearestAnyDist < 3) {
             score += 5;
@@ -294,7 +300,7 @@ export function chooseDirection(
           if (d === nearestAnyDist) score -= 5;
         }
         const owner = world.territory[world.index(to.x, to.y)] ?? 0;
-        if (owner > 0 && owner !== me && !ctx.atWar(owner) && !movingAway) {
+        if (owner > 0 && owner !== me && atPeace(owner) && !movingAway) {
           // INFERRED: the original rejects the square under a fresh peace and otherwise
           // penalises it when attitude is low; without attitudes the penalty always applies.
           score -= 5;
@@ -307,7 +313,7 @@ export function chooseDirection(
         }
       }
       if (city && city.owner !== me) {
-        if (!ctx.atWar(city.owner)) continue;
+        if (!canAttack(city.owner)) continue;
         score = 999; // an undefended enemy city is taken
       }
       if (!city && !ocean && hutAt(world, to.x, to.y)) score += 20;
@@ -315,7 +321,7 @@ export function chooseDirection(
       // 7. Attacking.
       if (role === ROLE_SETTLE || role === ROLE_TRADE) continue;
       if (hereOcean && type.domain === DOMAIN_GROUND) continue; // INFERRED: no amphibious flag yet
-      if (!ctx.atWar(occupantOwner)) continue; // at peace or cease-fire a unit never attacks
+      if (!canAttack(occupantOwner)) continue; // at peace or cease-fire a unit never attacks
       if (type.attack === 0) continue;
       const defender = chooseDefender(world, rules, occupants, unit, {
         defenderFortified: occupants.some((u) => u.fortified),

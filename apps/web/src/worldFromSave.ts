@@ -74,6 +74,16 @@ export function worldFromSave(save: SaveFile, rules: Rules): World {
       taxRate: rec?.taxRate ?? 0,
       knownAdvances: [...(rec?.knownAdvances ?? [])],
       freeAdvancePending: false,
+      ...(rec
+        ? {
+            treaties: Uint32Array.from(rec.treaties.map((t) => t.raw)),
+            attitudes: Uint8Array.from(rec.attitudes),
+            reputation: rec.reputation,
+            patience: rec.patience,
+            lastWarTurns: Int16Array.from(rec.lastContact),
+            governmentScores: Int16Array.from(rec.governmentScores),
+          }
+        : {}),
       inPlay: slot === 0 || (save.parameters.slotsInPlay[slot] ?? false),
     });
   }

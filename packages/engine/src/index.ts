@@ -25,4 +25,6 @@ export * from './aiBuild.js';
 export * from './aiStrategy.js';
 export * from './aiUnits.js';
 export * from './barbarians.js';
+export * from './diplomacy.js';
+export * from './government.js';
 export * from './fertility.js';
