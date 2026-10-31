@@ -2,6 +2,7 @@ export * from './text.js';
 export * from './rules.js';
 export * from './map.js';
 export * from './save.js';
+export * from './saveWriter.js';
 export * from './popups.js';
 export * from './labels.js';
 export * from './cityNames.js';

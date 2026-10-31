@@ -20,6 +20,7 @@ import { gameFromSave } from './gameFromSave.js';
 import { loadGameFolder, type GameFolder } from './gameFiles.js';
 import { drawMap, hitTest } from './mapRenderer.js';
 import { PlaySession } from './play.js';
+import { downloadBytes, saveFromGame } from './saveFromGame.js';
 import { worldFromSave } from './worldFromSave.js';
 import { drawWorld, WORLD_TOP_PAD } from './worldRenderer.js';
 
@@ -37,10 +38,12 @@ const showUnits = byId<HTMLInputElement>('showUnits');
 const showCities = byId<HTMLInputElement>('showCities');
 const playButton = byId<HTMLButtonElement>('play');
 const endTurnButton = byId<HTMLButtonElement>('endTurn');
+const saveButton = byId<HTMLButtonElement>('save');
 
 let folder: GameFolder | undefined;
 let map: MapFile | undefined;
 let save: SaveFile | undefined;
+let saveBytes: Uint8Array | undefined;
 let world: World | undefined;
 let session: PlaySession | undefined;
 let sourceName = '';
@@ -103,6 +106,7 @@ function redraw(): void {
   info.textContent = `${headline()}\nHover a square for details.`;
   playButton.disabled = !(world && folder && save) || session !== undefined;
   endTurnButton.disabled = session === undefined;
+  saveButton.disabled = session === undefined;
 }
 
 function showError(name: string, err: unknown): void {
@@ -127,6 +131,7 @@ function applyGame(name: string, bytes: Uint8Array): void {
     world = undefined;
   } else {
     save = parseSave(bytes);
+    saveBytes = bytes;
     map = save.map;
     world = folder ? worldFromSave(save, folder.rules) : undefined;
   }
@@ -184,6 +189,14 @@ byId<HTMLInputElement>('gameFile').addEventListener('change', (e) => {
 
 playButton.addEventListener('click', startPlay);
 endTurnButton.addEventListener('click', () => session?.endTurn());
+saveButton.addEventListener('click', () => {
+  if (!session || !save || !saveBytes) return;
+  const bytes = saveFromGame(saveBytes, save, session.game);
+  const base = sourceName.replace(/\.[^.]+$/, '');
+  downloadBytes(bytes, `${base}-turn${session.game.state.turn}.SAV`);
+  session.log(`Saved ${base}-turn${session.game.state.turn}.SAV (${bytes.length} bytes).`);
+  session.refresh();
+});
 zoomSelect.addEventListener('change', redraw);
 showUnits.addEventListener('change', redraw);
 showCities.addEventListener('change', redraw);

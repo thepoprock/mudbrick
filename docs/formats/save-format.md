@@ -138,26 +138,26 @@ smaller record and may differ.
 
 ### Unit record (26 bytes; v44 appends 6 unknown bytes)
 
-| +   | size | field                                                                                                         |
-| --- | ---- | ------------------------------------------------------------------------------------------------------------- |
-| 0   | u16  | x (game coordinates; 0xFFFF = dead/unused slot)                                                               |
-| 2   | u16  | y                                                                                                             |
-| 4   | 1    | bit 6: has moved this turn — VERIFIED (set by the move handler)                                               |
-| 5   | 1    | bit 5 veteran, bit 6 waiting                                                                                  |
-| 6   | 1    | unit type (RULES @UNITS index)                                                                                |
-| 7   | 1    | owner slot                                                                                                    |
-| 8   | 1    | movement points spent (thirds)                                                                                |
-| 9   | 1    | visible to slot n (bits)                                                                                      |
-| 10  | 1    | hit points lost                                                                                               |
-| 11  | 1    | last move direction 0–7 clockwise from up-right, 0xFF none — VERIFIED (written after every step)              |
-| 13  | 1    | settlers' work counter, air unit's turns of fuel used, or caravan commodity id — VERIFIED                     |
-| 14  | 1    | go-to loop counter: +1 per go-to step, +15 on a reversal; past 47 the game asks whether to give up — VERIFIED |
-| 15  | 1    | order: RULES @ORDERS index + 1 (1 Fortify … 11 Go To; 27 a second go-to form), 0xFF none — VERIFIED           |
-| 16  | 1    | home city id                                                                                                  |
-| 18  | u16  | go-to x                                                                                                       |
-| 20  | u16  | go-to y                                                                                                       |
-| 22  | u16  | link: next unit on top in the same square                                                                     |
-| 24  | u16  | link: next unit underneath                                                                                    |
+| +   | size | field                                                                                                                                                                  |
+| --- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0   | u16  | x (game coordinates; 0xFFFF = dead/unused slot)                                                                                                                        |
+| 2   | u16  | y                                                                                                                                                                      |
+| 4   | 1    | bit 6: has moved this turn — VERIFIED (set by the move handler)                                                                                                        |
+| 5   | 1    | bit 5 veteran, bit 6 waiting                                                                                                                                           |
+| 6   | 1    | unit type (RULES @UNITS index)                                                                                                                                         |
+| 7   | 1    | owner slot                                                                                                                                                             |
+| 8   | 1    | movement points spent (thirds)                                                                                                                                         |
+| 9   | 1    | visible to slot n (bits)                                                                                                                                               |
+| 10  | 1    | hit points lost                                                                                                                                                        |
+| 11  | 1    | last move direction 0–7 clockwise from up-right, 0xFF none — VERIFIED (written after every step)                                                                       |
+| 13  | 1    | settlers' work counter, air unit's turns of fuel used, or caravan commodity id — VERIFIED                                                                              |
+| 14  | 1    | go-to loop counter: +1 per go-to step, +15 on a reversal; past 47 the game asks whether to give up — VERIFIED                                                          |
+| 15  | 1    | order: RULES @ORDERS index + 1 (1 Fortify … 11 Go To; 27 a second go-to form), 0xFF none — VERIFIED                                                                    |
+| 16  | 1    | home city id                                                                                                                                                           |
+| 18  | u16  | go-to x                                                                                                                                                                |
+| 20  | u16  | go-to y                                                                                                                                                                |
+| 22  | u16  | stack link: the next unit record on the same square (0xFFFF for the last) — VERIFIED from real saves: units sharing a square form a doubly linked list in record order |
+| 24  | u16  | stack link: the previous unit record on the same square (0xFFFF for the first) — VERIFIED                                                                              |
 
 Coordinates VERIFIED in bounds with the right parity in all 42 files; types < 62 and owners < 8
 VERIFIED; the rest INFERRED.
@@ -224,3 +224,14 @@ slots · `+50` 12 × 24 names. Size VERIFIED, fields INFERRED.
 - `EVNT` blocks (scenario events) are detected but not parsed.
 - The 48-byte per-human blocks, the 110- and 70-byte gaps and the two minimap-sized blocks are
   unmapped.
+
+## Writing
+
+`writeSave` (packages/formats/src/saveWriter.ts) rebuilds a file from the original bytes: the
+fixed part is copied, the modelled header, tech, wonder and civilization fields are rewritten,
+the unit and city blocks are rebuilt record by record (unknown bytes copied from the source
+record, zeroed for new ones), stack links recomputed, and the tail from the cities-founded table
+onward copied unchanged. `patchFromSave` turns a parsed file into the identity patch; the
+round-trip test writes every shipped save and scenario back and checks that parsing the result
+gives the same units, cities, civilizations, techs, wonders, parameters and squares, with fewer
+than one byte in a thousand differing (stale link bytes in the originals).

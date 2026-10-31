@@ -44,6 +44,20 @@ export function decodeText(bytes: Uint8Array): string {
   return out.join('');
 }
 
+/** Encode a string as Windows-1252; characters outside the code page become `?`. */
+export function encodeText(text: string): Uint8Array {
+  const out = new Uint8Array(text.length);
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code < 0x80 || (code >= 0xa0 && code <= 0xff)) out[i] = code;
+    else {
+      const hi = CP1252_HIGH.indexOf(code);
+      out[i] = hi >= 0 && code !== 0xfffd ? 0x80 + hi : 0x3f;
+    }
+  }
+  return out;
+}
+
 /** Split text into lines, tolerating CRLF, LF and a missing final newline. */
 export function splitLines(text: string): string[] {
   const lines = text.split(/\r?\n/);
