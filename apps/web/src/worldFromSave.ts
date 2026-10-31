@@ -98,6 +98,7 @@ export function worldFromSave(save: SaveFile, rules: Rules): World {
       production: c.production,
       inDisorder: c.civilDisorder,
       celebrating: c.weLoveTheKingDay,
+      ...(typeof c.founder === 'number' ? { previousOwner: c.founder } : {}),
       tradeRoutes: c.routePartners
         .slice(0, c.activeTradeRoutes)
         .map((partner, i) => ({ partner, food: (c.routeCommodities[i] ?? 0) >= 0x80 })),

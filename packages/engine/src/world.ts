@@ -133,6 +133,10 @@ export interface City {
   inDisorder: boolean;
   /** Set on the second consecutive turn of disorder (the original's flag bit 13). */
   disorderRepeated?: boolean;
+  /** Owner before the last capture (the save's byte 10); a recapture by it is a liberation. */
+  previousOwner?: number;
+  /** Turn of the last capture (the save's byte 11). */
+  capturedTurn?: number;
   celebrating: boolean;
   /** Owners of outgoing trade routes' partner cities and whether each carries food. */
   tradeRoutes: { partner: number; food: boolean }[];

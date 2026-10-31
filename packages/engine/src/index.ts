@@ -17,3 +17,5 @@ export * from './turnStart.js';
 export * from './orders.js';
 export * from './huts.js';
 export * from './calendar.js';
+export * from './attack.js';
+export * from './conquest.js';

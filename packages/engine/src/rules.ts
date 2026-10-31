@@ -105,6 +105,8 @@ export interface AdvanceRule {
   /** 0 Ancient … 3 Modern. */
   epoch: number;
   category: number;
+  /** RULES AI value, used when an advance is taken from a conquered civilization. */
+  aiValue?: number;
 }
 
 export interface CosmicRule {

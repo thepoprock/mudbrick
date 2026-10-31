@@ -57,6 +57,8 @@ export interface CombatContext {
   difficulty?: number;
   /** Attacker's moves left in thirds: a real attack scales by min(left, 3) / 3 (VERIFIED). */
   attackerMovesLeft?: number;
+  /** Simplified combat OFF (default true): fight to the death. When false one round decides (VERIFIED). */
+  realisticCombat?: boolean;
 }
 
 const DEFAULT_CTX: CombatContext = { defenderFortified: false };
@@ -189,20 +191,15 @@ function prepareSides(
 ): Sides {
   const aType = rules.units[attacker.type];
   const dType = rules.units[defender.type];
-  const attack = attackStrength(rules, attacker, ctx.attackerMovesLeft);
+  const full = (rules.units[attacker.type]?.move ?? 1) * 3;
+  const left = ctx.attackerMovesLeft ?? Math.max(0, full - attacker.movesSpent);
+  const attack = attackStrength(rules, attacker, left);
   const defence = defenceStrength(world, rules, defender, attacker, ctx);
   let a = attack.value;
   let d = defence.value;
   let aFp = aType?.firepower ?? 1;
   let dFp = dType?.firepower ?? 1;
   const tag = (b: StrengthBreakdown, label: string, factor: number) => note(b, label, factor);
-
-  const full = (rules.units[attacker.type]?.move ?? 1) * 3;
-  const left = Math.max(0, full - attacker.movesSpent);
-  if (left < 3 && left > 0) {
-    a = Math.floor((a * left) / 3);
-    tag(attack, 'partial move', left / 3);
-  }
 
   const aAir = aType?.domain === DOMAIN_AIR;
   const aSea = aType?.domain === DOMAIN_SEA;
@@ -313,14 +310,18 @@ export function resolveCombat(
   let dHp = hitPoints(rules, defender);
   const rounds: CombatRound[] = [];
   const draw = (strength: number) => (strength > 1 ? rng.nextInt(strength) : 0);
+  const toTheDeath = ctx.realisticCombat ?? true;
+  let lastRound = false;
   while (aHp > 0 && dHp > 0) {
     let attackerWon = draw(s.d) < draw(s.a);
     if (s.doubleRoll && attackerWon && draw(s.a) < draw(s.d)) attackerWon = false;
     if (attackerWon) dHp = Math.max(0, dHp - s.aFp);
     else aHp = Math.max(0, aHp - s.dFp);
     rounds.push({ attackerWon, attackerHp: aHp, defenderHp: dHp });
+    lastRound = attackerWon;
+    if (!toTheDeath) break; // simplified combat: the first round decides, the loser is destroyed
   }
-  const attackerWon = dHp === 0;
+  const attackerWon = toTheDeath ? dHp === 0 : lastRound;
   const total = s.a + s.d;
   let promoted: boolean;
   if (attackerWon) {

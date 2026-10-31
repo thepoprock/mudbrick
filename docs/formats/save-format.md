@@ -174,8 +174,8 @@ VERIFIED; the rest INFERRED.
 | 7   | 1       | bits: 0 auto-build military advisor, 1 auto-build domestic advisor, 2 objective ×1, 4 objective ×3                                             |
 | 8   | 1       | owner slot                                                                                                                                     |
 | 9   | 1       | size                                                                                                                                           |
-| 10  | 1       | founder slot                                                                                                                                   |
-| 11  | 1       | turns since capture                                                                                                                            |
+| 10  | 1       | owner before the last capture (the founder until then); the executable compares it with a captor to detect a liberation — VERIFIED             |
+| 11  | 1       | turn of the last capture (the executable stores the turn number; every 64 turns a held city becomes 'originally' its holder's) — VERIFIED      |
 | 12  | 1       | known to slot n (bits)                                                                                                                         |
 | 13  | 8       | last size shown to slot n                                                                                                                      |
 | 22  | 4       | specialists: 16 × 2 bits (0 none, 1 entertainer, 2 tax collector, 3 scientist)                                                                 |

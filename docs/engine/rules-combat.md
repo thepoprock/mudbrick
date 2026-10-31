@@ -142,3 +142,48 @@ the rounds.
 
 The attack-cost condition, the Legion-vs-barbarian
 condition, nuclear attacks (attack 99), and what status bit 4 means.
+
+## After the fight (VERIFIED, 0x0052d472)
+
+- A real attack costs the attacker **one full move** (3 thirds), whatever it had left.
+- With **simplified combat on** a single round decides the battle and the loser is destroyed; with
+  it off the units fight to the death, damage accumulating by the winner's firepower each round.
+- The loser is destroyed. When the **defender** loses **in the open** — no city, fortress or
+  airbase on its square — every other unit on that square dies with it.
+- A **barbarian leader** (a barbarian unit of role 5 or higher) beaten by the attacker pays a
+  ransom of `50 × barbarian activity` gold.
+- A **city** whose defender falls to an attacker standing **on land** loses one citizen unless it
+  has City Walls, its owner holds the Great Wall, or the owner is a human at Chieftain. A city
+  emptied this way is destroyed.
+- Units that are **destroyed after attacking** (missiles) are consumed whether they won or lost.
+- Promotion as above: `rand() % (A + D) ≤ loser strength`, or always with Sun Tzu's.
+- A computer attacker that wins against an emptied city walks in at once; a human must move in.
+
+## Capturing a city (VERIFIED, 0x00528720, 0x00526efb, 0x005273ba)
+
+Entering an undefended enemy city with a ground unit captures it:
+
+- **Plunder:** `treasury × city size / (loser's total population + 1)` gold moves from the loser to
+  the captor (none for barbarians).
+- The shield box empties; disorder and celebration end.
+- Unless the captor is the civilization the city was last taken **from** (a liberation): the
+  Palace, Temple, Cathedral and Courthouse are destroyed, and — on conquest by force — **half the
+  remaining improvements**: all buildings whose index has one parity (even or odd, chosen at
+  random) are lost.
+- The city loses **one citizen** on conquest or whenever it is larger than 1; a size-1 city taken
+  by force is destroyed.
+- Units supported by the city: partisans keep going without a home; a Defend-role unit standing in
+  another city of the loser is re-homed there; everything else is disbanded.
+- A human captor under Republic or Democracy (above Chieftain) finds the city in disorder.
+- Production that is no longer valid resets to the best defensive unit (as for a new city).
+- **Partisans** rise for a loser under Communism or Democracy, or once anyone has discovered
+  Guerilla Warfare, or when the loser knows Communism: count `= ((size + 6) / 8) × (|government
+difference| + |rank difference| + 1) / 2`, halved when not by force, −1 without Conscription;
+  without Guerilla Warfare the count is zero unless the loser knows Communism and Gunpowder; with
+  it the count doubles when the captor lacks Guerilla Warfare, else +1. They appear fortified on the
+  best radius squares (defence × 2, +1 road, +1 railroad, ×2 fortress), veteran by a reputation roll.
+- The captor **learns one advance** the loser knows (the highest AI value; a human chooses), unless
+  the scenario forbids it; a scenario that forbids government changes also withholds the
+  government advances.
+- Not modelled yet: attitude changes, the civil-war split when an AI capital falls, the 1000-gold
+  Palace escape, wonder-movie and Leonardo's/Eiffel effects of a captured wonder.

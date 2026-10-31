@@ -7,11 +7,10 @@
  */
 import {
   advanceIndex,
-  applyCombat,
   canBuildUnit,
   canFoundCity,
   canOrder,
-  chooseDefender,
+  captureCity,
   disbandUnit,
   doWork,
   DOMAIN_GROUND,
@@ -31,10 +30,9 @@ import {
   pillageOptions,
   rawYields,
   researchableAdvances,
-  resolveCombat,
+  resolveAttack,
   sentry,
   shieldTotals,
-  SquareFlag,
   tradeSplit,
   tryMove,
   unitSupport,
@@ -335,64 +333,80 @@ export class PlaySession {
   }
 
   private attack(unit: Unit, to: Point): void {
-    const type = this.rules.units[unit.type];
-    if (!type) return;
-    const enemies = this.world.unitsAt(to.x, to.y).filter((u) => u.owner !== unit.owner);
     const city = this.world.cityAt(to.x, to.y);
-    if (type.attack === 0) {
-      this.log('This unit cannot attack.');
-      return;
-    }
+    const enemies = this.world.unitsAt(to.x, to.y).filter((u) => u.owner !== unit.owner);
     if (enemies.length === 0 && city && city.owner !== unit.owner) {
-      if (type.domain !== DOMAIN_GROUND) {
+      if (this.rules.units[unit.type]?.domain !== DOMAIN_GROUND) {
         this.log('Only ground units can occupy a city.');
         return;
       }
-      this.captureCity(unit, city);
+      this.takeCity(unit, city);
       return;
     }
-    const defenderCivSlot = enemies[0]?.owner ?? 0;
-    const ctx = {
-      defenderFortified: enemies.some((u) => u.fortified),
-      attackerWonders: this.wondersOf(unit.owner),
-      defenderWonders: this.wondersOf(defenderCivSlot),
-      damageMatters: this.game.state.realisticCombat,
-      ...(city ? { defenderCity: city.improvements } : {}),
+    const ev = resolveAttack(this.world, this.rules, this.game.rng, unit, to, {
+      civ: (slot) => this.world.civs.find((c) => c.slot === slot),
+      wondersOf: (slot) => this.wondersOf(slot),
+      cityCount: (slot) => this.game.citiesOf(slot).length,
+      difficulty: this.game.state.difficulty,
+      realisticCombat: this.game.state.realisticCombat,
+      barbarianActivity: 1,
       attackerMovesLeft: movesLeft(this.rules, unit, this.moveCtx()),
-    };
-    const defender = chooseDefender(this.world, this.rules, enemies, unit, ctx);
-    if (!defender) {
+    });
+    if (ev.kind === 'cannot-attack') {
+      this.log('This unit cannot attack.');
+      return;
+    }
+    if (ev.kind === 'no-defender') {
       this.log('Nothing there can defend against this unit.');
       return;
     }
-    const result = resolveCombat(this.world, this.rules, this.game.rng, unit, defender, ctx);
-    applyCombat(this.rules, result, unit, defender);
-    const loser = result.attackerWon ? defender : unit;
-    const winner = result.attackerWon ? unit : defender;
-    this.world.units.splice(this.world.units.indexOf(loser), 1);
-    const attackPct = Math.round((result.attack.value / 8) * 10) / 10;
-    const defencePct = Math.round((result.defence.value / 8) * 10) / 10;
+    const a = Math.round((ev.result.attack.value / 8) * 10) / 10;
+    const d = Math.round((ev.result.defence.value / 8) * 10) / 10;
+    const winner = ev.attackerWon ? unit : ev.defender;
     this.log(
-      `${this.unitName(unit)} (${attackPct}) attacks ${this.unitName(defender)} (${defencePct}): ` +
-        `${result.attackerWon ? 'victory' : 'defeat'} after ${result.rounds.length} rounds` +
-        (result.promoted ? `; ${this.unitName(winner)} becomes veteran` : '') +
+      `${this.unitName(unit)} (${a}) attacks ${this.unitName(ev.defender)} (${d}): ` +
+        `${ev.attackerWon ? 'victory' : 'defeat'} after ${ev.result.rounds.length} round(s)` +
+        (ev.result.promoted ? `; ${this.unitName(winner)} becomes veteran` : '') +
         '.',
     );
-    if (result.attackerWon && !city && !this.world.hasFlag(to.x, to.y, SquareFlag.Fortress)) {
-      // INFERRED: the original destroys the whole stack when the defender falls in the open.
-      const rest = this.world.unitsAt(to.x, to.y).filter((u) => u.owner !== unit.owner);
-      for (const u of rest) this.world.units.splice(this.world.units.indexOf(u), 1);
-      if (rest.length > 0)
-        this.log(`${rest.length} more enemy unit(s) destroyed with the defender (INFERRED rule).`);
-    }
-    if (this.world.units.includes(unit)) {
-      unit.movesSpent = Math.min(fullMoves(this.rules, unit, this.moveCtx()), unit.movesSpent + 3);
-      unit.moved = true;
-      unit.fortified = false;
-      unit.order = null;
+    if (ev.stackLost.length > 0)
+      this.log(`${ev.stackLost.length} more enemy unit(s) destroyed with the defender.`);
+    if (ev.cityDestroyed) this.log(`${ev.cityShrunk?.name ?? 'The city'} is destroyed.`);
+    else if (ev.cityShrunk) this.log(`${ev.cityShrunk.name} loses a citizen.`);
+    if (ev.ransom > 0) this.log(`Barbarian leader captured: ${ev.ransom} gold ransom.`);
+    if (ev.attackerConsumed) this.selected = null;
+  }
+
+  private takeCity(unit: Unit, city: City): void {
+    const loser = this.world.civs.find((c) => c.slot === city.owner);
+    if (!loser) return;
+    const ev = captureCity(this.world, this.rules, this.game.rng, city, this.civ, loser, {
+      turn: this.game.state.turn,
+      difficulty: this.game.state.difficulty,
+      conquest: true,
+      guerillaWarfareDiscovered: (this.game.state.firstDiscoveredBy[34] ?? 0) !== 0,
+      ...(this.game.state.forbidGovernmentChange ? { forbidGovernmentSwitching: true } : {}),
+    });
+    if (ev.cityDestroyed) {
+      this.log(`${this.unitName(unit)} destroys the ${loser.adjective} city of ${city.name}.`);
     } else {
-      this.selected = null;
+      unit.position = { x: city.position.x, y: city.position.y };
+      this.log(
+        `${this.unitName(unit)} captures ${city.name}: ${ev.plunder} gold plundered` +
+          (ev.destroyedImprovements.length
+            ? `, ${ev.destroyedImprovements.length} building(s) destroyed`
+            : '') +
+          (ev.partisans.length ? `, ${ev.partisans.length} partisans rise` : '') +
+          (ev.stolenAdvance !== null
+            ? `, you learn ${this.rules.advances[ev.stolenAdvance]?.name ?? 'an advance'}`
+            : '') +
+          '.',
+      );
+      this.openCity = city;
     }
+    unit.movesSpent = fullMoves(this.rules, unit, this.moveCtx());
+    unit.moved = true;
+    unit.order = null;
   }
 
   private wondersOf(slot: number): boolean[] {
@@ -402,28 +416,6 @@ export class PlaySession {
       for (let i = 39; i < 67; i++) if (c.improvements[i]) out[i] = true;
     }
     return out;
-  }
-
-  /** INFERRED: the original's capture routine is not yet read. */
-  private captureCity(unit: Unit, city: City): void {
-    const loserName = this.world.civs.find((c) => c.slot === city.owner)?.adjective ?? 'enemy';
-    city.size -= 1;
-    if (city.size < 1) {
-      this.world.cities.splice(this.world.cities.indexOf(city), 1);
-      this.log(`${this.unitName(unit)} destroys the ${loserName} city of ${city.name}.`);
-    } else {
-      city.owner = unit.owner;
-      city.improvements[IMPROVEMENT.palace] = false;
-      city.inDisorder = false;
-      city.celebrating = false;
-      this.log(
-        `${this.unitName(unit)} captures ${city.name} (INFERRED: size −1, Palace lost, no plunder yet).`,
-      );
-    }
-    unit.position = { x: city.position.x, y: city.position.y };
-    unit.movesSpent = fullMoves(this.rules, unit, this.moveCtx());
-    unit.moved = true;
-    unit.order = null;
   }
 
   private resolveHut(unit: Unit): void {
