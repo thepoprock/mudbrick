@@ -583,6 +583,8 @@ export class PlaySession {
           : null;
       case 'revolt':
         return 'Revolution! The government has fallen into Anarchy.';
+      case 'ai-unit':
+        return null;
       case 'polluted':
         return `Pollution near ${cityName}.`;
       case 'meltdown':

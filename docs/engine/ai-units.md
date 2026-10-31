@@ -63,7 +63,12 @@ unless marked INFERRED; the engine does not implement this layer yet — see the
 
 ## What the engine does instead (INFERRED)
 
-Computer players currently move no units. The planned interim behaviour, to be labelled INFERRED
-in the code: settlers found cities on good unclaimed squares, one or two defenders fortify in each
-city, spare combat units attack adjacent enemies and otherwise hold, and explorers roam. The real
-objective and plan machinery above will replace it as the move loop is read.
+`packages/engine/src/aiUnits.ts` is an interim controller, labelled INFERRED throughout: settlers
+found cities on scored sites (land in the radius, rivers, grassland or plains, no city within two
+squares) or irrigate, mine and build roads near their cities; defenders fortify where a city has
+fewer than `size / 4 + 1` (+1 in the capital) and walk to cities that lack them; attackers strike
+adjacent enemies at odds of 1.3 or better, advance on enemy cities within ten squares on their land
+mass, and otherwise garrison; caravans deliver their cost in shields to a city building a wonder;
+ships and aircraft stay put. Barbarians are everyone's enemy; other wars come from an explicit list
+until diplomacy is read. The objective and plan machinery above will replace this as the move
+chooser (0x004f44cc, called per unit from 0x004ff777 → 0x004ff621) is read.

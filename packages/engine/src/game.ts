@@ -41,6 +41,7 @@ import { ADVANCE, advanceIndex, GOVERNMENT, IMPROVEMENT, type EngineRules } from
 import { beginUnitsTurn, type UnitTurnEvent } from './turnStart.js';
 import { cityPollution, meltdownRoll, pollutionRoll, type PollutionEvent } from './pollution.js';
 import { aiChooseProduction } from './aiBuild.js';
+import { aiMoveUnits, type AiUnitEvent } from './aiUnits.js';
 import { inEnemyZoc } from './movement.js';
 import { payUpkeep, type UpkeepEvent } from './upkeep.js';
 import { CITY_CENTRE_INDEX, type City, type Civ, type World } from './world.js';
@@ -63,6 +64,8 @@ export interface GameState {
   eliminatePollution?: boolean;
   /** World pollution count (the save header's value), kept for global warming later. */
   pollutionSquares?: number;
+  /** Pairs of slots at war (INFERRED stand-in for the treaty table). */
+  wars?: [number, number][];
 }
 
 export type GrowthNote =
@@ -73,6 +76,7 @@ export type TurnEvent =
   | { slot: number; city: number; event: CityTurnEvent }
   | { slot: number; event: ResearchEvent }
   | { slot: number; event: UnitTurnEvent }
+  | { slot: number; event: AiUnitEvent }
   | { slot: number; event: { kind: 'rates'; science: number; tax: number; luxuries: number } };
 
 /** Advances that end the AI's science: Fusion Power, The Laser, and the spaceship parts' prerequisites. */
@@ -113,6 +117,26 @@ export class Game {
   wonderCity(improvement: number): number | null {
     const c = this.world.cities.find((x) => x.improvements[improvement]);
     return c ? c.id : null;
+  }
+
+  /** Are two civilizations at war? INFERRED: barbarians fight everyone; diplomacy is not modelled yet. */
+  atWar(a: number, b: number): boolean {
+    if (a === b) return false;
+    return (
+      a === 0 ||
+      b === 0 ||
+      (this.state.wars?.some(([x, y]) => (x === a && y === b) || (x === b && y === a)) ?? false)
+    );
+  }
+
+  /** Wonders held by a civilization, by @IMPROVE index. */
+  wondersOf(slot: number): boolean[] {
+    const out = Array<boolean>(67).fill(false);
+    for (const c of this.world.cities) {
+      if (c.owner !== slot) continue;
+      for (let i = 39; i < 67; i++) if (c.improvements[i]) out[i] = true;
+    }
+    return out;
   }
 
   /** Squares to the nearest own city holding the Palace; 32 when none. */
@@ -364,6 +388,28 @@ export class Game {
         !events.some((e) => 'city' in e && e.event.kind === 'celebration-start')
       ) {
         anyLargeQuiet = true; // INFERRED reading of "happy equals unhappy"
+      }
+    }
+    if (!civ.isHuman) {
+      // INFERRED interim behaviour until the original's move chooser is read (docs/engine/ai-units.md).
+      let names = this.citiesOf(slot).length;
+      for (const e of aiMoveUnits(this.world, this.rules, slot, {
+        rng: this.rng,
+        civ,
+        difficulty: this.state.difficulty,
+        realisticCombat: this.state.realisticCombat,
+        turn: this.state.turn,
+        atWar: (other) => this.atWar(slot, other),
+        knows: (a) => this.knows(slot, a),
+        wondersOf: (s) => this.wondersOf(s),
+        cityCount: (s) => this.citiesOf(s).length,
+        nextCityName: () => `${civ.adjective} City ${++names}`,
+        nuclearPower: this.knows(slot, ADVANCE.nuclearPower),
+        magellans: this.ownsWonder(slot, IMPROVEMENT.magellans),
+        lighthouse: this.ownsWonder(slot, IMPROVEMENT.lighthouse),
+        damageSlowsUnits: this.state.realisticCombat,
+      })) {
+        out.push({ slot, event: e });
       }
     }
     if (!civ.isHuman) {
