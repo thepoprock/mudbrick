@@ -36,6 +36,7 @@ import {
   type TradeContext,
   type TradeEvent,
 } from './trade.js';
+import { gotoDirection } from './pathfinding.js';
 import { gotoStep } from './turnStart.js';
 import {
   NEIGHBOUR_OFFSETS,
@@ -471,8 +472,21 @@ function stepToward(
 ): boolean {
   let best: Point | null = null;
   let bestDir = -1;
+  // The go-to pathfinder first (the original orders a go-to for the outer squares), so a bay or
+  // a mountain between the unit and its square is walked around.
+  const planned = gotoDirection(world, rules, unit, target);
+  if (planned !== null) {
+    const n = neighbour(world, unit.position, planned);
+    if (n) {
+      const v = checkMove(world, rules, unit, n, ctx);
+      if (v.ok && !v.boards && !world.unitsAt(n.x, n.y).some((u) => u.owner !== unit.owner)) {
+        best = n;
+        bestDir = planned;
+      }
+    }
+  }
   let bestD = distance(world, unit.position, target);
-  for (let dir = 0; dir < 8; dir++) {
+  for (let dir = 0; best === null && dir < 8; dir++) {
     const n = neighbour(world, unit.position, dir);
     if (!n) continue;
     const v = checkMove(world, rules, unit, n, ctx);
@@ -714,6 +728,16 @@ function settlersAct(
   const me = unit.owner;
   // VERIFIED: a settler clears the settle goal on its own square (0x0046ffe5, type 5, distance 0).
   if (ctx.strategy) removeGoals(world, ctx.strategy, 5, here, 0);
+  // VERIFIED (docs/engine/ai-units.md): the very first settler founds at its start position on
+  // turn 1.
+  if (ctx.turn <= 1 && ctx.cityCount(me) === 0) {
+    const verdict = canFoundCity(world, rules, unit);
+    if (verdict.ok && verdict.joins === null) {
+      const city = foundCity(world, rules, ctx.civ, unit, { name: ctx.nextCityName() });
+      events.push({ kind: 'ai-unit', text: `founds ${city.name}` });
+      return false;
+    }
+  }
   const landmass = world.landmass[world.index(here.x, here.y)];
   const nearestAny = nearestCity(world, here, () => true);
   const nearestDist = nearestAny ? distance(world, here, nearestAny.position) : 99;
@@ -759,7 +783,17 @@ function settlersAct(
           }
         } else {
           const target = world.radiusSquare(here.x, here.y, bestIndex);
-          if (target) return stepToward(world, rules, unit, target, ctx);
+          if (target && stepToward(world, rules, unit, target, ctx)) return true;
+          // INFERRED: a better square it cannot reach (a bay, a foreign unit) counts as a wait;
+          // after four the settler founds where it stands rather than standing forever.
+          if (++unit.gotoSteps > 4) {
+            const verdict = canFoundCity(world, rules, unit);
+            if (verdict.ok && verdict.joins === null) {
+              const city = foundCity(world, rules, ctx.civ, unit, { name: ctx.nextCityName() });
+              events.push({ kind: 'ai-unit', text: `founds ${city.name}` });
+            }
+          }
+          return false;
         }
       }
     }
