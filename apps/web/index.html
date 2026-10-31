@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Mudbrick — world viewer</title>
+    <title>Mudbrick</title>
     <style>
       :root {
         color-scheme: dark;
@@ -15,13 +15,16 @@
         margin: 0;
         background: #14161a;
         color: #ddd;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
       }
       header {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.75rem 1.25rem;
+        gap: 0.5rem 1.25rem;
         align-items: center;
-        padding: 0.75rem 1rem;
+        padding: 0.5rem 1rem;
         background: #1e2228;
         border-bottom: 1px solid #333;
       }
@@ -30,38 +33,101 @@
         gap: 0.4rem;
         align-items: center;
       }
-      main {
-        padding: 1rem;
+      button {
+        font: inherit;
+        padding: 0.2rem 0.7rem;
+        border-radius: 4px;
+        border: 1px solid #556;
+        background: #2a3038;
+        color: #eee;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+      #layout {
+        display: flex;
+        flex: 1;
+        min-height: 0;
+      }
+      #mapWrap {
+        flex: 1;
         overflow: auto;
+        padding: 0.5rem;
       }
       canvas {
         image-rendering: pixelated;
         background: #000;
         display: block;
       }
-      #info {
+      aside {
+        width: 24rem;
+        min-width: 24rem;
+        overflow: auto;
+        border-left: 1px solid #333;
+        background: #181b20;
+        padding: 0.75rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+      aside section {
+        border: 1px solid #2c3139;
+        border-radius: 6px;
+        padding: 0.5rem 0.6rem;
+        background: #1c2027;
+      }
+      aside h2 {
+        font-size: 0.8rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #9ab;
+        margin: 0 0 0.35rem;
+      }
+      .mono {
         font-family: ui-monospace, monospace;
-        white-space: pre;
-        margin: 0 0 0.75rem;
-        min-height: 4.5em;
+        white-space: pre-wrap;
+        font-size: 12px;
+      }
+      #info {
         color: #9fb;
+        margin: 0;
+        min-height: 3.5em;
+      }
+      #status {
+        color: #ffd;
+      }
+      #log {
+        color: #cde;
+        max-height: 14rem;
+        overflow: auto;
       }
       .hint {
         color: #888;
+        font-size: 12px;
       }
-      #status {
+      #statusLine {
         color: #cb8;
+      }
+      select {
+        max-width: 100%;
+        font: inherit;
       }
     </style>
   </head>
   <body>
     <header>
-      <strong>Mudbrick · world viewer</strong>
+      <strong>Mudbrick</strong>
       <label>1. Game folder <input id="folder" type="file" webkitdirectory multiple /></label>
       <label
         >2. Map or game
         <input id="gameFile" type="file" accept=".mp,.MP,.sav,.SAV,.scn,.SCN,.hot,.HOT,.net,.NET"
       /></label>
+      <button id="play" disabled title="Play the loaded game as its human civilization">
+        Play
+      </button>
+      <button id="endTurn" disabled title="End the turn (Enter)">End turn</button>
       <label
         >Zoom
         <select id="zoom">
@@ -73,17 +139,45 @@
       >
       <label><input id="showCities" type="checkbox" checked /> cities</label>
       <label><input id="showUnits" type="checkbox" checked /> units</label>
-      <span id="status"></span>
+      <span id="statusLine"></span>
       <span id="dev"></span>
       <span class="hint">Files are read in your browser only. Nothing is uploaded.</span>
     </header>
-    <main>
-      <p id="info">
-        Pick the folder of your own installed copy (the one with RULES.TXT), then a .MP map or a
-        .SAV/.SCN game.
-      </p>
-      <canvas id="map" width="0" height="0"></canvas>
-    </main>
+    <div id="layout">
+      <div id="mapWrap">
+        <p id="info" class="mono">
+          Pick the folder of your own installed copy (the one with RULES.TXT), then a .MP map or a
+          .SAV/.SCN game. Press Play to take over the human civilization.
+        </p>
+        <canvas id="map" width="0" height="0"></canvas>
+      </div>
+      <aside id="panel">
+        <section>
+          <h2>Empire</h2>
+          <div id="status" class="mono">Not playing.</div>
+        </section>
+        <section>
+          <h2>Selected unit</h2>
+          <div id="unitPanel" class="mono"></div>
+        </section>
+        <section>
+          <h2>City</h2>
+          <div id="cityPanel" class="mono"></div>
+        </section>
+        <section>
+          <h2>Research</h2>
+          <div id="researchPanel" class="mono"></div>
+        </section>
+        <section>
+          <h2>Log</h2>
+          <div id="log" class="mono"></div>
+        </section>
+        <p class="hint">
+          Rules marked VERIFIED were read from the original program; the log says INFERRED where a
+          rule is still a best guess. Computer players do not move units yet.
+        </p>
+      </aside>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

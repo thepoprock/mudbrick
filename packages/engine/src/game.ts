@@ -183,6 +183,7 @@ export class Game {
     const homed = () => this.world.units.filter((u) => u.homeCity === city.id);
     const settlers = () => homed().filter((u) => this.rules.units[u.type]?.role === 5);
 
+    this.ensureWorkers(city, ctx);
     // 1. Growth and starvation on last turn's stored food.
     const growth = processGrowth(this.rules, city, ctx, settlers());
     if (growth.disbandedSettler) {
@@ -366,6 +367,21 @@ export class Game {
     }
     this.state.turn += 1;
     return out;
+  }
+
+  /** Give every citizen a square or a specialist slot (the original's auto-arrange runs on founding and growth). */
+  ensureWorkers(city: City, ctx: CityContext = this.cityContext(city)): void {
+    const specialists =
+      city.specialists.entertainers + city.specialists.taxCollectors + city.specialists.scientists;
+    let working = 0;
+    for (let i = 0; i < CITY_CENTRE_INDEX; i++) if ((city.worked >> i) & 1) working++;
+    let guard = 0;
+    while (working + specialists < city.size && guard++ < 25) {
+      const before = city.worked;
+      this.placeNewWorker(city, ctx);
+      if (city.worked === before) break; // became an entertainer
+      working++;
+    }
   }
 
   /** Put a new citizen on the best free square by food, then shields and trade (INFERRED simplification of 0x004b49b5). */

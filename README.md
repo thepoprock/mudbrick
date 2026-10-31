@@ -49,6 +49,19 @@ npm run render-map -- /path/to/WORLD.MP world.png # headless PNG of a map
 Requires Node 20 or newer. `ORIGINAL_GAME_DIR` is the folder of your own installation that holds
 `RULES.TXT`, the `*.MP` maps and the `*.GIF` sheets.
 
+## Playing (alpha)
+
+Load your game folder and a `.SAV`/`.SCN`, then press **Play** to take over the human
+civilization. Click a unit to select it; the side panel lists the keys (arrows or the number pad
+to move, `f` fortify, `s` sleep, `g` go to, `b` build or join a city, `r`/`i`/`m`/`o` for roads,
+irrigation, mines and transforming, `F` fortress, `E` airbase, `p` clean pollution, `P` pillage,
+`D` disband, `Tab` next unit, `Enter` end turn). Click a city for its yields, mood and production
+menu; the research panel sets the research target.
+
+Everything the player does runs through the engine's verified rules; the log says INFERRED where
+a rule has not been read from the original yet. Computer players grow and build but do not move
+units, there is no diplomacy, and games cannot be saved yet — see the roadmap.
+
 ## Repository layout
 
 | path               | what                                                                               |
@@ -89,7 +102,8 @@ ln -s /path/to/your/copy apps/web/dev-game
 
 The dev build then shows a "Load dev-game folder" button and an input for a game file, and
 `http://localhost:5173/?game=WWII.SCN` loads both straight away, which is handy for screenshots
-and browser tests. None of this exists in the production build.
+and browser tests. None of this exists in the production build. `npm run play-smoke TUTORIAL.SAV out.png http://localhost:5173 5`
+plays a few turns headless and fails on any browser error.
 
 ## License
 

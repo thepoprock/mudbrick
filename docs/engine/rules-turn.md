@@ -33,3 +33,22 @@ order (INFERRED).
 implemented and therefore skipped: the pollution roll (0x004bb7bb), the AI's production choice
 and worker tasks, and the pre- and post-turn routines beyond the treasury clamp and warning.
 Each skipped step is listed in the "Still to read" section of the rules file it belongs to.
+
+## The calendar (VERIFIED, 0x0046520c and the table at 0x005b63d0)
+
+The year of a turn comes from one of four timelines chosen by difficulty (Chieftain and Warlord
+share the first, Emperor and Deity the last; options byte 8 bits 2/3 shift the row down/up).
+Each timeline is six segments of (start year, turns, years per turn); after them the calendar
+moves one year per turn. Turn 0 and turn 1 are both the start year; there is no year 0.
+
+| row                | segments                                                                               |
+| ------------------ | -------------------------------------------------------------------------------------- |
+| Chieftain, Warlord | −4000 ×250 @20 · 1000 ×50 @10 · 1500 ×50 @5 · 1750 ×50 @2 · 1850 ×50 @1 · 1900 ×100 @1 |
+| Prince             | −4000 ×60 @50 · −1000 ×40 @25 · 0 ×150 @10 · 1500 ×50 @5 · 1750 ×50 @2 · 1850 ×50 @1   |
+| King               | −4000 ×60 @50 · −1000 ×40 @25 · 0 ×50 @20 · 1000 ×50 @10 · 1500 ×50 @5 · 1750 ×50 @2   |
+| Emperor, Deity     | −4000 ×60 @50 · −1000 ×40 @25 · 0 ×75 @20 · 1500 ×25 @10 · 1750 ×50 @2 · 1850 ×50 @1   |
+
+A scenario with its own years-per-turn uses `starting year + |years per turn| × turn − 1`. The
+header word at offset 32 (−1 normally) names a turn from which the calendar advances one year per
+turn. The engine's `gameYear` implements this; the year is recomputed from the turn, as the
+original does at the start of each turn (0x00467591).

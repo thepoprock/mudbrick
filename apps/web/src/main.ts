@@ -1,10 +1,10 @@
 /**
- * Entry point of the browser viewer.
+ * Entry point of the browser app.
  *
- * Step 1: the player picks their own game folder; RULES.TXT and the sprite sheets are read in
- * the browser and never leave the machine. Step 2: they pick a map (.MP) or a save/scenario
- * (.SAV/.SCN) and the world is drawn with the original tiles, cities and units. Hovering a
- * square shows what the parsers decoded for it. Contains no game rules.
+ * Viewer: the player picks their own game folder (RULES.TXT and the sprite sheets are read in the
+ * browser and never leave the machine), then a map (.MP) or a save/scenario (.SAV/.SCN); the world
+ * is drawn with the original tiles. Play: with a save loaded, "Play" hands the human civilization
+ * to the player — orders, movement, cities, research and the end of turn go through the engine.
  */
 import { World } from '@mudbrick/engine';
 import {
@@ -16,8 +16,10 @@ import {
   type SaveFile,
 } from '@mudbrick/formats';
 import { installDevLoader } from './devLoader.js';
+import { gameFromSave } from './gameFromSave.js';
 import { loadGameFolder, type GameFolder } from './gameFiles.js';
 import { drawMap, hitTest } from './mapRenderer.js';
+import { PlaySession } from './play.js';
 import { worldFromSave } from './worldFromSave.js';
 import { drawWorld, WORLD_TOP_PAD } from './worldRenderer.js';
 
@@ -29,15 +31,18 @@ function byId<T extends HTMLElement>(id: string): T {
 
 const canvas = byId<HTMLCanvasElement>('map');
 const info = byId<HTMLParagraphElement>('info');
-const status = byId<HTMLSpanElement>('status');
+const statusLine = byId<HTMLSpanElement>('statusLine');
 const zoomSelect = byId<HTMLSelectElement>('zoom');
 const showUnits = byId<HTMLInputElement>('showUnits');
 const showCities = byId<HTMLInputElement>('showCities');
+const playButton = byId<HTMLButtonElement>('play');
+const endTurnButton = byId<HTMLButtonElement>('endTurn');
 
 let folder: GameFolder | undefined;
 let map: MapFile | undefined;
 let save: SaveFile | undefined;
 let world: World | undefined;
+let session: PlaySession | undefined;
 let sourceName = '';
 
 const TERRAIN_NAMES = [
@@ -54,7 +59,18 @@ const TERRAIN_NAMES = [
   'Ocean',
 ];
 
+function renderOptions() {
+  return {
+    zoom: Number(zoomSelect.value),
+    showUnits: showUnits.checked,
+    showCities: showCities.checked,
+  };
+}
+
 function headline(): string {
+  if (session) {
+    return `${sourceName}: playing the ${session.civ.name}. Click a unit or city; keys are listed under "Selected unit".`;
+  }
   if (save && world) {
     const h = save.map.header;
     const humans = world.civs.filter((c) => c.isHuman).map((c) => c.name);
@@ -76,18 +92,17 @@ function headline(): string {
 }
 
 function redraw(): void {
-  const zoom = Number(zoomSelect.value);
-  if (world && folder) {
-    drawWorld(canvas, world, folder, {
-      zoom,
-      showUnits: showUnits.checked,
-      showCities: showCities.checked,
-    });
+  if (session) {
+    session.refresh();
+  } else if (world && folder) {
+    drawWorld(canvas, world, folder, renderOptions());
   } else if (map) {
     const terrain = folder?.sheets.TERRAIN1;
-    drawMap(canvas, map, zoom, terrain ? { image: terrain.canvas } : undefined);
+    drawMap(canvas, map, Number(zoomSelect.value), terrain ? { image: terrain.canvas } : undefined);
   }
   info.textContent = `${headline()}\nHover a square for details.`;
+  playButton.disabled = !(world && folder && save) || session !== undefined;
+  endTurnButton.disabled = session === undefined;
 }
 
 function showError(name: string, err: unknown): void {
@@ -97,13 +112,15 @@ function showError(name: string, err: unknown): void {
 function applyFolder(f: GameFolder): void {
   folder = f;
   const sheets = Object.keys(f.sheets).join(', ');
-  status.textContent = `rules loaded (${f.rules.units.length} unit types); sheets: ${sheets || 'none'}`;
+  statusLine.textContent = `rules loaded (${f.rules.units.length} unit types); sheets: ${sheets || 'none'}`;
   if (save) world = worldFromSave(save, f.rules);
+  session = undefined;
   redraw();
 }
 
 function applyGame(name: string, bytes: Uint8Array): void {
   sourceName = name;
+  session = undefined;
   if (name.toLowerCase().endsWith('.mp')) {
     map = parseMap(bytes);
     save = undefined;
@@ -116,14 +133,42 @@ function applyGame(name: string, bytes: Uint8Array): void {
   redraw();
 }
 
+function startPlay(): void {
+  if (!save || !world || !folder) return;
+  const game = gameFromSave(save, folder.rules, world);
+  const human =
+    world.civs.find((c) => c.isHuman && c.slot !== 0) ??
+    world.civs.find((c) => c.slot === save?.parameters.humanSlot);
+  if (!human) {
+    info.textContent = 'This save has no human civilization to play.';
+    return;
+  }
+  session = new PlaySession(
+    game,
+    folder,
+    human.slot,
+    {
+      canvas,
+      status: byId('status'),
+      unitPanel: byId('unitPanel'),
+      cityPanel: byId('cityPanel'),
+      researchPanel: byId('researchPanel'),
+      log: byId('log'),
+    },
+    renderOptions,
+  );
+  redraw();
+  if (session.selected) session.centreOn(session.selected.position);
+}
+
 byId<HTMLInputElement>('folder').addEventListener('change', (e) => {
   const list = (e.target as HTMLInputElement).files;
   if (!list || list.length === 0) return;
-  status.textContent = 'reading folder…';
+  statusLine.textContent = 'reading folder…';
   loadGameFolder(list)
     .then(applyFolder)
     .catch((err: unknown) => {
-      status.textContent = '';
+      statusLine.textContent = '';
       showError('game folder', err);
     });
 });
@@ -137,9 +182,21 @@ byId<HTMLInputElement>('gameFile').addEventListener('change', (e) => {
     .catch((err: unknown) => showError(file.name, err));
 });
 
+playButton.addEventListener('click', startPlay);
+endTurnButton.addEventListener('click', () => session?.endTurn());
 zoomSelect.addEventListener('change', redraw);
 showUnits.addEventListener('change', redraw);
 showCities.addEventListener('change', redraw);
+
+window.addEventListener('keydown', (e) => {
+  if (!session) return;
+  if (session.handleKey(e)) e.preventDefault();
+});
+
+canvas.addEventListener('click', (e) => {
+  if (!session) return;
+  session.handleClick(e.clientX, e.clientY);
+});
 
 if (import.meta.env.DEV) {
   installDevLoader(byId<HTMLSpanElement>('dev'), {
@@ -177,11 +234,7 @@ canvas.addEventListener('mousemove', (e) => {
     const city = world.cityAt(g.x, g.y);
     if (city) {
       const owner = world.civs[city.owner]?.adjective ?? `slot ${city.owner}`;
-      const built = city.improvements
-        .map((has, i) => (has ? folder?.rules.improvements[i]?.name : undefined))
-        .filter(Boolean)
-        .join(', ');
-      line += `\n${owner} city "${city.name}" size ${city.size}${built ? `: ${built}` : ''}`;
+      line += `\n${owner} city "${city.name}" size ${city.size}`;
     }
     const units = world.unitsAt(g.x, g.y);
     if (units.length > 0) {

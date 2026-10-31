@@ -253,6 +253,14 @@ describe('Game turn loop', () => {
     expect(researchableAdvances(rules, c)).not.toContain(0);
   });
 
+  it('gives every citizen a square before the city turn runs', () => {
+    const { city, game } = setup({ size: 2, worked: 1 << CITY_CENTRE_INDEX });
+    game.endTurn();
+    let working = 0;
+    for (let i = 0; i < CITY_CENTRE_INDEX; i++) if ((city.worked >> i) & 1) working++;
+    expect(working).toBe(2);
+  });
+
   it('runs the AI rate policy for computer players', () => {
     const { game, civ } = setup({}, { isHuman: false });
     const events = game.endTurn();

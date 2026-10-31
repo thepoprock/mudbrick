@@ -33,7 +33,11 @@ export interface ResearchContext {
   reachableAdvances: number;
   /** @COSMIC tech paradigm (10 = normal). */
   techParadigm: number;
-  /** Scenario parameters in effect (options byte 8 bit 7); their paradigm replaces the cosmic one. */
+  /**
+   * Scenario parameters in effect (options byte 8 bit 7): their paradigm replaces the cosmic
+   * one, and when the scenario sets its own calendar (years per turn ≠ 0) the catch-up and
+   * late-game terms are skipped (`fixedCost`).
+   */
   scenario?: { techParadigm: number; fixedCost: boolean };
   /** Options byte 8 bit 2: research costs 25 % more. */
   researchDearer?: boolean;

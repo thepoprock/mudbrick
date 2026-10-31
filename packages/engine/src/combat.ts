@@ -55,6 +55,8 @@ export interface CombatContext {
   defenderCityCount?: number;
   /** Difficulty 0–5, for barbarian attacks on humans. */
   difficulty?: number;
+  /** Attacker's moves left in thirds: a real attack scales by min(left, 3) / 3 (VERIFIED). */
+  attackerMovesLeft?: number;
 }
 
 const DEFAULT_CTX: CombatContext = { defenderFortified: false };
@@ -187,7 +189,7 @@ function prepareSides(
 ): Sides {
   const aType = rules.units[attacker.type];
   const dType = rules.units[defender.type];
-  const attack = attackStrength(rules, attacker);
+  const attack = attackStrength(rules, attacker, ctx.attackerMovesLeft);
   const defence = defenceStrength(world, rules, defender, attacker, ctx);
   let a = attack.value;
   let d = defence.value;
