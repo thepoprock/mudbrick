@@ -110,6 +110,8 @@ export interface CosmicRule {
   communismPalaceDistance: number;
   fundamentalismSciencePenaltyPct: number;
   fundamentalismMaxScienceRate: number;
+  /** @COSMIC tech paradigm, 10 = normal. */
+  techParadigm?: number;
 }
 
 export interface EngineRules {
@@ -120,6 +122,8 @@ export interface EngineRules {
   improvements: ImprovementRule[];
   /** Indexed by RULES @CIVILIZE row. */
   advances: AdvanceRule[];
+  /** RULES @LEADERS personalities; only `civilize` is used (AI rate policy). */
+  leaders?: { civilize: number }[];
 }
 
 export const DOMAIN_GROUND = 0;

@@ -9,3 +9,5 @@ export * from './city.js';
 export * from './production.js';
 export * from './research.js';
 export * from './upkeep.js';
+export * from './outcome.js';
+export * from './game.js';

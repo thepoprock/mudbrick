@@ -131,6 +131,8 @@ export interface City {
   specialists: Specialists;
   production: Production;
   inDisorder: boolean;
+  /** Set on the second consecutive turn of disorder (the original's flag bit 13). */
+  disorderRepeated?: boolean;
   celebrating: boolean;
   /** Owners of outgoing trade routes' partner cities and whether each carries food. */
   tradeRoutes: { partner: number; food: boolean }[];

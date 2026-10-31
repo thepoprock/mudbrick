@@ -74,21 +74,30 @@ When storage is negative: if a Settlers-role unit (role 5) is supported by the c
 disbanded (FAMINE dialog names the unit); otherwise the city shrinks by one, and a size-1 city is
 destroyed. Storage resets to 0.
 
-## Happiness outcomes (VERIFIED, 0x004bafef; the counting of happy/unhappy citizens is in 0x004b6f17, being read)
+## Disorder, celebration and gold (VERIFIED, 0x004bafef)
 
-With `happy` and `unhappy` counted for the city (content citizens count as neither):
+After the totals, with `happy` and `unhappy` counted and the city not barbarian:
 
-- `happy < unhappy` → **civil disorder** (flag bit 0). A second consecutive turn of disorder sets
-  bit 13; under **Democracy** that triggers the REVOLT dialog and the government falls (the
-  "second turn of disorder under Democracy" rule).
-- Order is restored (flag cleared, RESTORED dialog) when `happy ≥ unhappy` again.
-- **We Love the King Day** (flag bit 1): no unhappy citizens, size > 2, `happy ≥ (size + 1) / 2`,
-  and the government is not Anarchy. While celebrating under a government with index > 4
-  (Republic, Democracy), if food produced exceeds what citizens and settlers eat and growth is
-  not blocked, the city grows by one each turn (rapture growth). The celebration ends when the
-  condition fails (WEDONTLOVEKING).
-- Under any government other than Anarchy, each turn's happiness surplus feeds the owner's
-  score counter.
+- **Disorder** when `unhappy > happy`. The city enters disorder (flag bit 0, bit 14 set); the AI
+  re-chooses production. If it was **already** in disorder, bit 13 is set as well, and a human
+  **Democracy** falls into revolution (REVOLT) unless the scenario forbids government changes.
+  No gold is collected from a city in disorder.
+- **Order restored** when `unhappy ≤ happy` and the city was in disorder: bits 0, 13 and 20 are
+  cleared (RESTORED message).
+- When `happy == unhappy`, the shield surplus is positive and the food surplus is not negative,
+  bit 14 ("content") is set; otherwise cleared.
+- **Gold:** when not in disorder and the government is not Anarchy, the city's tax (after the
+  trade split and its building bonuses) is added to the treasury.
+- **We Love the King Day** when `unhappy == 0`, size ≥ 3, at least half the citizens rounded up
+  are happy (`(size + 1) / 2 ≤ happy`) and the government is not Anarchy. Starting it sets flag
+  bit 1 and shows WELOVEKING. While it continues under **Republic or Democracy**, the city grows by
+  one each turn ("rapture growth") when `food produced > size × food-per-citizen + settlers ×
+settlers' food` and no Aqueduct/Sewer blocker applies — food storage is untouched. Under
+  Monarchy, Communism and Fundamentalism the celebration effects are in the yields (Republic-level
+  trade) and in corruption (one government step better).
+- The celebration **ends** (WEDONTLOVEKING, bit 1 cleared) the turn its conditions fail.
+
+The routine's result, `happy − unhappy`, is what the civilization turn inspects.
 
 ## Shields and unit support (VERIFIED structure: 0x004b3b24, 0x004ba99a)
 
