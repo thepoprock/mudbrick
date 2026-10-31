@@ -46,10 +46,10 @@ Total size is always `98 + 6 × area` (54098 bytes for 150×120, 24098 for 100×
 | 1    | 5    | railroad (set together with bit 4)                                                                   | VERIFIED                                                                                                       |
 | 1    | 6    | fortress (with bit 1 also set: airbase)                                                              | VERIFIED                                                                                                       |
 | 1    | 7    | pollution                                                                                            | VERIFIED (cleaning clears it and lowers the world count)                                                       |
-| 2    | all  | which civilization's city radius covers the square                                                   | INFERRED                                                                                                       |
+| 2    | all  | civilization slot whose territory (city radius) covers the square, 0 none                            | VERIFIED (the AI's land-value test returns it and refuses such squares as city sites)                          |
 | 3    | all  | land-mass / water-body id                                                                            | INFERRED                                                                                                       |
 | 4    | 0–7  | square has been seen by civilization slot n                                                          | INFERRED                                                                                                       |
-| 5    | 0–3  | AI fertility rating                                                                                  | INFERRED                                                                                                       |
+| 5    | 0–3  | AI fertility rating 0–15: a settlers' site value; 0 never, otherwise at least 8 counts               | VERIFIED (0x00559162: unclaimed squares with a nonzero rating are worth max(8, rating))                        |
 | 5    | 4–7  | ownership                                                                                            | INFERRED                                                                                                       |
 
 The byte-1 bit meanings are the same ones the save-game format uses for its terrain block; the
