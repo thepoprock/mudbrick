@@ -21,9 +21,11 @@ Coming next: menus (Menu.txt), `EVNT` scenario events, the images stored inside 
 
 ## Engine behaviour (`engine/`)
 
-| document                            | covers                                                           |
-| ----------------------------------- | ---------------------------------------------------------------- |
-| [exe-notes.md](engine/exe-notes.md) | What has been recovered from the executable so far, as behaviour |
+| document                                      | covers                                                                                            |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| [exe-notes.md](engine/exe-notes.md)           | What has been recovered from the executable so far, as behaviour                                  |
+| [rules-movement.md](engine/rules-movement.md) | Movement costs in thirds, roads/rails/rivers, domains, zones of control (INFERRED)                |
+| [rules-combat.md](engine/rules-combat.md)     | Strength modifiers, round formula, and the list of things to confirm in the executable (INFERRED) |
 
 ## Research (`research/`)
 
