@@ -226,6 +226,11 @@ export function processProduction(
     movesSpent: 0,
     fortified: false,
     homeCity: city.id,
+    order: null,
+    workCounter: 0,
+    gotoTarget: null,
+    lastDirection: null,
+    gotoSteps: 0,
   };
   world.units.push(unit);
 

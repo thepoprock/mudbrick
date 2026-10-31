@@ -147,8 +147,18 @@ export interface Unit {
   veteran: boolean;
   hitPointsLost: number;
   movesSpent: number;
+  /** True while the order is Fortified (kept in step with `order`). */
   fortified: boolean;
   homeCity: number | null;
+  /** Standing order as a RULES @ORDERS index (see terraform.ts ORDER), or null. */
+  order: number | null;
+  /** Settlers' work progress, or an air unit's turns of fuel used. */
+  workCounter: number;
+  gotoTarget: Point | null;
+  /** 0–7 clockwise from north-east, or null. */
+  lastDirection: number | null;
+  /** Go-to steps taken toward the current target (the original asks to give up past 47). */
+  gotoSteps: number;
   /** Caravans/freight: RULES @CARAVAN commodity index, or 0xFF for a food caravan. */
   commodity?: number;
 }

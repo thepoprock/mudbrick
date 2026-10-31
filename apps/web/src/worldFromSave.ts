@@ -114,10 +114,14 @@ export function worldFromSave(save: SaveFile, rules: Rules): World {
       veteran: u.veteran,
       hitPointsLost: u.hitPointsLost,
       movesSpent: u.movesSpent,
-      // Order codes are INFERRED; the original uses this value for "fortified" per the reader
-      // the spec was cross-checked against. Treat with suspicion until verified in a real game.
-      fortified: u.order === 1 || u.order === 2,
+      // The save stores RULES @ORDERS index + 1, 0xFF for none (VERIFIED in the executable).
+      fortified: u.order === 2,
       homeCity: u.homeCity === 0xff ? null : u.homeCity,
+      order: u.order === 0xff || u.order === 0 ? null : u.order - 1,
+      workCounter: u.counterOrCommodity,
+      gotoTarget: u.order === 11 || u.order === 28 ? u.goTo : null,
+      lastDirection: u.lastMoveDirection,
+      gotoSteps: 0,
     });
   }
 

@@ -136,3 +136,33 @@ The loader counts the enabled rows into the header word at 0x005da73a (90 for th
 | 0x0049675f | grant an advance: beakers reset only when researched (mode word 0x005b7670 ≠ 2), popups, side-effect popups    |
 | 0x004935e5 | add the advance to the civilization (not yet read) · 0x00495ee8 choose a research target (not yet read)        |
 | 0x00467c61 | civilization turn: cities last-to-first through 0x004bc513, then the AI rate policy, then AI attitude counters |
+
+### Units (VERIFIED) — full rules in rules-units.md
+
+| address                            | what                                                                                                                                                                                                                                                                                                                                               |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0x00539099(unit, direction, flags) | the unit move handler: on-map test, zones of control via 0x005564c0, caravans/diplomats entering cities, allied repair, boarding, amphibious/submarine/non-combat refusals, FATIGUE confirmation then combat 0x0052d472, landfall, OCCUPY, treaty warning, step cost, the partial-move gamble, air fuel, trireme loss, huts (0x00537aa0), LONGMOVE |
+| 0x005564c0(x, y, civ)              | zone of control at a square: never on a city square, else 0x00556397                                                                                                                                                                                                                                                                               |
+| 0x00497340(unit, order)            | settlers' work: turns table, pooling, Engineers double, completion effects                                                                                                                                                                                                                                                                         |
+| 0x00535adf(order)                  | validation of a settlers order for the selected unit (ONLYSETTLERS, RADIO, CONSTRUCTION, BRIDGEBUILDING, ALREADYROAD, RAILROADS, CANTIMPROVE, NOWATER, ALREADYFARMLAND, FARMLAND, ALREADYMINING, ENGINEERS, NOPOLLUTION)                                                                                                                           |
+| 0x005359ed(x, y)                   | water source for irrigation: the square and its four edge-neighbours (table 0x005b2e04/0x005b2e0c: (1,−1) (1,1) (−1,1) (−1,−1) (0,0))                                                                                                                                                                                                              |
+| 0x005352e6                         | found / join city for the selected unit (ONLYSETTLERS, CITYATSEA, ADJACENTCITY, NAMECITY, ONLY10)                                                                                                                                                                                                                                                  |
+| 0x00497dbe(unit, city, name)       | settle: create if needed, name, delete the unit, clear square flags 0x7c, mark seen                                                                                                                                                                                                                                                                |
+| 0x0042e8ff(x, y, owner)            | create city: city bit set, fortress cleared, size 1, initial production = best Defend unit by defence×8/cost (+1 for ×2 vs horse), Palace for the first city, late-start AI bonuses after turns 39/40                                                                                                                                              |
+| 0x004984a8(unit)                   | continue the unit's order at turn start: 1 → 0x00497b7a (fortify completes), 4–10 → work, 11/27 → go-to step 0x00497f0d                                                                                                                                                                                                                            |
+| 0x00485e3d(unit)                   | go-to step chooser · 0x0049857a air unit return-to-base check · 0x00465e35 barbarian uprising spawner (INFERRED name)                                                                                                                                                                                                                              |
+| 0x004f44cc, 0x00474edb, 0x004ed2dd | AI unit routines (not read)                                                                                                                                                                                                                                                                                                                        |
+
+Unit record (32 bytes at 0x005dad10 + 0x20·unit, VERIFIED fields): `+0` x, `+2` y, `+4` u16 flags
+(bit 6 moved this turn, bit 13 veteran, bit 15 go-to pending), `+6` type, `+7` owner, `+8` moves
+spent in thirds, `+9` visible-to mask, `+0xa` hit points lost, `+0xb` last direction, `+0xc` AI
+counter, `+0xd` work counter / air fuel used / caravan commodity, `+0xe` go-to loop counter,
+`+0xf` order (RULES @ORDERS index + 1; 0xFF none; 27 = second go-to form), `+0x10` home city,
+`+0x12`/`+0x14` go-to target, `+0x16`/`+0x18` stack links, `+0x1a` in-use flag.
+
+Terrain record (24 bytes at 0x005b2a04 + 24·row; rows 0–10 terrains, 11–32 the two specials of
+each terrain, VERIFIED from the @TERRAIN loader 0x00411242): `+0` name pointer, `+4` movement
+cost, `+5` defence halves, `+6` food, `+7` shields, `+8` trade, `+9` transform-to, `+10`
+irrigate-to, `+11` mine-to, `+12` irrigate bonus, `+13` mine bonus, `+14` irrigation turns,
+`+15` mining turns, `+16`/`+17` AI government thresholds. Change encoding: −2 `yes`, −1 `no`,
+−3 parse error, ≥ 0 the terrain index the square becomes.

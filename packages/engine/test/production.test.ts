@@ -25,6 +25,11 @@ const terrain = {
   trade: 0,
   irrigateBonus: 1,
   mineBonus: 0,
+  irrigate: { kind: 'yes' as const },
+  irrigateTurns: 5,
+  mine: { kind: 'no' as const },
+  mineTurns: 10,
+  transformTo: { kind: 'no' as const },
   specials: [
     { food: 0, shields: 0, trade: 0 },
     { food: 0, shields: 0, trade: 0 },

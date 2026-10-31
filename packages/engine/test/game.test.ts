@@ -46,6 +46,11 @@ const rules: EngineRules = {
     trade: 0,
     irrigateBonus: 1,
     mineBonus: 0,
+    irrigate: { kind: 'yes' as const },
+    irrigateTurns: 5,
+    mine: { kind: 'no' as const },
+    mineTurns: 10,
+    transformTo: { kind: 'no' as const },
     specials: [special(2, 1, 0), special(2, 1, 0)] as [
       ReturnType<typeof special>,
       ReturnType<typeof special>,
@@ -152,6 +157,11 @@ function setup(cityOver: Partial<City> = {}, civOver: Partial<Civ> = {}) {
     movesSpent: 2,
     fortified: true,
     homeCity: 0,
+    order: null,
+    workCounter: 0,
+    gotoTarget: null,
+    lastDirection: null,
+    gotoSteps: 0,
   });
   const game = new Game(world, rules, new Rng(7), {
     turn: 10,

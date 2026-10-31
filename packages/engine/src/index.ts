@@ -11,3 +11,5 @@ export * from './research.js';
 export * from './upkeep.js';
 export * from './outcome.js';
 export * from './game.js';
+export * from './terraform.js';
+export * from './founding.js';

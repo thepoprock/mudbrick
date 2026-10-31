@@ -78,6 +78,11 @@ const rules: EngineRules = {
     trade: 0,
     irrigateBonus: 1,
     mineBonus: 0,
+    irrigate: { kind: 'yes' as const },
+    irrigateTurns: 5,
+    mine: { kind: 'no' as const },
+    mineTurns: 10,
+    transformTo: { kind: 'no' as const },
     specials: [special, special] as [typeof special, typeof special],
   })),
   advances: [],
@@ -152,8 +157,8 @@ describe('movement', () => {
 
   it('charges terrain cost in thirds', () => {
     expect(stepCost(w, rules, warriors, { x: 2, y: 2 }, { x: 3, y: 3 })).toBe(3);
-    // Warriors have one MP, so hills cost them one MP; Armor pays the full two.
-    expect(stepCost(w, rules, warriors, { x: 2, y: 2 }, { x: 4, y: 2 })).toBe(3);
+    // Hills cost two full moves for everyone; a fresh one-move unit still always gets in (the gamble).
+    expect(stepCost(w, rules, warriors, { x: 2, y: 2 }, { x: 4, y: 2 })).toBe(6);
     expect(stepCost(w, rules, unit(7, 6, 2, 2), { x: 2, y: 2 }, { x: 4, y: 2 })).toBe(6);
   });
 
@@ -202,9 +207,9 @@ describe('movement', () => {
     expect(fullMoves(rules, hurtShip, { damageSlowsUnits: true })).toBe(6); // minimum two MP at sea
   });
 
-  it('caps terrain cost for one-move units and limits river moves to edge-neighbours', () => {
+  it('charges the full terrain cost and limits river moves to edge-neighbours', () => {
     const c = world();
-    expect(stepCost(c, rules, unit(0, 0, 2, 2), { x: 2, y: 2 }, { x: 4, y: 2 })).toBe(3); // warriors onto hills: one MP
+    expect(stepCost(c, rules, unit(0, 0, 2, 2), { x: 2, y: 2 }, { x: 4, y: 2 })).toBe(6); // warriors onto hills: the full cost
     const armor = unit(1, 6, 2, 2);
     expect(stepCost(c, rules, armor, { x: 2, y: 2 }, { x: 4, y: 2 })).toBe(6); // armor pays the real hills cost
     c.setFlag(2, 2, SquareFlag.River);
@@ -247,19 +252,31 @@ describe('movement', () => {
   it('checks a move end to end', () => {
     const c = world();
     const u = unit(0, 0, 2, 2);
-    expect(checkMove(c, rules, u, { x: 3, y: 3 })).toEqual({ ok: true, cost: 3, partial: false });
-    expect(checkMove(c, rules, u, { x: 4, y: 2 })).toEqual({ ok: true, cost: 3, partial: false });
+    expect(checkMove(c, rules, u, { x: 3, y: 3 })).toEqual({
+      ok: true,
+      cost: 3,
+      partial: false,
+      boards: false,
+    });
+    // A unit that has not moved yet never gambles, however costly the square.
+    expect(checkMove(c, rules, u, { x: 4, y: 2 })).toEqual({
+      ok: true,
+      cost: 6,
+      partial: false,
+      boards: false,
+    });
     const armor = unit(1, 6, 2, 2, 1, { movesSpent: 6 }); // one MP left, hills cost two
     expect(checkMove(c, rules, armor, { x: 4, y: 2 })).toEqual({
       ok: true,
       cost: 6,
       partial: true,
+      boards: false,
     });
     expect(checkMove(c, rules, u, { x: 6, y: 2 })).toEqual({ ok: false, reason: 'not-adjacent' });
     u.movesSpent = 3;
     expect(checkMove(c, rules, u, { x: 3, y: 3 })).toEqual({ ok: false, reason: 'no-moves' });
-    expect(partialMoveChance(6, 3)).toBeCloseTo(0.5);
-    expect(partialMoveChance(3, 3)).toBe(1);
+    expect(partialMoveChance(6, 3, 1)).toBeCloseTo(0.5);
+    expect(partialMoveChance(3, 3, 0)).toBe(1);
   });
 });
 

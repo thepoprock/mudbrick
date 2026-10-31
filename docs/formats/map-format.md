@@ -33,24 +33,24 @@ Total size is always `98 + 6 × area` (54098 bytes for 150×120, 24098 for 100×
 
 ## Square record (6 bytes)
 
-| byte | bits | meaning                                                                         | status                                                                                              |
-| ---- | ---- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| 0    | 0–3  | terrain index into @TERRAIN: 0 Desert … 10 Ocean                                | VERIFIED (WORLD.MP renders as Earth: polar Glacier, Saharan Desert, Ocean; `scripts/render-map.ts`) |
-| 0    | 6    | "has special resource" flag — the game actually derives specials from a formula | INFERRED                                                                                            |
-| 0    | 7    | river                                                                           | VERIFIED (rendered rivers trace real river systems in WORLD.MP and EUROPE.MP)                       |
-| 1    | 0    | unit present                                                                    | INFERRED                                                                                            |
-| 1    | 1    | city present                                                                    | INFERRED                                                                                            |
-| 1    | 2    | irrigation (with bit 3 also set: farmland)                                      | INFERRED                                                                                            |
-| 1    | 3    | mine (with bit 2 also set: farmland)                                            | INFERRED                                                                                            |
-| 1    | 4    | road                                                                            | INFERRED                                                                                            |
-| 1    | 5    | railroad (only meaningful with bit 4)                                           | INFERRED                                                                                            |
-| 1    | 6    | fortress (with bit 1 also set: airbase)                                         | INFERRED                                                                                            |
-| 1    | 7    | pollution                                                                       | INFERRED                                                                                            |
-| 2    | all  | which civilization's city radius covers the square                              | INFERRED                                                                                            |
-| 3    | all  | land-mass / water-body id                                                       | INFERRED                                                                                            |
-| 4    | 0–7  | square has been seen by civilization slot n                                     | INFERRED                                                                                            |
-| 5    | 0–3  | AI fertility rating                                                             | INFERRED                                                                                            |
-| 5    | 4–7  | ownership                                                                       | INFERRED                                                                                            |
+| byte | bits | meaning                                                                                              | status                                                                                                         |
+| ---- | ---- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| 0    | 0–3  | terrain index into @TERRAIN: 0 Desert … 10 Ocean                                                     | VERIFIED (WORLD.MP renders as Earth: polar Glacier, Saharan Desert, Ocean; `scripts/render-map.ts`)            |
+| 0    | 6    | "has special resource" flag — the game actually derives specials from a formula                      | INFERRED                                                                                                       |
+| 0    | 7    | river                                                                                                | VERIFIED (roads need Bridge Building here; rendered rivers trace real river systems in WORLD.MP and EUROPE.MP) |
+| 1    | 0    | unit present                                                                                         | INFERRED                                                                                                       |
+| 1    | 1    | city present (set on founding; the move handler treats it as road and railroad). With bit 6: airbase | VERIFIED                                                                                                       |
+| 1    | 2    | irrigation (with bit 3 also set: farmland)                                                           | VERIFIED (work completion sets them so)                                                                        |
+| 1    | 3    | mine (with bit 2 also set: farmland)                                                                 | VERIFIED                                                                                                       |
+| 1    | 4    | road                                                                                                 | VERIFIED                                                                                                       |
+| 1    | 5    | railroad (set together with bit 4)                                                                   | VERIFIED                                                                                                       |
+| 1    | 6    | fortress (with bit 1 also set: airbase)                                                              | VERIFIED                                                                                                       |
+| 1    | 7    | pollution                                                                                            | VERIFIED (cleaning clears it and lowers the world count)                                                       |
+| 2    | all  | which civilization's city radius covers the square                                                   | INFERRED                                                                                                       |
+| 3    | all  | land-mass / water-body id                                                                            | INFERRED                                                                                                       |
+| 4    | 0–7  | square has been seen by civilization slot n                                                          | INFERRED                                                                                                       |
+| 5    | 0–3  | AI fertility rating                                                                                  | INFERRED                                                                                                       |
+| 5    | 4–7  | ownership                                                                                            | INFERRED                                                                                                       |
 
 The byte-1 bit meanings are the same ones the save-game format uses for its terrain block; the
 save-file work will verify them against real games with cities, roads and pollution. The

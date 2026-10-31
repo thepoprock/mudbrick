@@ -66,3 +66,10 @@ until the move handler itself is read.
 
 The move handler proper (the function that applies a step and decides the partial-move case),
 transport loading, paradrops, pillage, the turn-end reset, terrain transformation.
+
+## See also
+
+The unit move handler itself — step costs including rivers and city squares, the partial-move
+gamble, zones of control, boarding, landfall, air fuel and trireme loss — is VERIFIED and written up
+in [rules-units.md](rules-units.md). Where this file and that one differ, rules-units.md wins: it
+was read from the move handler, this one partly from the go-to weighting code.

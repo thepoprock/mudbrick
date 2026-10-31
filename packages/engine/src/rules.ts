@@ -26,7 +26,17 @@ export interface TerrainRule {
   mineBonus: number;
   /** The terrain's two special resources (RULES @TERRAIN first and second lists). */
   specials: [TerrainSpecialRule, TerrainSpecialRule];
+  /** Irrigate / mine / transform columns: `yes`, `no`, or the terrain the square becomes. */
+  irrigate: TerrainChangeRule;
+  irrigateTurns: number;
+  mine: TerrainChangeRule;
+  mineTurns: number;
+  transformTo: TerrainChangeRule;
 }
+
+/** Same shape as the parsed rules' TerrainChange. */
+export type TerrainChangeRule =
+  { kind: 'yes' } | { kind: 'no' } | { kind: 'becomes'; terrainIndex: number };
 
 export interface UnitFlagsRule {
   ignoreZonesOfControl: boolean;
@@ -62,6 +72,8 @@ export interface UnitTypeRule {
   obsoleteWith?: AdvanceRef;
   /** Advance required to build the type. */
   preq?: AdvanceRef;
+  /** Transport capacity. */
+  holds?: number;
 }
 
 /**
@@ -112,6 +124,10 @@ export interface CosmicRule {
   fundamentalismMaxScienceRate: number;
   /** @COSMIC tech paradigm, 10 = normal. */
   techParadigm?: number;
+  /** @COSMIC transform base time (turns × terrain movement cost). */
+  transformBaseTurns?: number;
+  /** @COSMIC chance of trireme loss: 1 in N. */
+  triremeLossChance?: number;
 }
 
 export interface EngineRules {

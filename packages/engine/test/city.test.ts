@@ -46,6 +46,11 @@ const rules: EngineRules = {
       trade: 0,
       irrigateBonus: 1,
       mineBonus: 0,
+      irrigate: { kind: 'yes' as const },
+      irrigateTurns: 5,
+      mine: { kind: 'no' as const },
+      mineTurns: 10,
+      transformTo: { kind: 'no' as const },
     };
     if (i === 0)
       return {
@@ -55,6 +60,11 @@ const rules: EngineRules = {
         trade: 0,
         irrigateBonus: 1,
         mineBonus: 1,
+        irrigate: { kind: 'yes' as const },
+        irrigateTurns: 5,
+        mine: { kind: 'no' as const },
+        mineTurns: 10,
+        transformTo: { kind: 'no' as const },
         specials: [special(3, 1, 0), special(0, 4, 0)] as const,
       };
     if (i === 1)
@@ -73,6 +83,11 @@ const rules: EngineRules = {
         shields: 0,
         irrigateBonus: 1,
         mineBonus: 3,
+        irrigate: { kind: 'yes' as const },
+        irrigateTurns: 5,
+        mine: { kind: 'no' as const },
+        mineTurns: 10,
+        transformTo: { kind: 'no' as const },
         specials: [special(1, 2, 0), special(1, 0, 4)] as const,
       };
     if (i === 10)
@@ -409,6 +424,11 @@ describe('support, growth and boxes (verified)', () => {
       movesSpent: 0,
       fortified: false,
       homeCity: 0,
+      order: null,
+      workCounter: 0,
+      gotoTarget: null,
+      lastDirection: null,
+      gotoSteps: 0,
     };
   }
   it('charges shields per government and counts settlers and units abroad', () => {
