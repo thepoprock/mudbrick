@@ -1,49 +1,63 @@
 # Movement rules
 
-Status: **INFERRED** throughout, from the original manual and community documentation, and
-implemented in `packages/engine/src/movement.ts` so each rule can be tested and later confirmed
-or corrected from the executable. Confirmed items will be relabelled VERIFIED with the evidence.
+Status: the movement allowance and the step-cost rules are **VERIFIED by decompilation** of the
+original executable (0x00554169 full moves, 0x0055436d moves left, 0x00485e3d / 0x00484325
+go-to weighting; see exe-notes.md). Zones of control and the partial-move gamble are still
+**INFERRED** and marked below. Implemented in `packages/engine/src/movement.ts`.
 
 ## Units of measure
 
-Movement is counted in thirds of a movement point. A unit type with `move` N in RULES.TXT has
-3N thirds per turn. The save file stores a unit's spent movement in the same thirds
-(docs/formats/save-format.md, unit record +8).
+Movement is counted in thirds of a movement point: the @UNITS loader multiplies the file's
+`move` by the road multiplier (@COSMIC first value, 3) when it builds the unit table, so a unit
+type with `move` N has 3N thirds. The save file stores spent movement in the same thirds.
 
-## Cost to enter a square
+## Full movement allowance of a unit (VERIFIED)
 
-| situation                                                                 | cost (thirds)                                          |
-| ------------------------------------------------------------------------- | ------------------------------------------------------ |
-| air unit, any square                                                      | 3                                                      |
-| sea unit entering ocean or a city                                         | 3                                                      |
-| sea unit entering land that is not a city                                 | impossible                                             |
-| ground unit entering ocean that is not a city                             | impossible (boarding a transport is a separate action) |
-| ground unit, railroad on both squares (a city counts as railroad)         | 0                                                      |
-| ground unit, road on both squares (a city counts as road), or Alpine flag | 1                                                      |
-| ground unit, river on both squares                                        | 1                                                      |
-| ground unit, otherwise                                                    | 3 × terrain `moveCost`                                 |
+```
+moves = type.move × 3
+sea units:
+    +3  if the civilization knows Nuclear Power
+    +6  if it owns Magellan's Expedition
+    +3  if it owns the Lighthouse, unless the unit has the "stay near land" flag (Trireme)
+damaged units (when the options word has bit 4 set, i.e. simplified combat is OFF), not air:
+    moves = moves × hitPointsLeft / maxHitPoints, rounded UP to a whole movement point,
+    minimum 1 MP (2 MP for sea units)
+movesLeft = max(0, moves − spent)
+```
 
-`roadMoveMultiplier` in @COSMIC is 3, which is why one third is the road step: a road
-multiplies movement by 3.
+So in the default (non-simplified) game a Battleship at a quarter of its hit points still has
+two movement points, and a damaged Armor never drops below one.
 
-## Attempting a step with too little movement left
+## Cost to enter a square (VERIFIED as the weighting the go-to code applies; the move handler itself is still to be read)
 
-A unit with any movement left may attempt a step that costs more than it has. It succeeds with
-probability `left / cost`; on failure the unit stays and its movement is spent. (The original's
-exact rule for the failure case is one of the first things to confirm in the executable.)
+| situation                                                                              | cost (thirds)          |
+| -------------------------------------------------------------------------------------- | ---------------------- |
+| air or sea unit, any legal square                                                      | 3                      |
+| ground unit, railroad on both squares (a city counts)                                  | 0                      |
+| ground unit, road on both squares (a city counts), or Alpine flag                      | 1                      |
+| ground unit, river on both squares, step to an **edge-neighbour** (diagonal on screen) | 1                      |
+| ground unit whose full allowance is one MP or less                                     | 3 (any terrain)        |
+| ground unit, otherwise                                                                 | 3 × terrain `moveCost` |
 
-## Zones of control
+Legal squares: sea units need ocean or a city; ground units cannot enter ocean (boarding a
+transport is a separate action). Trireme-flagged units are steered away from squares whose
+byte-0 bit 6 is set (INFERRED: "no land adjacent"), which is how "must stay near land" is
+weighted rather than forbidden.
+
+## Attempting a step with too little movement left (INFERRED)
+
+A unit with any movement left may attempt a step that costs more than it has and succeeds with
+probability `left / cost`; on failure it stays and its movement is spent. The handler that
+decides this has not been read yet.
+
+## Zones of control (INFERRED; the check function 0x005564c0 exists and takes (x, y, civ))
 
 A ground unit may not move from a square adjacent to an enemy ground unit directly into another
-square adjacent to an enemy ground unit, unless:
+square adjacent to an enemy ground unit, unless it ignores zones of control (RULES flag bit 1),
+starts inside a city, or the destination holds a friendly unit or city. Sea and air units
+neither exert nor suffer zones of control.
 
-- the unit ignores zones of control (RULES flag bit 1: diplomats, explorers, partisans), or
-- it starts the move inside a city, or
-- the destination holds a friendly unit or a friendly city.
+## Still to read
 
-Sea and air units neither exert nor suffer zones of control.
-
-## Still to specify
-
-Transport loading and unloading; triremes and the "must stay near land" flag; paradrops;
-pillage; the turn-end reset of movement; terrain transformation times (RULES @TERRAIN turns).
+The move handler proper (the function that applies a step and decides the partial-move case),
+transport loading, paradrops, pillage, the turn-end reset, terrain transformation.

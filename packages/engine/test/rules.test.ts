@@ -6,7 +6,13 @@ import {
   resolveCombat,
   type CombatContext,
 } from '../src/combat.js';
-import { blockedByZoc, checkMove, partialMoveChance, stepCost } from '../src/movement.js';
+import {
+  blockedByZoc,
+  checkMove,
+  fullMoves,
+  partialMoveChance,
+  stepCost,
+} from '../src/movement.js';
 import { Rng } from '../src/rng.js';
 import type { EngineRules } from '../src/rules.js';
 import { SquareFlag, World, type Unit } from '../src/world.js';
@@ -112,7 +118,9 @@ describe('movement', () => {
 
   it('charges terrain cost in thirds', () => {
     expect(stepCost(w, rules, warriors, { x: 2, y: 2 }, { x: 3, y: 3 })).toBe(3);
-    expect(stepCost(w, rules, warriors, { x: 2, y: 2 }, { x: 4, y: 2 })).toBe(6);
+    // Warriors have one MP, so hills cost them one MP; Armor pays the full two.
+    expect(stepCost(w, rules, warriors, { x: 2, y: 2 }, { x: 4, y: 2 })).toBe(3);
+    expect(stepCost(w, rules, unit(7, 6, 2, 2), { x: 2, y: 2 }, { x: 4, y: 2 })).toBe(6);
   });
 
   it('makes roads, railroads and rivers cheap when both squares have them', () => {
@@ -122,9 +130,9 @@ describe('movement', () => {
     w.setFlag(2, 2, SquareFlag.Railroad);
     w.setFlag(3, 3, SquareFlag.Railroad);
     expect(stepCost(w, rules, warriors, { x: 2, y: 2 }, { x: 3, y: 3 })).toBe(0);
-    w.setFlag(4, 2, SquareFlag.River);
+    w.setFlag(3, 1, SquareFlag.River);
     w.setFlag(2, 2, SquareFlag.River);
-    expect(stepCost(w, rules, warriors, { x: 2, y: 2 }, { x: 4, y: 2 })).toBe(1);
+    expect(stepCost(w, rules, warriors, { x: 2, y: 2 }, { x: 3, y: 1 })).toBe(1); // along a river, diagonal step
   });
 
   it('treats domains correctly', () => {
@@ -145,11 +153,44 @@ describe('movement', () => {
     expect(blockedByZoc(z, rules, unit(6, 5, 3, 1, 1), { x: 3, y: 1 }, { x: 3, y: 3 })).toBe(false);
   });
 
+  it('computes the verified movement allowance', () => {
+    const trireme = unit(1, 3, 6, 4);
+    expect(fullMoves(rules, trireme)).toBe(9);
+    expect(
+      fullMoves(rules, trireme, { nuclearPower: true, magellans: true, lighthouse: true }),
+    ).toBe(9 + 3 + 6); // no Lighthouse for triremes
+    const armor = unit(2, 6, 2, 2, 1, { hitPointsLost: 20 }); // 10 of 30 HP left, move 3
+    expect(fullMoves(rules, armor)).toBe(9); // simplified combat: no slowdown
+    expect(fullMoves(rules, armor, { damageSlowsUnits: true })).toBe(3); // 9 × 10/30 = 3
+    const badlyHurt = unit(3, 6, 2, 2, 1, { hitPointsLost: 29 });
+    expect(fullMoves(rules, badlyHurt, { damageSlowsUnits: true })).toBe(3); // minimum one MP
+    const hurtShip = unit(4, 3, 6, 4, 1, { hitPointsLost: 9 });
+    expect(fullMoves(rules, hurtShip, { damageSlowsUnits: true })).toBe(6); // minimum two MP at sea
+  });
+
+  it('caps terrain cost for one-move units and limits river moves to edge-neighbours', () => {
+    const c = world();
+    expect(stepCost(c, rules, unit(0, 0, 2, 2), { x: 2, y: 2 }, { x: 4, y: 2 })).toBe(3); // warriors onto hills: one MP
+    const armor = unit(1, 6, 2, 2);
+    expect(stepCost(c, rules, armor, { x: 2, y: 2 }, { x: 4, y: 2 })).toBe(6); // armor pays the real hills cost
+    c.setFlag(2, 2, SquareFlag.River);
+    c.setFlag(4, 2, SquareFlag.River); // east neighbour (not an edge-neighbour)
+    c.setFlag(3, 3, SquareFlag.River); // south-east edge-neighbour
+    expect(stepCost(c, rules, armor, { x: 2, y: 2 }, { x: 4, y: 2 })).toBe(6);
+    expect(stepCost(c, rules, armor, { x: 2, y: 2 }, { x: 3, y: 3 })).toBe(1);
+  });
+
   it('checks a move end to end', () => {
     const c = world();
     const u = unit(0, 0, 2, 2);
     expect(checkMove(c, rules, u, { x: 3, y: 3 })).toEqual({ ok: true, cost: 3, partial: false });
-    expect(checkMove(c, rules, u, { x: 4, y: 2 })).toEqual({ ok: true, cost: 6, partial: true });
+    expect(checkMove(c, rules, u, { x: 4, y: 2 })).toEqual({ ok: true, cost: 3, partial: false });
+    const armor = unit(1, 6, 2, 2, 1, { movesSpent: 6 }); // one MP left, hills cost two
+    expect(checkMove(c, rules, armor, { x: 4, y: 2 })).toEqual({
+      ok: true,
+      cost: 6,
+      partial: true,
+    });
     expect(checkMove(c, rules, u, { x: 6, y: 2 })).toEqual({ ok: false, reason: 'not-adjacent' });
     u.movesSpent = 3;
     expect(checkMove(c, rules, u, { x: 3, y: 3 })).toEqual({ ok: false, reason: 'no-moves' });
