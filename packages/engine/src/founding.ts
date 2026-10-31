@@ -116,6 +116,7 @@ export function foundCity(
   ]) {
     world.setFlag(x, y, f, false);
   }
+  city.recomputeTrade = true; // INFERRED: the founding path flags the first recompute
   world.cities.push(city);
   claimCitySite(world, city); // VERIFIED: 45-square demotion, 21-square territory
   world.revealRadius(city.position.x, city.position.y, city.owner);

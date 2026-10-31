@@ -166,6 +166,8 @@ export interface City {
   demanded?: Int8Array;
   /** Trade after corruption and before routes, from the last city turn (city record +30). */
   lastTrade?: number;
+  /** The commodity lists must be recomputed at the next city turn (city flag bit 17). */
+  recomputeTrade?: boolean;
   /** AI: a wanted settler stands within four squares (city flag 0x40). */
   workerNearby?: boolean;
 }

@@ -188,6 +188,7 @@ export function addRoute(
   )
     return false;
   const entry = { partner: b.id, food: commodity < 0, commodity };
+  a.recomputeTrade = true;
   if (a.tradeRoutes.length < 3) {
     a.tradeRoutes.push(entry);
     return true;

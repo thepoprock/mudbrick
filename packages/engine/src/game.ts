@@ -46,6 +46,7 @@ import { aiChooseProduction } from './aiBuild.js';
 import { runStrategy, type StrategyEvent } from './aiStrategy.js';
 import { gameYear } from './calendar.js';
 import { routeIncomeTotal, type TradeContext } from './trade.js';
+import { computeSupplyDemand, supplyDemandDue } from './supplyDemand.js';
 import {
   barbarianMoves,
   spawnBarbarians,
@@ -312,6 +313,17 @@ export class Game {
     const settlers = () => homed().filter((u) => this.rules.units[u.type]?.role === 5);
 
     this.ensureWorkers(city, ctx);
+    // Commodity lists (0x0042c44f): every sixteenth turn by city index, or when flagged.
+    if (supplyDemandDue(this.state.turn, city)) {
+      computeSupplyDemand(this.world, this.rules, city, {
+        turn: this.state.turn,
+        knows: (s, a) => this.knows(s, a),
+        ownsWonder: (s, i) => this.ownsWonder(s, i),
+        advancesOf: (s) => this.civ(s).advancesCount,
+        tribeOf: (s) => this.civ(s).tribe,
+        combustionKnown: (this.state.firstDiscoveredBy[14] ?? 0) !== 0,
+      });
+    }
     // 1. Growth and starvation on last turn's stored food.
     const growth = processGrowth(this.rules, city, ctx, settlers());
     if (growth.disbandedSettler) {

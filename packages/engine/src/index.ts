@@ -6,6 +6,7 @@ export * from './pathfinding.js';
 export * from './combat.js';
 export * from './terrainSpecials.js';
 export * from './trade.js';
+export * from './supplyDemand.js';
 export * from './newGame.js';
 export * from './mapgen.js';
 export * from './defender.js';
