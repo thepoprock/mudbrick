@@ -54,10 +54,12 @@ Requires Node 20 or newer. `ORIGINAL_GAME_DIR` is the folder of your own install
 The Pages workflow (`.github/workflows/pages.yml`, run by hand once GitHub Pages is enabled for the
 repository) publishes the app at https://thepoprock.github.io/mudbrick/; it ships no game data — you
 point it at your own copy. Load your game folder and a `.SAV`/`.SCN`, then press **Play** to take over the human
-civilization. Click a unit to select it; the side panel lists the keys (arrows or the number pad
+civilization — or open **New game** for a random world (size, land, climate, age, difficulty,
+civilizations, tribe, barbarians) and start at 4000 BC. **Save** writes a `.SAV` in the original
+format when one was loaded, else Mudbrick's own `.mudbrick.json`, which "Map or game" reloads. Click a unit to select it; the side panel lists the keys (arrows or the number pad
 to move, `f` fortify, `s` sleep, `g` go to, `b` build or join a city, `r`/`i`/`m`/`o` for roads,
 irrigation, mines and transforming, `F` fortress, `E` airbase, `p` clean pollution, `P` pillage,
-`D` disband, `Tab` next unit, `Enter` end turn). Click a city for its yields, mood and production
+`D` disband, `t` trade route and `h` help wonder for caravans, `Tab` next unit, `Enter` end turn). Click a city for its yields, mood and production
 menu; the research panel sets the research target.
 
 Everything the player does runs through the engine's verified rules; the log says INFERRED where

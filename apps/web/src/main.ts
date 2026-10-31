@@ -6,7 +6,7 @@
  * is drawn with the original tiles. Play: with a save loaded, "Play" hands the human civilization
  * to the player — orders, movement, cities, research and the end of turn go through the engine.
  */
-import { Game, newGame, Rng, World } from '@mudbrick/engine';
+import { Game, isSnapshot, newGame, restoreGame, Rng, snapshotGame, World } from '@mudbrick/engine';
 import {
   decodeSquare,
   parseMap,
@@ -110,8 +110,7 @@ function redraw(): void {
   playButton.disabled = !(world && folder && save) || session !== undefined;
   newGameButton.disabled = !folder || session !== undefined;
   endTurnButton.disabled = session === undefined;
-  // A game started here has no original file to write back into (the writer patches one).
-  saveButton.disabled = session === undefined || saveBytes === undefined;
+  saveButton.disabled = session === undefined;
 }
 
 function showError(name: string, err: unknown): void {
@@ -149,6 +148,40 @@ function applyFolder(f: GameFolder): void {
 function applyGame(name: string, bytes: Uint8Array): void {
   sourceName = name;
   session = undefined;
+  if (name.toLowerCase().endsWith('.json')) {
+    const text = new TextDecoder().decode(bytes);
+    if (!isSnapshot(text)) {
+      info.textContent = `${name} is not a Mudbrick save.`;
+      return;
+    }
+    if (!folder) {
+      info.textContent = 'Pick the game folder first; a Mudbrick save needs its rules and tiles.';
+      return;
+    }
+    const restored = restoreGame(text, engineRules(folder.rules));
+    save = undefined;
+    saveBytes = undefined;
+    map = undefined;
+    world = restored.game.world;
+    session = new PlaySession(
+      restored.game,
+      folder,
+      restored.humanSlot,
+      {
+        canvas,
+        status: byId('status'),
+        unitPanel: byId('unitPanel'),
+        cityPanel: byId('cityPanel'),
+        researchPanel: byId('researchPanel'),
+        log: byId('log'),
+      },
+      renderOptions,
+    );
+    session.log(`Loaded ${name} at turn ${restored.game.state.turn}.`);
+    redraw();
+    if (session.selected) session.centreOn(session.selected.position);
+    return;
+  }
   if (name.toLowerCase().endsWith('.mp')) {
     map = parseMap(bytes);
     save = undefined;
@@ -269,11 +302,19 @@ playButton.addEventListener('click', startPlay);
 newGameButton.addEventListener('click', startNewGame);
 endTurnButton.addEventListener('click', () => session?.endTurn());
 saveButton.addEventListener('click', () => {
-  if (!session || !save || !saveBytes) return;
-  const bytes = saveFromGame(saveBytes, save, session.game);
+  if (!session) return;
   const base = sourceName.replace(/\.[^.]+$/, '');
-  downloadBytes(bytes, `${base}-turn${session.game.state.turn}.SAV`);
-  session.log(`Saved ${base}-turn${session.game.state.turn}.SAV (${bytes.length} bytes).`);
+  const turn = session.game.state.turn;
+  if (save && saveBytes) {
+    const bytes = saveFromGame(saveBytes, save, session.game);
+    downloadBytes(bytes, `${base}-turn${turn}.SAV`);
+    session.log(`Saved ${base}-turn${turn}.SAV (${bytes.length} bytes).`);
+  } else {
+    // A game started here: Mudbrick's own format (reload it through "Map or game").
+    const text = snapshotGame(session.game, session.humanSlot);
+    downloadBytes(new TextEncoder().encode(text), `${base}-turn${turn}.mudbrick.json`);
+    session.log(`Saved ${base}-turn${turn}.mudbrick.json.`);
+  }
   session.refresh();
 });
 zoomSelect.addEventListener('change', redraw);

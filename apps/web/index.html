@@ -132,13 +132,20 @@
       <label>1. Game folder <input id="folder" type="file" webkitdirectory multiple /></label>
       <label
         >2. Map or game
-        <input id="gameFile" type="file" accept=".mp,.MP,.sav,.SAV,.scn,.SCN,.hot,.HOT,.net,.NET"
+        <input
+          id="gameFile"
+          type="file"
+          accept=".mp,.MP,.sav,.SAV,.scn,.SCN,.hot,.HOT,.net,.NET,.json"
       /></label>
       <button id="play" disabled title="Play the loaded game as its human civilization">
         Play
       </button>
       <button id="endTurn" disabled title="End the turn (Enter)">End turn</button>
-      <button id="save" disabled title="Download the game as a .SAV in the original format">
+      <button
+        id="save"
+        disabled
+        title="Download the game: a .SAV in the original format when one was loaded, else Mudbrick's own .mudbrick.json"
+      >
         Save
       </button>
       <details id="newGamePanel">
