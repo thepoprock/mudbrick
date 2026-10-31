@@ -7,10 +7,18 @@
 import { distance } from './city.js';
 import { maxHitPoints } from './combat.js';
 import { checkMove, endUnitMove, fullMoves, tryMove, type MovementContext } from './movement.js';
+import { gotoDirection } from './pathfinding.js';
 import type { Rng } from './rng.js';
 import { DOMAIN_AIR, DOMAIN_GROUND, DOMAIN_SEA, IMPROVEMENT, type EngineRules } from './rules.js';
 import { doWork, ORDER, type WorkContext, type WorkEvent } from './terraform.js';
-import { SquareFlag, type City, type Civ, type Unit, type World } from './world.js';
+import {
+  SquareFlag,
+  type City,
+  type Civ,
+  type Unit,
+  type World,
+  NEIGHBOUR_OFFSETS,
+} from './world.js';
 
 export type UnitTurnEvent =
   | { kind: 'healed'; unit: Unit; amount: number }
@@ -120,7 +128,10 @@ export function checkFuel(world: World, rules: EngineRules, unit: Unit): UnitTur
   return { kind: 'fuel', unit, used: unit.workCounter, range: type.range };
 }
 
-/** One greedy go-to step (INFERRED simplification of the original's weighted chooser). */
+/**
+ * One go-to step: the pathfinder's first step (pathfinding.ts, the original's 0x00484325),
+ * falling back to a greedy step when the goal is outside the pathfinder's window.
+ */
 export function gotoStep(
   world: World,
   rules: EngineRules,
@@ -137,15 +148,27 @@ export function gotoStep(
   }
   while (fullMoves(rules, unit, ctx) > unit.movesSpent) {
     let best: { x: number; y: number } | null = null;
+    const dir = gotoDirection(world, rules, unit, target);
+    if (dir !== null) {
+      const off = NEIGHBOUR_OFFSETS[dir];
+      const y = unit.position.y + (off?.y ?? 0);
+      const x = y >= 0 && y < world.rows ? world.wrapX(unit.position.x + (off?.x ?? 0), y) : null;
+      if (x !== null) {
+        const v = checkMove(world, rules, unit, { x, y }, ctx);
+        if (v.ok && !v.boards) best = { x, y };
+      }
+    }
     let bestDist = distance(world, unit.position, target);
-    for (const n of world.neighbours(unit.position.x, unit.position.y)) {
-      if (!n) continue;
-      const v = checkMove(world, rules, unit, n, ctx);
-      if (!v.ok || v.boards) continue;
-      const d = distance(world, n, target);
-      if (d < bestDist) {
-        bestDist = d;
-        best = n;
+    if (!best) {
+      for (const n of world.neighbours(unit.position.x, unit.position.y)) {
+        if (!n) continue;
+        const v = checkMove(world, rules, unit, n, ctx);
+        if (!v.ok || v.boards) continue;
+        const d = distance(world, n, target);
+        if (d < bestDist) {
+          bestDist = d;
+          best = n;
+        }
       }
     }
     if (!best) {

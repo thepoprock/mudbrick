@@ -207,7 +207,9 @@ best one (tag `9`), or stays when nothing scores above the floor of −999.
    attack an aircraft in the open unless it has "can attack air" (0x5cfddc bit 4); a city or
    airbase makes the aircraft attackable. With no cease-fire or peace, computer owners are
    evaluated directly; a human owner only when `reputation × 5 + attitude + random(0..19) − 10 >
-50`. The odds (0x0052d472, the combat evaluator) are scaled: `× (sum of costs in the enemy
+50`. The odds come from the combat routine's evaluate-only branch (0x0052d472, VERIFIED:
+   `8 × A / (D + 1)` over the real-fight strengths weighted by `hit points + firepower × 8`
+   when hit points matter, capped at 1024 — combat.ts `combatOdds`) and are scaled: `× (sum of costs in the enemy
 stack + 1) / own cost`, ×3 for a city, ×2 for a naval unit attacking a transport; for a unit
    not needed as a defender ×2 under plan 0, ×2 when the stack's attack total is more than
    twice its own, ×2 when the enemy stack has attackers, ×2 with an attack objective on our
@@ -313,8 +315,7 @@ terms over a per-civilization "seen" mask (map byte 4, kept by the world and rev
 sight radius of one around units and the city radius around cities — INFERRED radii), the
 attack gate and the fatigue rule. Settlers follow the verified site rule over the fertility
 rating and territory (`fertility.ts`, exact against the shipped fresh game), and the defender
-quota is the verified formula. Stand-ins marked INFERRED in the code: the combat evaluator
-(eight times the strength ratio replaces 0x0052d472), continent plan 5 for the quota, the
+quota is the verified formula. Stand-ins marked INFERRED in the code: continent plan 5 for the quota, the
 go-to toward an outer site square as greedy steps. Still interim: settlers with nothing to found
 improve squares near their cities or explore; caravans deliver their cost to a wonder in
 progress; surplus defenders walk to a city short of its quota in place of "defend" objectives;

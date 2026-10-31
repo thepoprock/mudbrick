@@ -318,6 +318,17 @@ function deleteUnit(world: World, unit: Unit): void {
   if (i >= 0) world.units.splice(i, 1);
 }
 
+/** A ship lost at sea takes the land units aboard with it (INFERRED: the original's cargo rule). */
+function deleteShip(world: World, rules: EngineRules, ship: Unit): void {
+  if (world.terrainAt(ship.position.x, ship.position.y) === OCEAN) {
+    for (const u of [...world.unitsAt(ship.position.x, ship.position.y)]) {
+      if (u !== ship && u.owner === ship.owner && rules.units[u.type]?.domain !== DOMAIN_SEA)
+        deleteUnit(world, u);
+    }
+  }
+  deleteUnit(world, ship);
+}
+
 function neighbour(world: World, p: Point, dir: number): Point | null {
   const off = NEIGHBOUR_OFFSETS[dir];
   if (!off) return null;
@@ -389,12 +400,12 @@ export function barbarianStep(
     // Ships: disband with fewer than two passengers or after thirty turns; unload next to a
     // city's land mass; attack a foreign ship alongside; otherwise sail for the richest city.
     if (stack.length - leaders < 2) {
-      deleteUnit(world, unit);
+      deleteShip(world, rules, unit);
       return false;
     }
     unit.workCounter += 1;
     if (unit.workCounter > 30) {
-      deleteUnit(world, unit);
+      deleteShip(world, rules, unit);
       return false;
     }
     for (let dir = 0; dir < 8; dir++) {
@@ -416,7 +427,7 @@ export function barbarianStep(
           countRole(rules, stack, ROLE_DEFEND) === 0 &&
           near.dist < 3
         ) {
-          deleteUnit(world, unit);
+          deleteShip(world, rules, unit);
           return false;
         }
         let landed = 0;
@@ -460,7 +471,7 @@ export function barbarianStep(
         }
       }
       if (!best) {
-        deleteUnit(world, unit);
+        deleteShip(world, rules, unit);
         return false;
       }
       orderGoTo(unit, best.position);

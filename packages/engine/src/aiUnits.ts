@@ -11,7 +11,7 @@ import { addGoal, removeGoals, type CivStrategy } from './aiStrategy.js';
 import { resolveAttack } from './attack.js';
 import { captureCity } from './conquest.js';
 import { distance } from './city.js';
-import { attackStrength, defenceStrength, hitPoints, maxHitPoints } from './combat.js';
+import { combatOdds, hitPoints, maxHitPoints } from './combat.js';
 import { chooseDefender } from './defender.js';
 import { landValue } from './fertility.js';
 import { canFoundCity, foundCity } from './founding.js';
@@ -333,16 +333,17 @@ export function chooseDirection(
         !airbase
       )
         continue;
-      const a = attackStrength(rules, unit, left).value;
-      const d = defenceStrength(world, rules, defender, unit, {
+      // VERIFIED: the original's combat evaluator (combat.ts combatOdds).
+      let odds = combatOdds(world, rules, unit, defender, {
         defenderFortified: defender.fortified,
         ...(city ? { defenderCity: city.improvements } : {}),
         attackerWonders: ctx.wondersOf(me),
         defenderWonders: ctx.wondersOf(occupantOwner),
-      }).value;
-      // INFERRED stand-in for the original's combat evaluator (0x0052d472): eight times the
-      // strength ratio, so even odds score 8 and the threshold of 6 admits slightly worse.
-      let odds = d === 0 ? 99 : Math.trunc((8 * a) / d);
+        realisticCombat: ctx.realisticCombat,
+        difficulty: ctx.difficulty,
+        defenderIsHuman: false,
+        defenderCityCount: ctx.cityCount(occupantOwner),
+      });
       odds = Math.trunc(((sumCost(rules, occupants) + 1) * odds) / Math.max(1, type.costRows));
       if (city) odds *= 3;
       if (role === ROLE_NAVAL && dType.role === ROLE_TRANSPORT) odds *= 2;

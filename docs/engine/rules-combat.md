@@ -187,3 +187,11 @@ difference| + |rank difference| + 1) / 2`, halved when not by force, −1 withou
   government advances.
 - Not modelled yet: attitude changes, the civil-war split when an AI capital falls, the 1000-gold
   Palace escape, wonder-movie and Leonardo's/Eiffel effects of a captured wonder.
+
+## The AI's odds (VERIFIED, the evaluate-only entry of 0x0052d472)
+
+The same routine that fights also answers "how good is this attack" for the AI (its third
+argument 0): it prepares both sides with every modifier above but without the fatigue scaling,
+then — with simplified combat off — weights each side by `hit points left + firepower × 8`,
+halves both while the attacker's exceeds 3999, and returns `8 × A / (D + 1)` capped at 1024
+(999 when no unit stands on the target square). The engine's `combatOdds` is this.

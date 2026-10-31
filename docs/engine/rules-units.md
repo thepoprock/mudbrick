@@ -199,3 +199,19 @@ doubled again — then made a **full** heal — when the city has the unit's bui
 ground, Airport for air, Port Facility for sea). An air unit on an airbase heals fully. A sentried
 unit that reaches full health wakes up. A helicopter (air unit with range 0) that moved and is not
 on a city or airbase square loses `maxHP / 10` instead.
+
+## Go-to pathfinding (VERIFIED structure, 0x00485e3d → 0x00484325)
+
+A go-to one square away steps straight. Otherwise, for a goal within 22 squares, the pathfinder
+spreads costs outward from the goal over a window of 48 squares (a ring buffer of 2304 slots in
+the original) and the unit takes the neighbour whose cost plus the step's own cost is lowest,
+the one nearer the goal on ties; when the search fails and a waypoint finder (0x00485550) offers
+an intermediate goal, it tries again with a looser limit. Step costs: 1 along a railroad (a city
+counts as both road and railroad), 4 along a road, 4 along a river, 4 everywhere for alpine
+units, else `terrain move cost × road multiplier × 4` for units with more than one movement
+point and `road multiplier × 4` for the rest; squares with another civilization's units are
+impassable; a square of own units outside a city or fortress in a foreign zone of control adds
+16 per unit of the same role; a square beside an enemy unit adds a movement point for combat
+roles; air units pay 1 a step. Beyond the window the unit falls back to a weighted greedy step
+whose terms are the same costs plus the distance to the goal. The engine's `pathfinding.ts`
+implements the search and the step choice; the greedy fallback is the engine's own.

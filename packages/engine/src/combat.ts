@@ -297,6 +297,34 @@ function prepareSides(
 }
 
 /** Fight to the death, exactly as the original's round loop does. */
+/**
+ * The AI's attack odds (VERIFIED, the evaluate-only branch of the original's combat routine
+ * 0x0052d472): both strengths with every modifier of a real fight but no fatigue scaling;
+ * with simplified combat off each side is weighted by `hit points left + firepower × 8`; both
+ * are halved while the attacker's exceeds 3999; the result is `8 × A / (D + 1)`, at most 1024.
+ * Even odds therefore come out near 8. The original returns 999 when no unit stands there.
+ */
+export function combatOdds(
+  world: World,
+  rules: EngineRules,
+  attacker: Unit,
+  defender: Unit,
+  ctx: CombatContext = DEFAULT_CTX,
+): number {
+  const s = prepareSides(world, rules, attacker, defender, { ...ctx, attackerMovesLeft: 3 });
+  let a = s.a;
+  let d = s.d;
+  if (ctx.realisticCombat ?? true) {
+    a = (hitPoints(rules, attacker) + s.aFp * 8) * a;
+    d = (hitPoints(rules, defender) + s.dFp * 8) * d;
+  }
+  while (a > 3999) {
+    a >>= 1;
+    d >>= 1;
+  }
+  return Math.min(1024, Math.trunc((a << 3) / (d + 1)));
+}
+
 export function resolveCombat(
   world: World,
   rules: EngineRules,
