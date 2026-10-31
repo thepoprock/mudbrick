@@ -14,9 +14,11 @@ Labels: **VERIFIED** = checked against the files, the game or a test; **INFERRED
 | [rules-format.md](formats/rules-format.md) | `RULES.TXT`: constants, advances, improvements, wonders, units, terrain, leaders … | `packages/formats/src/rules.ts`   |
 | [textdata.md](formats/textdata.md)         | The seven families of text files: dialogs, labels, encyclopedia, city names, menus | `packages/formats/src/text.ts`    |
 | [map-format.md](formats/map-format.md)     | `.MP` map files: header, start positions, 6-byte square records                    | `packages/formats/src/map.ts`     |
+| [save-format.md](formats/save-format.md)   | `.SAV` / `.SCN` saves and scenarios: options, civilizations, map, units, cities    | `packages/formats/src/save.ts`    |
 | [assets.md](formats/assets.md)             | Sprite-sheet layout: every rectangle in the GIF sheets, marker pixels, palette     | `packages/formats/src/sprites.ts` |
 
-Coming next: save/scenario files (`.SAV`/`.SCN`), the images stored inside the game's DLLs.
+Coming next: the dialog-text parser, `EVNT` scenario events, the images stored inside the game's
+DLLs.
 
 ## Engine behaviour (`engine/`)
 

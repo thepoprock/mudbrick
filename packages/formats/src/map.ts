@@ -129,8 +129,15 @@ export function toStorageCoords(p: Point): { c: number; y: number } {
 }
 
 export function decodeSquare(map: MapFile, index: number): Square {
-  const o = index * SQUARE_BYTES;
   const v = new DataView(map.squares.buffer, map.squares.byteOffset, map.squares.byteLength);
+  return decodeSquareBytes(v, index * SQUARE_BYTES);
+}
+
+/**
+ * Decode one 6-byte square record at `o`. Shared by `.MP` maps and the terrain block of save
+ * files, which use the identical layout (docs/formats/map-format.md, "Square record").
+ */
+export function decodeSquareBytes(v: DataView, o: number): Square {
   const b0 = v.getUint8(o);
   const b1 = v.getUint8(o + 1);
   const b2 = v.getUint8(o + 2);
