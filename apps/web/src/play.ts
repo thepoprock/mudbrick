@@ -11,6 +11,7 @@ import {
   canFoundCity,
   canOrder,
   captureCity,
+  changeProduction,
   disbandUnit,
   doWork,
   DOMAIN_GROUND,
@@ -770,8 +771,15 @@ export class PlaySession {
     select.addEventListener('change', () => {
       const [kind, idx] = select.value.split(':');
       if (kind === 'unit' || kind === 'improvement') {
-        city.production = { kind, index: Number(idx) };
-        this.log(`${city.name} now builds ${select.selectedOptions[0]?.textContent ?? ''}.`);
+        const lost = changeProduction(
+          this.rules,
+          city,
+          { kind, index: Number(idx) },
+          this.game.state.difficulty,
+        );
+        this.log(
+          `${city.name} now builds ${select.selectedOptions[0]?.textContent ?? ''}${lost ? ` (${lost} shields lost to the change)` : ''}.`,
+        );
         this.refresh();
       }
     });

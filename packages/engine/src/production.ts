@@ -263,6 +263,35 @@ export function processProduction(
   return events;
 }
 
+/**
+ * Production category (VERIFIED, 0x004b2ec8): 0 units, 1 improvements 1–34, 2 spaceship parts and
+ * wonders (35 and up). Changing between categories costs shields.
+ */
+export function productionCategory(p: Production): 0 | 1 | 2 {
+  if (p.kind === 'unit') return 0;
+  return p.index >= 35 ? 2 : 1;
+}
+
+/**
+ * Change what a city builds (VERIFIED, 0x004b2f4f): above Chieftain, switching to another
+ * category loses @COSMIC "percent shield penalty for production type change" of the stored
+ * shields. Returns the shields lost.
+ */
+export function changeProduction(
+  rules: EngineRules,
+  city: City,
+  next: Production,
+  difficulty: number,
+): number {
+  const before = city.shieldsStored;
+  if (difficulty !== 0 && productionCategory(city.production) !== productionCategory(next)) {
+    const pct = rules.cosmic.productionChangePenaltyPct ?? 50;
+    city.shieldsStored -= Math.trunc((pct * (before & 0xffff)) / 100);
+  }
+  city.production = next;
+  return before - city.shieldsStored;
+}
+
 /** Convenience: the shield rows the production code uses for this owner. */
 export function shieldRowsFor(rules: EngineRules, isHuman: boolean, difficulty: number): number {
   return boxRows(rules, { isHuman, difficulty }, true);

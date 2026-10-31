@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { processProduction, startsVeteran, type ProductionContext } from '../src/production.js';
+import {
+  changeProduction,
+  processProduction,
+  productionCategory,
+  startsVeteran,
+  type ProductionContext,
+} from '../src/production.js';
 import { Rng } from '../src/rng.js';
 import { GOVERNMENT, IMPROVEMENT, type EngineRules } from '../src/rules.js';
 import { CITY_CENTRE_INDEX, World, type City } from '../src/world.js';
@@ -312,5 +318,18 @@ describe('production (verified)', () => {
     const ai = makeCity(w, { id: 1, shieldsStored: 50, production: { kind: 'unit', index: 4 } });
     processProduction(w, rules, new Rng(3), ai, ctx({ isHuman: false }), inputs(0));
     expect(w.units[1]?.commodity).toBeLessThan(16);
+  });
+
+  it('charges the change penalty only across categories and above Chieftain', () => {
+    const w = new World({ columns: 4, rows: 8, flatEarth: true });
+    expect(productionCategory({ kind: 'unit', index: 3 })).toBe(0);
+    expect(productionCategory({ kind: 'improvement', index: 34 })).toBe(1);
+    expect(productionCategory({ kind: 'improvement', index: 35 })).toBe(2);
+    expect(productionCategory({ kind: 'improvement', index: 40 })).toBe(2);
+    const c = makeCity(w, { shieldsStored: 30, production: { kind: 'unit', index: 1 } });
+    expect(changeProduction(rules, c, { kind: 'unit', index: 2 }, 2)).toBe(0);
+    expect(changeProduction(rules, c, { kind: 'improvement', index: 2 }, 2)).toBe(15);
+    expect(c.shieldsStored).toBe(15);
+    expect(changeProduction(rules, c, { kind: 'unit', index: 1 }, 0)).toBe(0);
   });
 });

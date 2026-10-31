@@ -229,6 +229,12 @@ Each turn the city's shield surplus (shields − support, 0 while in disorder) i
 production box, except while producing Capitalization (38), where it becomes gold instead.
 Cost of an item = its RULES cost rows × the shield-box rows (`K₂`, 10 for humans).
 
+### Changing production (VERIFIED, 0x004b2ec8, 0x004b2f4f)
+
+Production falls into three categories: units; improvements 1–34; spaceship parts and wonders
+(35 and up). Above Chieftain, switching to a different category loses @COSMIC "percent shield
+penalty for production type change" (50) of the stored shields; within a category it is free.
+
 ### Completing an improvement or wonder (production value < 0, index = −value)
 
 - An improvement the city already has, or a wonder another city has already completed, is

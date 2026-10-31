@@ -133,6 +133,8 @@ export interface CosmicRule {
   transformBaseTurns?: number;
   /** @COSMIC chance of trireme loss: 1 in N. */
   triremeLossChance?: number;
+  /** @COSMIC percent of stored shields lost when production changes category. */
+  productionChangePenaltyPct?: number;
 }
 
 export interface EngineRules {
