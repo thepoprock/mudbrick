@@ -237,6 +237,38 @@ square · 0x00556aea units of a role in a stack · 0x005567e1 stack totals (mode
 defence, 2 count, 3 attack, 4 homed defenders, 5 sea units, 6 free cargo room, 7 ranged aircraft,
 8–10 flag counts).
 
+## Air units (0x004f2dd3, VERIFIED; not ported yet)
+
+The move chooser hands aircraft to their own routine. It first works out the **fuel budget** in
+movement points: `(range − turns flown − 1) × full moves + moves left` (twice the full moves for
+range 0), and the distance to the nearest own city.
+
+- **Return to base.** A fighter (range 1) with no go-to, half its moves or less left and the
+  nearest own city just within the budget turns home (tag `H`, the return-to-base routine
+  0x0049857a). A bomber (range above 1) that has flown half its range or more and can still
+  reach the nearest own city does the same.
+- **Missiles** (the destroyed-after-attacking flag, attack below 99) look for an enemy
+  non-air unit within the budget worth at least four times the missile's own cost: a unit in a
+  city, fortress or airbase is worth its cost (doubled when alone, doubled again with an own
+  unit adjacent), a stack in the open its total cost; doubled at sea and doubled on a fortress,
+  plus the type's capacity. The missile is placed on an empty square beside the best target and
+  attacks it at once. With more than one missile stacked and none worth firing, the surplus is
+  moved to an own city within the budget that holds fewer. Otherwise it waits.
+- **Fighters (role 3)** score every visible enemy unit of a civilization they are at war with:
+  aircraft by `2 × distance` (halved for a human's), −1 for ranged types and −1 when alone;
+  other units only when the fighter's attack, hit points and firepower (×3 when veteran, ×2
+  otherwise) beat one and a half times the target's defence, hit points, firepower and terrain
+  factor and the target stands alone (transports: fewer than two ships). The lowest score wins.
+  It attacks when adjacent with fuel to reach home afterwards, or when it cannot reach home
+  anyway; otherwise it checks the empty squares beside the target for one from which an own
+  city is reachable inside the budget and goes for the target when the round trip fits (tag
+  `A`). Failing that it moves to the own city nearest the target within the budget, or to a
+  human's city that allows it under a treaty (tag `a`), else waits (tag `h`) or turns home.
+- **Bombers (role 0 with range)** with fuel left score every enemy city of a civilization
+  without a treaty within reach that holds units: `size × 10 − units × 25`, +40 on the bomber's
+  land mass, +60 for each own unit adjacent; the best becomes the go-to (tag `B`). A bomber
+  already on a go-to with its fuel spent reports that it must land.
+
 ## Barbarians
 
 **Where they appear (0x00465e35, once per turn from the turn driver, VERIFIED).** Nothing
