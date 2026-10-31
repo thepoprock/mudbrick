@@ -34,5 +34,7 @@ Coming next: menus (Menu.txt), `EVNT` scenario events, the images stored inside 
 | [inventory.md](research/inventory.md)         | The edition, every file, sizes, executables, sheets, sounds |
 | [inventory.sha256](research/inventory.sha256) | Hash of every file in that edition                          |
 
+- [engine/map-generation.md](engine/map-generation.md) — the random map maker, pass by pass
+- [engine/new-game.md](engine/new-game.md) — civilization birth, start sites, start balancing
 - [engine/rules-trade.md](engine/rules-trade.md) — caravans, trade routes, their bonus and income
 - [engine/diplomacy.md](engine/diplomacy.md) — treaties, contact, the AI's war and peace reviews, governments

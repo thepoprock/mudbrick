@@ -6,7 +6,7 @@
  * is drawn with the original tiles. Play: with a save loaded, "Play" hands the human civilization
  * to the player — orders, movement, cities, research and the end of turn go through the engine.
  */
-import { World } from '@mudbrick/engine';
+import { Game, newGame, Rng, World } from '@mudbrick/engine';
 import {
   decodeSquare,
   parseMap,
@@ -21,7 +21,7 @@ import { loadGameFolder, type GameFolder } from './gameFiles.js';
 import { drawMap, hitTest } from './mapRenderer.js';
 import { PlaySession } from './play.js';
 import { downloadBytes, saveFromGame } from './saveFromGame.js';
-import { worldFromSave } from './worldFromSave.js';
+import { engineRules, worldFromSave } from './worldFromSave.js';
 import { drawWorld, WORLD_TOP_PAD } from './worldRenderer.js';
 
 function byId<T extends HTMLElement>(id: string): T {
@@ -39,6 +39,7 @@ const showCities = byId<HTMLInputElement>('showCities');
 const playButton = byId<HTMLButtonElement>('play');
 const endTurnButton = byId<HTMLButtonElement>('endTurn');
 const saveButton = byId<HTMLButtonElement>('save');
+const newGameButton = byId<HTMLButtonElement>('newGame');
 
 let folder: GameFolder | undefined;
 let map: MapFile | undefined;
@@ -107,8 +108,10 @@ function redraw(): void {
   }
   info.textContent = `${headline()}\nHover a square for details.`;
   playButton.disabled = !(world && folder && save) || session !== undefined;
+  newGameButton.disabled = !folder || session !== undefined;
   endTurnButton.disabled = session === undefined;
-  saveButton.disabled = session === undefined;
+  // A game started here has no original file to write back into (the writer patches one).
+  saveButton.disabled = session === undefined || saveBytes === undefined;
 }
 
 function showError(name: string, err: unknown): void {
@@ -117,6 +120,25 @@ function showError(name: string, err: unknown): void {
 
 function applyFolder(f: GameFolder): void {
   folder = f;
+  const difficulty = byId<HTMLSelectElement>('ngDifficulty');
+  difficulty.replaceChildren(
+    ...f.rules.difficulty.map((name, i) => {
+      const o = document.createElement('option');
+      o.value = String(i);
+      o.textContent = name;
+      o.selected = i === 2;
+      return o;
+    }),
+  );
+  const tribe = byId<HTMLSelectElement>('ngTribe');
+  tribe.replaceChildren(
+    ...f.rules.leaders.map((l) => {
+      const o = document.createElement('option');
+      o.value = String(l.index);
+      o.textContent = `${l.plural} (${l.name})`;
+      return o;
+    }),
+  );
   const sheets = Object.keys(f.sheets).join(', ');
   statusLine.textContent = `rules loaded (${f.rules.units.length} unit types); sheets: ${sheets || 'none'}`;
   if (save) world = worldFromSave(save, f.rules);
@@ -138,6 +160,60 @@ function applyGame(name: string, bytes: Uint8Array): void {
     world = folder ? worldFromSave(save, folder.rules) : undefined;
   }
   redraw();
+}
+
+function selectValue(id: string): number {
+  return Number(byId<HTMLSelectElement>(id).value);
+}
+
+/** "New game": a random world from the panel's settings, then play as the chosen tribe. */
+function startNewGame(): void {
+  if (!folder) return;
+  const [columns, rows] = byId<HTMLSelectElement>('ngSize').value.split('x').map(Number);
+  const seed = (Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0;
+  const rng = new Rng(seed);
+  const rules = engineRules(folder.rules);
+  const result = newGame(rules, rng, {
+    map: {
+      columns: columns ?? 50,
+      rows: rows ?? 80,
+      flatEarth: byId<HTMLInputElement>('ngFlat').checked,
+      landMass: selectValue('ngLand'),
+      landForm: selectValue('ngForm'),
+      climate: selectValue('ngClimate'),
+      temperature: selectValue('ngTemp'),
+      age: selectValue('ngAge'),
+    },
+    difficulty: selectValue('ngDifficulty'),
+    civCount: selectValue('ngCivs'),
+    humanTribe: selectValue('ngTribe'),
+    leaders: folder.rules.leaders,
+    barbarianActivity: selectValue('ngBarb'),
+  });
+  save = undefined;
+  saveBytes = undefined;
+  map = undefined;
+  world = result.world;
+  sourceName = `New game ${seed.toString(16)}`;
+  const game = new Game(result.world, rules, rng, result.state);
+  session = new PlaySession(
+    game,
+    folder,
+    result.humanSlot,
+    {
+      canvas,
+      status: byId('status'),
+      unitPanel: byId('unitPanel'),
+      cityPanel: byId('cityPanel'),
+      researchPanel: byId('researchPanel'),
+      log: byId('log'),
+    },
+    renderOptions,
+  );
+  for (const n of result.notes) session.log(`${n}.`);
+  byId<HTMLDetailsElement>('newGamePanel').open = false;
+  redraw();
+  if (session.selected) session.centreOn(session.selected.position);
 }
 
 function startPlay(): void {
@@ -190,6 +266,7 @@ byId<HTMLInputElement>('gameFile').addEventListener('change', (e) => {
 });
 
 playButton.addEventListener('click', startPlay);
+newGameButton.addEventListener('click', startNewGame);
 endTurnButton.addEventListener('click', () => session?.endTurn());
 saveButton.addEventListener('click', () => {
   if (!session || !save || !saveBytes) return;

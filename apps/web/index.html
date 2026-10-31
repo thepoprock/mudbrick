@@ -114,6 +114,16 @@
         max-width: 100%;
         font: inherit;
       }
+      #newGamePanel {
+        flex-basis: 100%;
+      }
+      #newGamePanel > div {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem 1rem;
+        align-items: center;
+        padding: 0.4rem 0 0.2rem 1rem;
+      }
     </style>
   </head>
   <body>
@@ -131,6 +141,88 @@
       <button id="save" disabled title="Download the game as a .SAV in the original format">
         Save
       </button>
+      <details id="newGamePanel">
+        <summary title="Make a random world and start at 4000 BC">New game</summary>
+        <div>
+          <label
+            >World
+            <select id="ngSize">
+              <option value="40x50">small 40×50</option>
+              <option value="50x80" selected>normal 50×80</option>
+              <option value="75x120">large 75×120</option>
+            </select></label
+          >
+          <label><input id="ngFlat" type="checkbox" /> flat</label>
+          <label
+            >Land mass
+            <select id="ngLand">
+              <option value="0">small</option>
+              <option value="1" selected>normal</option>
+              <option value="2">large</option>
+            </select></label
+          >
+          <label
+            >Land form
+            <select id="ngForm">
+              <option value="-1">archipelago</option>
+              <option value="0" selected>varied</option>
+              <option value="1">continents</option>
+            </select></label
+          >
+          <label
+            >Climate
+            <select id="ngClimate">
+              <option value="-1">arid</option>
+              <option value="0" selected>normal</option>
+              <option value="1">wet</option>
+            </select></label
+          >
+          <label
+            >Temperature
+            <select id="ngTemp">
+              <option value="-1">cool</option>
+              <option value="0" selected>temperate</option>
+              <option value="1">warm</option>
+            </select></label
+          >
+          <label
+            >Age
+            <select id="ngAge">
+              <option value="0">3 billion years</option>
+              <option value="1" selected>4 billion years</option>
+              <option value="2">5 billion years</option>
+            </select></label
+          >
+          <label
+            >Difficulty
+            <select id="ngDifficulty"></select
+          ></label>
+          <label
+            >Civilizations
+            <select id="ngCivs">
+              <option value="3">3</option>
+              <option value="5">5</option>
+              <option value="7" selected>7</option>
+            </select></label
+          >
+          <label
+            >Tribe
+            <select id="ngTribe"></select
+          ></label>
+          <label
+            >Barbarians
+            <select id="ngBarb">
+              <option value="0">villages only</option>
+              <option value="1" selected>roving bands</option>
+              <option value="2">restless tribes</option>
+              <option value="3">raging hordes</option>
+            </select></label
+          >
+          <button id="newGame" disabled title="Needs the game folder for the rules and tiles">
+            Start
+          </button>
+        </div>
+      </details>
       <label
         >Zoom
         <select id="zoom">
