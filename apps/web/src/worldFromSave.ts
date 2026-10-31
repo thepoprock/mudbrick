@@ -5,8 +5,16 @@
  * model (`@mudbrick/engine`), so the engine stays free of file-format knowledge. Field meanings
  * follow docs/formats/save-format.md; anything marked INFERRED there is INFERRED here too.
  */
-import { SquareFlag, World } from '@mudbrick/engine';
+import { SquareFlag, World, type EngineRules } from '@mudbrick/engine';
 import { decodeSquare, type Rules, type SaveFile } from '@mudbrick/formats';
+
+/**
+ * The parsed rules already have the shape the engine needs; this function is the compile-time
+ * proof (and the one place to adapt should the shapes ever diverge).
+ */
+export function engineRules(rules: Rules): EngineRules {
+  return rules;
+}
 
 export function worldFromSave(save: SaveFile, rules: Rules): World {
   const world = new World({

@@ -77,8 +77,8 @@ describe('research cost (verified)', () => {
   it('counts reachable advances from the rules', () => {
     const rules = {
       advances: [
-        { name: 'a', preq1: null, preq2: null, epoch: 0, category: 0, enabled: true },
-        { name: 'b', preq1: null, preq2: null, epoch: 0, category: 0, enabled: false },
+        { name: 'a', preq1: { kind: 'none' }, preq2: { kind: 'none' }, epoch: 0, category: 0 },
+        { name: 'b', preq1: { kind: 'never' }, preq2: { kind: 'never' }, epoch: 0, category: 0 },
       ],
     } as unknown as EngineRules;
     expect(reachableAdvanceCount(rules)).toBe(1);
@@ -91,7 +91,10 @@ describe('science income and discovery (verified)', () => {
       name: `i${i}`,
       costRows: 4,
       upkeep: 1,
-      prereq: i >= 35 && i <= 37 ? 70 + i : null,
+      preq:
+        i >= 35 && i <= 37
+          ? { kind: 'advance' as const, index: 70 + i }
+          : { kind: 'none' as const },
     })),
   } as unknown as EngineRules;
   it('doubles for a Chieftain human on a known advance and discards under Anarchy', () => {

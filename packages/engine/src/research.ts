@@ -6,7 +6,7 @@
  * civilization-turn routine that sets the AI's tax, luxury and science rates. Integer
  * arithmetic mirrors the original (C division truncates toward zero).
  */
-import type { EngineRules } from './rules.js';
+import { advanceIndex, type EngineRules } from './rules.js';
 import type { Civ } from './world.js';
 
 /** Advance index of Future Technology in the shipped rules. */
@@ -41,9 +41,9 @@ export interface ResearchContext {
   researchCheaper?: boolean;
 }
 
-/** Advances whose prerequisites are not marked "no" in the rules. */
+/** Advances whose first prerequisite is not `no` in the rules (VERIFIED: the loader's rule). */
 export function reachableAdvanceCount(rules: EngineRules): number {
-  return rules.advances.filter((a) => a.enabled).length;
+  return rules.advances.filter((a) => a.preq1.kind !== 'never').length;
 }
 
 /** Beakers needed for the next advance of a civilization that knows `advancesKnown` (VERIFIED). */
@@ -114,7 +114,7 @@ export function cityScienceToCiv(
   }
   if (!ctx.isHuman && ctx.difficulty > 1 && ctx.aiSpaceRace) {
     for (let imp = 35; imp <= 37; imp++) {
-      const prereq = rules.improvements[imp]?.prereq ?? null;
+      const prereq = advanceIndex(rules.improvements[imp]?.preq);
       if (prereq !== null && !civ.knownAdvances[prereq]) {
         s <<= 1;
         break;
@@ -170,7 +170,7 @@ export interface AiRateContext {
   turn: number;
   /** Any city of the civilization is in disorder this turn. */
   anyDisorder: boolean;
-  /** Any content city of size 6 or more (a settled, prospering empire). */
+  /** Any city of size 6 or more whose turn result was zero (INFERRED: a quiet large city). */
   anyLargeContentCity: boolean;
   /** The leader's RULES @LEADERS "civilize" personality value (−1, 0, 1). */
   civilize: number;

@@ -58,26 +58,39 @@ export interface UnitTypeRule {
   /** AI role 0–7; role 3 (air superiority) and 5 (settle) matter to the rules. */
   role: number;
   flags: UnitFlagsRule;
+  /** Advance that makes the type obsolete (drives the upgrade on completion). */
+  obsoleteWith?: AdvanceRef;
+  /** Advance required to build the type. */
+  preq?: AdvanceRef;
+}
+
+/**
+ * A reference to an advance, in the same shape `@mudbrick/formats` parses: `none` = no
+ * requirement (`nil`), `never` = disabled (`no`), or the advance index.
+ */
+export type AdvanceRef = { kind: 'none' } | { kind: 'never' } | { kind: 'advance'; index: number };
+
+/** The advance index a reference names, or null for `none` / `never`. */
+export function advanceIndex(ref: AdvanceRef | undefined): number | null {
+  return ref?.kind === 'advance' ? ref.index : null;
 }
 
 export interface ImprovementRule {
   name: string;
   costRows: number;
   upkeep: number;
-  /** Advance index required to build it, or null. */
-  prereq?: number | null;
+  /** Advance required to build it. */
+  preq?: AdvanceRef;
 }
 
 export interface AdvanceRule {
   name: string;
-  /** Prerequisite advance indices; null = none. */
-  preq1: number | null;
-  preq2: number | null;
+  /** Prerequisites; an advance whose first prerequisite is `never` is unreachable. */
+  preq1: AdvanceRef;
+  preq2: AdvanceRef;
   /** 0 Ancient … 3 Modern. */
   epoch: number;
   category: number;
-  /** False when the rules mark the advance unreachable ("no" as a prerequisite). */
-  enabled: boolean;
 }
 
 export interface CosmicRule {

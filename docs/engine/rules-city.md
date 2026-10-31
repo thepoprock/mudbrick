@@ -6,26 +6,42 @@ happiness/disorder, 0x004b3924 food constants, 0x00430ac9 growth blockers). Yiel
 support, trade and production formulas are being read next; anything about them below is
 INFERRED and labelled.
 
-## Order of a city's turn (0x004bc513)
+## Order of a city's turn (VERIFIED, 0x004bc513)
 
 1. Every 64 turns a city held by a conqueror becomes "originally theirs" (founder := owner).
-2. Food constants are set for the owner (below) and the city's totals computed.
-3. **Growth and starvation** (0x004b7654). A destroyed city ends processing.
-4. Totals recomputed; food surplus added to storage; FOODSHORTAGE warning when storage fell this
-   turn and `stored + 3 × surplus < 0`.
-5. **Production** (0x004b7e74): shields toward the current item, completion, AI build choice.
-6. **Trade** (0x004ba99a): taxes, luxuries, science, corruption (to be read).
-7. Per-civilization government statistics updated (unit support counts, celebration counts).
-8. War-weariness bookkeeping for Republic/Democracy from units outside the home territory
-   (Police Station, or Women's Suffrage in every city, halves it; Courthouse, Bank-like effects
-   adjust the multiplier) — exact formula to be read.
-9. **Happiness** (0x004bafef): disorder, order restored, We Love the King Day, rapture growth,
-   Democracy revolt.
-10. Science added to the owner's research (0x004bb63d) — doubled for the human at Chieftain
-    when researching a specific advance, and for AI civilizations above Warlord that lack key
-    advances.
-11. Human owner only: pollution check (0x004bb7bb) and one more routine (0x004bbc98).
-12. AI worker/pollution task assignment for the city radius (0x004bc284).
+2. **Growth and starvation** (0x004b7654) on last turn's stored food. A destroyed city ends
+   processing (the caller sees −999).
+3. Totals computed (0x004b6f63): worked squares, yields, support, happiness, trade split.
+4. Food surplus = food − size × food-per-citizen − supported settlers × settlers' food, added to
+   storage. FOODSHORTAGE warning when storage fell this turn and `stored + 3 × surplus < 0`.
+5. **Production** (0x004b7e74), then the shield-shortage disband (0x004ba99a), then totals again.
+6. Per-civilization AI statistics: shield shortfall, units over each government's free support,
+   and the attitude counters toward the human player.
+7. **Disorder, celebration and revolt** (0x004bafef).
+8. **Science** to the owner's research (0x004bb63d).
+9. Human owner only: the pollution roll (0x004bb7bb) and **upkeep with forced sales**
+   (0x004bbc98). Where the AI pays upkeep is not yet read.
+10. AI worker and pollution task assignment for the city radius (0x004bc284).
+
+The owner's turn (0x00467c61) processes its cities from the last slot to the first, then sets
+the AI's rates (see rules-research.md). The turn driver (0x00469773) clamps the treasury to
+0 … 30000 before the turn and autosaves afterwards when that option is on.
+
+## Upkeep (VERIFIED, 0x004bbb67 and 0x004bbc98)
+
+Each improvement costs its RULES upkeep every turn, with these changes:
+
+- **Barracks:** one less at Chieftain and Warlord; one more once the owner knows Gunpowder and
+  one more again with Mobile Warfare (the original walks the prerequisite chain down from Mobile
+  Warfare to the first reachable advance, which in the shipped rules is Mobile Warfare itself).
+- **Adam Smith's Trading Co.** pays every improvement whose upkeep comes to exactly 1.
+- Under **Fundamentalism** the Temple, Colosseum and Cathedral cost nothing.
+- Under **Anarchy** nothing is paid at all.
+
+Payment runs over improvements 1–38 in index order. When the treasury would go negative it is
+set to zero, that improvement is sold (the INHOCK message) and its full shield cost
+(`cost rows × shield-box rows`) is added to the treasury. The engine's `payUpkeep` returns the
+sale as an event.
 
 ## Food
 

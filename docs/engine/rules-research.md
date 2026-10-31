@@ -61,7 +61,8 @@ At the start of its turn, after its cities are processed, an AI civilization set
 (tenths):
 
 1. `lux = 10 − (science + tax)`. If any city is in disorder and `lux < 4`, `lux += 1`. Every
-   fourth turn with no disorder and no content city of size 6 or more, `lux −= 1` while above 2.
+   fourth turn with no disorder and no city of size 6 or more whose turn result was zero (INFERRED:
+   a quiet large city), `lux −= 1` while above 2.
    `lux` is clamped to 0–4.
 2. `science = civilize + (10 − lux) / 2`, where `civilize` is the leader's personality value
    from @LEADERS. `+1` when the treasury exceeds `turn + 100`, `+1` again above 2000 gold; above

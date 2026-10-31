@@ -9,6 +9,7 @@
 import { boxRows } from './city.js';
 import type { Rng } from './rng.js';
 import {
+  advanceIndex,
   DOMAIN_AIR,
   DOMAIN_GROUND,
   DOMAIN_SEA,
@@ -113,9 +114,9 @@ export interface ProductionInputs {
   surplus: number;
   /** The city's three supplied commodities (negative = already used), for caravans. */
   supplied: number[];
-  /** Obsolescence lookups from the rules (RULES @UNITS until / preq as advance indices). */
-  obsoleteWith: (type: number) => number | null;
-  prereq: (type: number) => number | null;
+  /** Obsolescence lookups; default to the rules' `obsoleteWith` / `preq` references. */
+  obsoleteWith?: (type: number) => number | null;
+  prereq?: (type: number) => number | null;
   /** Next free unit id. */
   nextUnitId: () => number;
 }
@@ -185,7 +186,13 @@ export function processProduction(
 
   // ---- unit
   let type = p.index;
-  const upgraded = upgradeTarget(rules, type, ctx.knows, inputs.obsoleteWith, inputs.prereq);
+  const upgraded = upgradeTarget(
+    rules,
+    type,
+    ctx.knows,
+    inputs.obsoleteWith ?? ((t) => advanceIndex(rules.units[t]?.obsoleteWith)),
+    inputs.prereq ?? ((t) => advanceIndex(rules.units[t]?.preq)),
+  );
   if (upgraded !== type) {
     events.push({ kind: 'upgraded', from: type, to: upgraded });
     type = upgraded;
