@@ -133,6 +133,7 @@ const rules: EngineRules = {
       flags: flags(),
     },
   ],
+  advances: [],
   improvements: Array.from({ length: 67 }, (_, i) => ({
     name: `i${i}`,
     costRows: i === IMPROVEMENT.palace ? 10 : 4,

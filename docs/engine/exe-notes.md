@@ -107,3 +107,30 @@ Step cost as weighted by the go-to code (ground units): railroad on both squares
 ## Imported subsystems (VERIFIED from import table)
 
 DirectDraw (DDRAW), Video for Windows + AVIFile (wonder/herald movies via MSVFW32/AVIFIL32, MCIWnd), WinMM (WAV + CD audio), COMCTL32/comdlg32 (dialogs), XDaemon.dll `XD_*` (MicroProse network layer: connections, lobby launch, secure/broadcast send), cv.dll / pv.dll / mk.dll / ss.dll / Tiles.dll (game-specific DLLs, roles TBD — candidates: city view, palace view, map kit, spaceship, terrain tiles), timerdll.dll.
+
+### Save header in memory (VERIFIED)
+
+The fixed part of the save file is a memory image starting at 0x005da6fc: options at 0x005da708,
+turn 0x005da718, difficulty 0x005da728, slots-in-play 0x005da72a, human mask 0x005da72b, city
+count 0x005da738, reachable-advance count 0x005da73a, first-discoverer table 0x005da73e, wonder
+city table 0x005da806 (addressed as 0x005da7b8 + 2·improvement). Civilization records at
+0x005d12c0 + 0x594·slot, city records at 0x005d3f60 + 0x58·city, unit records at
+0x005dad10 + 0x20·unit.
+
+### Advance record (VERIFIED, @CIVILIZE loader 0x00410929)
+
+16 bytes at 0x005b23c4 + 16·advance: `+0` name pointer, `+5` enabled (0 when the first
+prerequisite is `no`), `+6` AI value, `+7` civilized modifier, `+8` category, `+9` epoch,
+`+10`/`+11` prerequisites (−1 `nil`, −2 `no`). Rows beyond the file get `no` prerequisites.
+The loader counts the enabled rows into the header word at 0x005da73a (90 for the shipped rules).
+
+### Research (VERIFIED) — full rules in rules-research.md
+
+| address    | what                                                                                                           |
+| ---------- | -------------------------------------------------------------------------------------------------------------- |
+| 0x00496d12 | research cost for a civilization                                                                               |
+| 0x004bb63d | a city's science to its civilization: Chieftain doubling, AI space-race doubling, Anarchy discards             |
+| 0x004970fd | add beakers; grant at cost; pending free advance; ask for a target                                             |
+| 0x0049675f | grant an advance: beakers reset only when researched (mode word 0x005b7670 ≠ 2), popups, side-effect popups    |
+| 0x004935e5 | add the advance to the civilization (not yet read) · 0x00495ee8 choose a research target (not yet read)        |
+| 0x00467c61 | civilization turn: cities last-to-first through 0x004bc513, then the AI rate policy, then AI attitude counters |

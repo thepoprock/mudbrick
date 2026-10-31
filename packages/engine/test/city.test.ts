@@ -133,6 +133,7 @@ const rules: EngineRules = {
       flags: { ...noFlags(), freeSupportUnderFundamentalism: true },
     },
   ],
+  advances: [],
   improvements: Array.from({ length: 67 }, (_, i) => ({
     name: `improvement ${i}`,
     costRows: i === 1 ? 10 : 4,

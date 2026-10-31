@@ -64,6 +64,20 @@ export interface ImprovementRule {
   name: string;
   costRows: number;
   upkeep: number;
+  /** Advance index required to build it, or null. */
+  prereq?: number | null;
+}
+
+export interface AdvanceRule {
+  name: string;
+  /** Prerequisite advance indices; null = none. */
+  preq1: number | null;
+  preq2: number | null;
+  /** 0 Ancient … 3 Modern. */
+  epoch: number;
+  category: number;
+  /** False when the rules mark the advance unreachable ("no" as a prerequisite). */
+  enabled: boolean;
 }
 
 export interface CosmicRule {
@@ -91,6 +105,8 @@ export interface EngineRules {
   units: UnitTypeRule[];
   /** Indexed by RULES @IMPROVE row: 0 Nothing, 1 Palace … 38 Capitalization, 39–66 wonders. */
   improvements: ImprovementRule[];
+  /** Indexed by RULES @CIVILIZE row. */
+  advances: AdvanceRule[];
 }
 
 export const DOMAIN_GROUND = 0;

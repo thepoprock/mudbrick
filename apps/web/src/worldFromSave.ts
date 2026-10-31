@@ -55,6 +55,14 @@ export function worldFromSave(save: SaveFile, rules: Rules): World {
       government: rec?.government ?? 0,
       treasury: rec?.treasury ?? 0,
       isHuman: save.parameters.humanSlots[slot] ?? false,
+      scienceStored: rec?.researchProgress ?? 0,
+      researching: rec?.researching ?? null,
+      advancesCount: rec?.advancesCount ?? 0,
+      futureTechs: rec?.futureTechs ?? 0,
+      scienceRate: rec?.scienceRate ?? 0,
+      taxRate: rec?.taxRate ?? 0,
+      knownAdvances: [...(rec?.knownAdvances ?? [])],
+      freeAdvancePending: false,
       inPlay: slot === 0 || (save.parameters.slotsInPlay[slot] ?? false),
     });
   }

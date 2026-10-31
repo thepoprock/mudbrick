@@ -80,6 +80,7 @@ const rules: EngineRules = {
     mineBonus: 0,
     specials: [special, special] as [typeof special, typeof special],
   })),
+  advances: [],
   improvements: Array.from({ length: 67 }, (_, i) => ({
     name: `improvement ${i}`,
     costRows: 1,

@@ -124,7 +124,7 @@ export interface CivRecord {
   treasury: number;
   tribeId: number;
   researchProgress: number;
-  /** Advance index being researched, or null when 0xFF. */
+  /** Advance index being researched, or null when −1. */
   researching: number | null;
   advancesCount: number;
   futureTechs: number;
@@ -315,6 +315,9 @@ class Reader {
   u16(o: number): number {
     return this.view.getUint16(o, true);
   }
+  i32(o: number): number {
+    return this.view.getInt32(o, true);
+  }
   i16(o: number): number {
     return this.view.getInt16(o, true);
   }
@@ -456,16 +459,16 @@ export function parseSave(bytes: Uint8Array): SaveFile {
   const civs: CivRecord[] = Array.from({ length: 8 }, (_, slot) => {
     const o = civsOff + civRecordSize * slot;
     const X = o + 216 + 3 * UNIT_TYPES + 592;
-    const researching = r.u8(o + 10);
+    const researching = r.i16(o + 10);
     const knownAdvances: boolean[] = [];
     for (let i = 0; i < T; i++) knownAdvances.push(r.bit(o + 88 + (i >> 3), i & 7));
     return {
       slot,
       gender: r.u8(o + 1),
-      treasury: r.u16(o + 2),
-      tribeId: r.u8(o + 6),
-      researchProgress: r.u16(o + 8),
-      researching: researching === 0xff ? null : researching,
+      treasury: r.i32(o + 2),
+      tribeId: r.u16(o + 6),
+      researchProgress: r.i16(o + 8),
+      researching: researching < 0 ? null : researching,
       advancesCount: r.u8(o + 16),
       futureTechs: r.u8(o + 17),
       scienceRate: r.u8(o + 19),

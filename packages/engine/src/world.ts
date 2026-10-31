@@ -92,6 +92,20 @@ export interface Civ {
   treasury: number;
   isHuman: boolean;
   inPlay: boolean;
+  /** Beakers toward the current research target. */
+  scienceStored: number;
+  /** Advance index being researched, or null. */
+  researching: number | null;
+  /** Discoveries so far (drives research cost). */
+  advancesCount: number;
+  futureTechs: number;
+  /** Rates in tenths; luxuries are the remainder. */
+  scienceRate: number;
+  taxRate: number;
+  /** Indexed by advance index. */
+  knownAdvances: boolean[];
+  /** A free advance (Philosophy) is owed and granted at the next discovery check. */
+  freeAdvancePending: boolean;
 }
 
 export type Production = { kind: 'unit'; index: number } | { kind: 'improvement'; index: number };

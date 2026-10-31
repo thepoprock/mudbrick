@@ -17,34 +17,35 @@ version 44, so the MGE-specific record sizes are INFERRED from the community rea
 
 ## Fixed part
 
-| offset       | size             | field                                                                   | status            |
-| ------------ | ---------------- | ----------------------------------------------------------------------- | ----------------- |
-| 0            | 8                | magic `CIVILIZE`                                                        | VERIFIED          |
-| 8            | 2                | `00 1A`                                                                 | VERIFIED          |
-| 10           | 1                | version (39, 40, 44, …)                                                 | VERIFIED          |
-| 12           | 12               | options bit-field (table below)                                         | INFERRED          |
-| 24           | 42               | game parameters (table below)                                           | partly            |
-| 66           | T                | per advance: id of the civilization that discovered it first            | INFERRED          |
-| 66 + T       | T                | per advance: bit n = civilization slot n knows it                       | INFERRED          |
-| 66 + 2T      | 28 × i16         | per wonder (RULES @IMPROVE order from 39): city id, −1 none, −2 lost    | INFERRED          |
-| W + 318      | 7 × 242          | civilization names (slots 1–7; slot 0 = barbarians, not stored)         | INFERRED          |
-| C            | 8 × S            | civilization records (slot 0 = barbarians)                              | partly            |
-| M            | 14               | map header                                                              | VERIFIED          |
-| M + 14       | 7 × area         | per civilization slot 1–7: what it has seen on each square (bits)       | INFERRED          |
-| M + 14 + 7a  | 6 × area         | square records, same 6-byte layout as `.MP` files                       | VERIFIED          |
-| M + 14 + 13a | 2 × lx × ly      | unknown (minimap-sized)                                                 | VERIFIED size     |
-| … + 1024     | 1024             | unknown                                                                 | VERIFIED size     |
-| U            | n_units × 26/32  | unit records                                                            | VERIFIED size     |
-| C₂           | n_cities × 84/88 | city records                                                            | VERIFIED size     |
-| T₂           | 63               | 21 × 3 bytes; byte 1 of each triple = cities founded by that tribe      | INFERRED          |
-| O            | 4                | cursor square x, y (i16)                                                | INFERRED          |
-| O + 4        | 48 × humans      | one 48-byte block per human player                                      | VERIFIED size     |
-| … next       | 1200             | power-graph history: 150 records × 8 civs, one byte each, every 4 turns | INFERRED          |
-| … next       | 110              | unknown                                                                 | VERIFIED size     |
-| O + Oo       | 76               | clicked square x, y (i16), zoom (i16, −7 … +8), 70 unknown              | INFERRED          |
-| O + Oo + 76  | 100 (optional)   | scenario parameters, present in `.SCN` and saves derived from them      | VERIFIED presence |
-| then         | 338              | destroyed civilizations                                                 | VERIFIED size     |
-| then         | optional         | `EVNT` block (scenario events compiled from events.txt)                 | not parsed yet    |
+| offset       | size             | field                                                                                                                                                                                             | status                                                                              |
+| ------------ | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| 0            | 8                | magic `CIVILIZE`                                                                                                                                                                                  | VERIFIED                                                                            |
+| 8            | 2                | `00 1A`                                                                                                                                                                                           | VERIFIED                                                                            |
+| 10           | 1                | version (39, 40, 44, …)                                                                                                                                                                           | VERIFIED                                                                            |
+| 12           | 12               | options bit-field (table below)                                                                                                                                                                   | partly VERIFIED (see the notes under the table)                                     |
+| 24           | 42               | game parameters (table below)                                                                                                                                                                     | partly                                                                              |
+| 66           | T                | per advance: slot of the civilization that discovered it first, 0 = nobody yet                                                                                                                    | VERIFIED (the executable reads it by advance index for the Chieftain science bonus) |
+| 66 + T       | T                | per advance: bit n = civilization slot n knows it                                                                                                                                                 | INFERRED                                                                            |
+| 66 + 2T      | 28 × i16         | per wonder (RULES @IMPROVE order from 39): city id, −1 none, −2 lost. The executable addresses the table as `base + 2 × improvement` with the first wonder at 39                                  | VERIFIED                                                                            |
+| W + 56       | 262              | mostly unknown. The executable keeps civilization-level bytes here: +2 the civilization the AI measures itself against (the human player, INFERRED), +4 … +11 one byte per slot, +19 a slot index | partly                                                                              |
+| W + 318      | 7 × 242          | civilization names (slots 1–7; slot 0 = barbarians, not stored)                                                                                                                                   | INFERRED                                                                            |
+| C            | 8 × S            | civilization records (slot 0 = barbarians)                                                                                                                                                        | partly                                                                              |
+| M            | 14               | map header                                                                                                                                                                                        | VERIFIED                                                                            |
+| M + 14       | 7 × area         | per civilization slot 1–7: what it has seen on each square (bits)                                                                                                                                 | INFERRED                                                                            |
+| M + 14 + 7a  | 6 × area         | square records, same 6-byte layout as `.MP` files                                                                                                                                                 | VERIFIED                                                                            |
+| M + 14 + 13a | 2 × lx × ly      | unknown (minimap-sized)                                                                                                                                                                           | VERIFIED size                                                                       |
+| … + 1024     | 1024             | unknown                                                                                                                                                                                           | VERIFIED size                                                                       |
+| U            | n_units × 26/32  | unit records                                                                                                                                                                                      | VERIFIED size                                                                       |
+| C₂           | n_cities × 84/88 | city records                                                                                                                                                                                      | VERIFIED size                                                                       |
+| T₂           | 63               | 21 × 3 bytes; byte 1 of each triple = cities founded by that tribe                                                                                                                                | INFERRED                                                                            |
+| O            | 4                | cursor square x, y (i16)                                                                                                                                                                          | INFERRED                                                                            |
+| O + 4        | 48 × humans      | one 48-byte block per human player                                                                                                                                                                | VERIFIED size                                                                       |
+| … next       | 1200             | power-graph history: 150 records × 8 civs, one byte each, every 4 turns                                                                                                                           | INFERRED                                                                            |
+| … next       | 110              | unknown                                                                                                                                                                                           | VERIFIED size                                                                       |
+| O + Oo       | 76               | clicked square x, y (i16), zoom (i16, −7 … +8), 70 unknown                                                                                                                                        | INFERRED                                                                            |
+| O + Oo + 76  | 100 (optional)   | scenario parameters, present in `.SCN` and saves derived from them                                                                                                                                | VERIFIED presence                                                                   |
+| then         | 338              | destroyed civilizations                                                                                                                                                                           | VERIFIED size                                                                       |
+| then         | optional         | `EVNT` block (scenario events compiled from events.txt)                                                                                                                                           | not parsed yet                                                                      |
 
 where `T` = 93 for version 39 and 100 from version 40; `W` = 66 + 2T (252 / 266);
 `C` = W + 56 + 1694 (2264 / 2278); `S` = 1396 (v39) / 1428 (v40, v44);
@@ -66,27 +67,36 @@ where `T` = 93 for version 39 and 100 from version 40; `W` = 66 + 2T (252 / 266)
 | 10   | 0–7 | **clear = on**: warn city growth halted, show improvements built, show non-combat units built, show invalid build instructions, announce disorder, announce order restored, announce "we love the king" day, warn food low |
 | 11   | 0–2 | **clear = on**: warn pollution, warn production change costs shields, zoom-to-city is not default                                                                                                                          |
 
+Bits the executable is seen to read (VERIFIED): byte 0 bit 4 (simplified combat, in the veteran and
+movement rules) and bit 7 (bloodlust zeroes the AI's attitude counters); byte 3 bit 0 (tutorial
+popups); byte 4 bit 0 (wonder movies) and bit 3 (encyclopedia on a new advance); byte 8 bit 7
+(scenario parameters in effect — the scenario's tech paradigm replaces the cosmic one); byte 8
+bits 2 and 3 (research 25 % dearer / 20 % cheaper; not named by the community reader). In memory
+the header starts at 0x005da6fc, so file offset = address − 0x005da6fc for the whole fixed part.
+
 ### Game parameters (offset 24)
 
-| +   | size | field                                                                                                                         | status                                                              |
-| --- | ---- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| 0   | 1    | bits: 1 first air unit built, 2 first naval, 4 first caravan, 5 Republic/Democracy ever adopted, 6+7 first badly damaged unit | INFERRED                                                            |
-| 4   | u16  | turn number                                                                                                                   | VERIFIED (plausible in all files: 0, 1, 6, 7, 101, 151, 201)        |
-| 6   | u16  | turn number used for the game-year calculation                                                                                | INFERRED                                                            |
-| 10  | u16  | selected unit index (0xFFFF none)                                                                                             | INFERRED                                                            |
-| 15  | 1    | human player's civilization slot                                                                                              | INFERRED                                                            |
-| 16  | 1    | whose map is shown                                                                                                            | INFERRED                                                            |
-| 17  | 1    | player's civilization number (RULES @LEADERS index)                                                                           | INFERRED                                                            |
-| 19  | 1    | map revealed (1)                                                                                                              | INFERRED                                                            |
-| 20  | 1    | difficulty 0–5                                                                                                                | INFERRED                                                            |
-| 21  | 1    | barbarian activity                                                                                                            | INFERRED                                                            |
-| 22  | 1    | bit n = civilization slot n is in play                                                                                        | INFERRED                                                            |
-| 23  | 1    | bit n = slot n is human (multiplayer)                                                                                         | VERIFIED (count drives the block arithmetic that matches all files) |
-| 27  | 1    | global temperature rise count                                                                                                 | INFERRED                                                            |
-| 30  | u16  | pollution squares                                                                                                             | INFERRED                                                            |
-| 32  | 1    | turns of peace                                                                                                                | INFERRED                                                            |
-| 34  | u16  | number of units                                                                                                               | VERIFIED (block arithmetic)                                         |
-| 36  | u16  | number of cities                                                                                                              | VERIFIED (block arithmetic)                                         |
+| +   | size | field                                                                                                                         | status                                                                                      |
+| --- | ---- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| 0   | 1    | bits: 1 first air unit built, 2 first naval, 4 first caravan, 5 Republic/Democracy ever adopted, 6+7 first badly damaged unit | INFERRED                                                                                    |
+| 4   | u16  | turn number                                                                                                                   | VERIFIED (the executable's turn counter; plausible in all files: 0, 1, 6, 7, 101, 151, 201) |
+| 6   | u16  | turn number used for the game-year calculation                                                                                | INFERRED                                                                                    |
+| 10  | u16  | selected unit index (0xFFFF none)                                                                                             | INFERRED                                                                                    |
+| 14  | 1    | game mode; values above 2 take the executable's multiplayer messaging paths                                                   | INFERRED                                                                                    |
+| 15  | 1    | human player's civilization slot                                                                                              | INFERRED                                                                                    |
+| 16  | 1    | whose map is shown                                                                                                            | INFERRED                                                                                    |
+| 17  | 1    | player's civilization number (RULES @LEADERS index)                                                                           | INFERRED                                                                                    |
+| 19  | 1    | map revealed (1)                                                                                                              | INFERRED                                                                                    |
+| 20  | 1    | difficulty 0–5                                                                                                                | VERIFIED (research cost, food box)                                                          |
+| 21  | 1    | barbarian activity                                                                                                            | INFERRED                                                                                    |
+| 22  | 1    | bit n = civilization slot n is in play                                                                                        | VERIFIED (production checks)                                                                |
+| 23  | 1    | bit n = slot n is human (multiplayer)                                                                                         | VERIFIED (count drives the block arithmetic that matches all files)                         |
+| 27  | 1    | global temperature rise count                                                                                                 | INFERRED                                                                                    |
+| 30  | u16  | pollution squares                                                                                                             | INFERRED                                                                                    |
+| 32  | 1    | turns of peace                                                                                                                | INFERRED                                                                                    |
+| 34  | u16  | number of units                                                                                                               | VERIFIED (block arithmetic)                                                                 |
+| 36  | u16  | number of cities                                                                                                              | VERIFIED (block arithmetic; the executable's city loop bound)                               |
+| 38  | u16  | number of reachable advances in RULES (first prerequisite not `no`): 90 in the shipped rules. Scales research cost            | VERIFIED                                                                                    |
 
 ### Civilization names (7 × 242 bytes, slots 1–7)
 
@@ -98,15 +108,16 @@ ruler title under each of the 7 governments (24 each). Empty = use RULES.TXT. IN
 | +    | size      | field                                                                                                                        |
 | ---- | --------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | 1    | 1         | gender (0 male, 2 female)                                                                                                    |
-| 2    | u16       | treasury                                                                                                                     |
-| 6    | 1         | tribe id (RULES @LEADERS index)                                                                                              |
-| 8    | u16       | research progress (beakers)                                                                                                  |
-| 10   | 1         | advance being researched (0xFF none)                                                                                         |
-| 16   | 1         | advances discovered                                                                                                          |
-| 17   | 1         | future techs discovered                                                                                                      |
-| 19   | 1         | science rate (tenths)                                                                                                        |
-| 20   | 1         | tax rate (tenths)                                                                                                            |
-| 21   | 1         | government 0–6                                                                                                               |
+| 2    | i32       | treasury (the executable reads 32 bits) — VERIFIED                                                                           |
+| 6    | u16       | tribe id (RULES @LEADERS index; the executable reads 16 bits) — VERIFIED                                                     |
+| 8    | i16       | research progress (beakers) — VERIFIED                                                                                       |
+| 10   | i16       | advance being researched, −1 none — VERIFIED (16-bit in the executable)                                                      |
+| 16   | 1         | advances discovered (drives research cost) — VERIFIED                                                                        |
+| 17   | 1         | future techs discovered — VERIFIED (shown in the discovery popup)                                                            |
+| 18   | 1         | added to byte 16 in the research-cost formula; the executable only ever zeroes it (vestigial) — VERIFIED                     |
+| 19   | 1         | science rate (tenths) — VERIFIED (AI rate policy)                                                                            |
+| 20   | 1         | tax rate (tenths); luxuries = 10 − science − tax — VERIFIED                                                                  |
+| 21   | 1         | government 0–6 — VERIFIED (Anarchy discards science)                                                                         |
 | 30   | 1         | reputation                                                                                                                   |
 | 31   | 1         | patience                                                                                                                     |
 | 32   | 8 × 4     | treaty with slot n: byte0 bits 0 contact, 1 cease-fire, 2 peace, 3 alliance, 4 vendetta, 7 embassy; byte1 bit 5 war          |
@@ -121,7 +132,7 @@ ruler title under each of the 7 governments (24 each). Empty = use RULES.TXT. IN
 | X+30 | 1         | bit 0: has launched a spaceship                                                                                              |
 | X+32 | u16 … u16 | spaceship: estimated arrival, launch year, (gap), structural, propulsion, fuel, habitation, life support, solar at +38 … +48 |
 
-All INFERRED. The 62-entry unit-type arrays are known for version 40/44; version 39 has a
+Rows marked VERIFIED were confirmed by reading the executable (its civilization record is a memory image of this one, stride 0x594); the rest are INFERRED. The 62-entry unit-type arrays are known for version 40/44; version 39 has a
 smaller record and may differ.
 
 ### Unit record (26 bytes; v44 appends 6 unknown bytes)
