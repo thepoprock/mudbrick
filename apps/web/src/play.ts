@@ -48,6 +48,9 @@ import {
   changeGovernment,
   governmentAllowed,
   startRevolution,
+  establishTradeRoute,
+  helpWonder,
+  type TradeEvent,
 } from '@mudbrick/engine';
 import { ADVANCE, IMPROVEMENT } from '@mudbrick/engine';
 import { sprites } from '@mudbrick/formats';
@@ -225,6 +228,10 @@ export class PlaySession {
         return this.withSelected((u) => this.pillageSelected(u));
       case 'D':
         return this.withSelected((u) => this.disbandSelected(u));
+      case 't':
+        return this.withSelected((u) => this.caravanTrade(u));
+      case 'h':
+        return this.withSelected((u) => this.caravanHelp(u));
       case 'c':
         if (this.selected) this.centreOn(this.selected.position);
         return true;
@@ -383,6 +390,41 @@ export class PlaySession {
     else if (ev.cityShrunk) this.log(`${ev.cityShrunk.name} loses a citizen.`);
     if (ev.ransom > 0) this.log(`Barbarian leader captured: ${ev.ransom} gold ransom.`);
     if (ev.attackerConsumed) this.selected = null;
+  }
+
+  /** 't': a caravan in a city other than its home establishes a trade route (rules-trade.md). */
+  private caravanTrade(unit: Unit): void {
+    const city = this.world.cityAt(unit.position.x, unit.position.y);
+    if (!city || (this.rules.units[unit.type]?.role ?? 0) !== 7) {
+      this.log('Only a caravan or freight in a city can establish a trade route.');
+      return;
+    }
+    if (city.id === unit.homeCity) {
+      this.log('A caravan cannot trade with its own home city.');
+      return;
+    }
+    const events: TradeEvent[] = [];
+    establishTradeRoute(this.world, this.rules, unit, city, this.game.tradeContext(), events);
+    for (const e of events) this.log(`${e.text}.`);
+    this.selected = null;
+    this.refresh();
+  }
+
+  /** 'h': a caravan helps build the wonder the city is working on. */
+  private caravanHelp(unit: Unit): void {
+    const city = this.world.cityAt(unit.position.x, unit.position.y);
+    if (!city || (this.rules.units[unit.type]?.role ?? 0) !== 7) {
+      this.log('Only a caravan or freight in a city can help build a wonder.');
+      return;
+    }
+    const events: TradeEvent[] = [];
+    if (!helpWonder(this.world, this.rules, unit, city, events)) {
+      this.log(`${city.name} is not building a wonder.`);
+      return;
+    }
+    for (const e of events) this.log(`${e.text}.`);
+    this.selected = null;
+    this.refresh();
   }
 
   private takeCity(unit: Unit, city: City): void {
@@ -712,7 +754,7 @@ export class PlaySession {
       (this.gotoMode ? 'Go to: click the destination.\n' : '') +
       `keys: arrows/numpad move · f fortify · s sleep · g go to · w wait · b build city\n` +
       `r road · i irrigate · m mine · o transform · F fortress · E airbase · p clean pollution\n` +
-      `P pillage · D disband · Tab next unit · c centre · Enter end turn`;
+      `P pillage · D disband · t trade route · h help wonder · Tab next unit · c centre · Enter end turn`;
   }
 
   private renderCityPanel(): void {

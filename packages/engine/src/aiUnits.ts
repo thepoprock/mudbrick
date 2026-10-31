@@ -29,6 +29,13 @@ import type { Rng } from './rng.js';
 import { DOMAIN_AIR, DOMAIN_GROUND, IMPROVEMENT, type EngineRules } from './rules.js';
 import { canOrder, doWork, ORDER } from './terraform.js';
 import { hutAt } from './terrainSpecials.js';
+import {
+  aiCaravanDestination,
+  establishTradeRoute,
+  helpWonder,
+  type TradeContext,
+  type TradeEvent,
+} from './trade.js';
 import { gotoStep } from './turnStart.js';
 import {
   NEIGHBOUR_OFFSETS,
@@ -63,6 +70,10 @@ export interface AiUnitContext extends MovementContext {
   guerillaWarfareDiscovered?: boolean;
   /** The civilization's strategic state, for settle goals (aiStrategy.ts). */
   strategy?: CivStrategy;
+  /** Trade-route context for caravans; without it caravans only help wonders. */
+  trade?: TradeContext;
+  /** Attitude toward a slot, for caravan destinations. */
+  attitude?: (slot: number) => number;
 }
 
 export interface AiUnitEvent {
@@ -785,21 +796,21 @@ function caravanAct(
   events: AiUnitEvent[],
 ): boolean {
   const here = world.cityAt(unit.position.x, unit.position.y);
-  if (
-    here &&
-    here.owner === unit.owner &&
-    here.production.kind === 'improvement' &&
-    here.production.index >= 39
-  ) {
-    const rows = rules.cosmic.shieldBoxRows;
-    const gift = (rules.units[unit.type]?.costRows ?? 5) * rows;
-    here.shieldsStored += gift;
-    world.units.splice(world.units.indexOf(unit), 1);
-    events.push({
-      kind: 'ai-unit',
-      text: `caravan adds ${gift} shields to the wonder in ${here.name}`,
-    });
+  const tradeEvents: TradeEvent[] = [];
+  if (here && here.owner === unit.owner && helpWonder(world, rules, unit, here, tradeEvents)) {
+    for (const e of tradeEvents) events.push({ kind: 'ai-unit', text: e.text });
     return false;
+  }
+  if (here && here.id !== unit.homeCity && ctx.trade) {
+    // VERIFIED: a computer caravan at its destination establishes the route.
+    if (
+      unit.gotoTarget === null ||
+      (unit.gotoTarget.x === here.position.x && unit.gotoTarget.y === here.position.y)
+    ) {
+      establishTradeRoute(world, rules, unit, here, ctx.trade, tradeEvents);
+      for (const e of tradeEvents) events.push({ kind: 'ai-unit', text: e.text });
+      return false;
+    }
   }
   const wonderCity = nearestCity(
     world,
@@ -808,6 +819,11 @@ function caravanAct(
       c.owner === unit.owner && c.production.kind === 'improvement' && c.production.index >= 39,
   );
   if (wonderCity) return stepToward(world, rules, unit, wonderCity.position, ctx);
+  const target = aiCaravanDestination(world, unit, (slot) => ctx.attitude?.(slot) ?? 50);
+  if (target) {
+    unit.gotoTarget = { x: target.position.x, y: target.position.y };
+    return stepToward(world, rules, unit, target.position, ctx);
+  }
   sentry(unit);
   return false;
 }

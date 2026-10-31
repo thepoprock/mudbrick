@@ -112,9 +112,13 @@ export function worldFromSave(save: SaveFile, rules: Rules): World {
       inDisorder: c.civilDisorder,
       celebrating: c.weLoveTheKingDay,
       ...(typeof c.founder === 'number' ? { previousOwner: c.founder } : {}),
-      tradeRoutes: c.routePartners
-        .slice(0, c.activeTradeRoutes)
-        .map((partner, i) => ({ partner, food: (c.routeCommodities[i] ?? 0) >= 0x80 })),
+      tradeRoutes: c.routePartners.slice(0, c.activeTradeRoutes).map((partner, i) => {
+        const raw = c.routeCommodities[i] ?? 0;
+        return { partner, food: raw >= 0x80, commodity: raw >= 0x80 ? -1 : raw };
+      }),
+      supplied: Int8Array.from(c.commoditiesSupplied.map((v) => (v >= 0x80 ? v - 256 : v))),
+      demanded: Int8Array.from(c.commoditiesDemanded.map((v) => (v >= 0x80 ? v - 256 : v))),
+      lastTrade: c.netTrade,
     });
   }
 

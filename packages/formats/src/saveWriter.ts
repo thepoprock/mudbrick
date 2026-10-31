@@ -61,6 +61,11 @@ export interface CityWrite {
   production: { kind: 'unit' | 'improvement'; index: number };
   civilDisorder: boolean;
   weLoveTheKingDay: boolean;
+  /** Routes (up to three): partner city id and commodity (−1 food). */
+  routes?: { partner: number; commodity: number }[];
+  /** Three signed commodity bytes each (+59, +62). */
+  supplied?: number[];
+  demanded?: number[];
   /** Display figures the original keeps in the record; optional. */
   totals?: {
     science: number;
@@ -372,6 +377,16 @@ export function writeSave(original: Uint8Array, save: SaveFile, patch: SavePatch
     w.u16(b + 2, c.y);
     w.bit(b + 4, 0, c.civilDisorder);
     w.bit(b + 4, 1, c.weLoveTheKingDay);
+    if (c.routes) {
+      w.u8(b + 58, Math.min(3, c.routes.length));
+      for (let i = 0; i < 3; i++) {
+        const r = c.routes[i];
+        w.u8(b + 65 + i, r ? (r.commodity < 0 ? 0xff : r.commodity & 0xff) : 0);
+        w.u16(b + 68 + 2 * i, r ? r.partner : 0);
+      }
+    }
+    if (c.supplied) for (let i = 0; i < 3; i++) w.u8(b + 59 + i, (c.supplied[i] ?? -1) & 0xff);
+    if (c.demanded) for (let i = 0; i < 3; i++) w.u8(b + 62 + i, (c.demanded[i] ?? -1) & 0xff);
     w.u8(b + 8, c.owner);
     w.u8(b + 9, c.size);
     w.u8(b + 10, c.founder);

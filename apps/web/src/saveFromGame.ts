@@ -86,6 +86,12 @@ export function saveFromGame(original: Uint8Array, parsed: SaveFile, game: Game)
       production: c.production,
       civilDisorder: c.inDisorder,
       weLoveTheKingDay: c.celebrating,
+      routes: c.tradeRoutes.map((r) => ({
+        partner: cityIndex.get(r.partner) ?? r.partner,
+        commodity: r.commodity ?? (r.food ? -1 : 0),
+      })),
+      ...(c.supplied ? { supplied: Array.from(c.supplied) } : {}),
+      ...(c.demanded ? { demanded: Array.from(c.demanded) } : {}),
     };
   });
 

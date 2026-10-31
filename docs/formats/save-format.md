@@ -167,41 +167,41 @@ VERIFIED; the rest INFERRED.
 
 ### City record (84 bytes; v44 appends 4 unknown bytes)
 
-| +   | size    | field                                                                                                                                          |
-| --- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0   | u16     | x                                                                                                                                              |
-| 2   | u16     | y                                                                                                                                              |
-| 4   | 1       | bits: 0 civil disorder, 1 "we love the king" day, 2 improvement sold this turn, 3 stolen tech, 4 auto-build military rule, 7 can build coastal |
-| 5   | 1       | bit 3: can build hydro                                                                                                                         |
-| 6   | 1       | bit 5: can build ships                                                                                                                         |
-| 7   | 1       | bits: 0 auto-build military advisor, 1 auto-build domestic advisor, 2 objective ×1, 4 objective ×3                                             |
-| 8   | 1       | owner slot                                                                                                                                     |
-| 9   | 1       | size                                                                                                                                           |
-| 10  | 1       | owner before the last capture (the founder until then); the executable compares it with a captor to detect a liberation — VERIFIED             |
-| 11  | 1       | turn of the last capture (the executable stores the turn number; every 64 turns a held city becomes 'originally' its holder's) — VERIFIED      |
-| 12  | 1       | known to slot n (bits)                                                                                                                         |
-| 13  | 8       | last size shown to slot n                                                                                                                      |
-| 22  | 4       | specialists: 16 × 2 bits (0 none, 1 entertainer, 2 tax collector, 3 scientist)                                                                 |
-| 26  | u16     | food in storage                                                                                                                                |
-| 28  | u16     | shields toward current production                                                                                                              |
-| 30  | u16     | net trade                                                                                                                                      |
-| 32  | 16      | name                                                                                                                                           |
-| 48  | 3       | worked squares, one bit per square of the 21-square radius, MSB first                                                                          |
-| 51  | 1       | specialists × 4                                                                                                                                |
-| 52  | 5       | improvements: bit per RULES @IMPROVE index 1–34 (Palace … last buildable), bit 0 unused                                                        |
-| 57  | i8      | production: 0–61 = unit type; negative = improvement, −k = @IMPROVE index k                                                                    |
-| 58  | 1       | active trade routes                                                                                                                            |
-| 59  | 3       | commodities supplied                                                                                                                           |
-| 62  | 3       | commodities demanded                                                                                                                           |
-| 65  | 3       | commodity carried on each route                                                                                                                |
-| 68  | 3 × u16 | trade-route partner city id                                                                                                                    |
-| 74  | u16     | science output                                                                                                                                 |
-| 76  | u16     | tax output                                                                                                                                     |
-| 78  | u16     | trade icons                                                                                                                                    |
-| 80  | 1       | food production                                                                                                                                |
-| 81  | 1       | shield production                                                                                                                              |
-| 82  | 1       | happy citizens                                                                                                                                 |
-| 83  | 1       | unhappy citizens                                                                                                                               |
+| +   | size    | field                                                                                                                                                                        |
+| --- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0   | u16     | x                                                                                                                                                                            |
+| 2   | u16     | y                                                                                                                                                                            |
+| 4   | 1       | bits: 0 civil disorder, 1 "we love the king" day, 2 improvement sold this turn, 3 stolen tech, 4 auto-build military rule, 7 can build coastal                               |
+| 5   | 1       | bit 3: can build hydro                                                                                                                                                       |
+| 6   | 1       | bit 5: can build ships                                                                                                                                                       |
+| 7   | 1       | bits: 0 auto-build military advisor, 1 auto-build domestic advisor, 2 objective ×1, 4 objective ×3                                                                           |
+| 8   | 1       | owner slot                                                                                                                                                                   |
+| 9   | 1       | size                                                                                                                                                                         |
+| 10  | 1       | owner before the last capture (the founder until then); the executable compares it with a captor to detect a liberation — VERIFIED                                           |
+| 11  | 1       | turn of the last capture (the executable stores the turn number; every 64 turns a held city becomes 'originally' its holder's) — VERIFIED                                    |
+| 12  | 1       | known to slot n (bits)                                                                                                                                                       |
+| 13  | 8       | last size shown to slot n                                                                                                                                                    |
+| 22  | 4       | specialists: 16 × 2 bits (0 none, 1 entertainer, 2 tax collector, 3 scientist)                                                                                               |
+| 26  | u16     | food in storage                                                                                                                                                              |
+| 28  | u16     | shields toward current production                                                                                                                                            |
+| 30  | u16     | net trade                                                                                                                                                                    |
+| 32  | 16      | name                                                                                                                                                                         |
+| 48  | 3       | worked squares, one bit per square of the 21-square radius, MSB first                                                                                                        |
+| 51  | 1       | specialists × 4                                                                                                                                                              |
+| 52  | 5       | improvements: bit per RULES @IMPROVE index 1–34 (Palace … last buildable), bit 0 unused                                                                                      |
+| 57  | i8      | production: 0–61 = unit type; negative = improvement, −k = @IMPROVE index k                                                                                                  |
+| 58  | 1       | active trade routes (0–3) — VERIFIED                                                                                                                                         |
+| 59  | 3       | commodities supplied                                                                                                                                                         |
+| 62  | 3       | commodities demanded                                                                                                                                                         |
+| 65  | 3       | commodity carried on each route, 0xFF a food route — VERIFIED                                                                                                                |
+| 68  | 3 × u16 | trade-route partner city id — VERIFIED (rules-trade.md; the supplied list at +59 and demanded list at +62 are signed bytes, negative = in use by a route or a homed caravan) |
+| 74  | u16     | science output                                                                                                                                                               |
+| 76  | u16     | tax output                                                                                                                                                                   |
+| 78  | u16     | trade icons                                                                                                                                                                  |
+| 80  | 1       | food production                                                                                                                                                              |
+| 81  | 1       | shield production                                                                                                                                                            |
+| 82  | 1       | happy citizens                                                                                                                                                               |
+| 83  | 1       | unhappy citizens                                                                                                                                                             |
 
 Names, coordinates and owner < 8 are VERIFIED across all 42 files; the rest INFERRED. Values a strict reader must tolerate, all VERIFIED in shipped fan scenarios: an empty city name (Santa), sizes of 59 and 127 set in the editor (Atolon, Zeus), and a food-storage word that has wrapped past 65000 (Atolon, a barbarian city). Treat size as a plain byte and food as u16 as stored.
 

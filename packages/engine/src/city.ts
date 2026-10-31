@@ -170,7 +170,13 @@ export function rawYields(world: World, rules: EngineRules, city: City, ctx: Cit
     y.shields += squareYield(world, rules, city, i, SHIELDS, ctx);
     y.trade += squareYield(world, rules, city, i, TRADE, ctx);
   }
-  for (const r of city.tradeRoutes) if (r.food) y.food -= 1;
+  for (const r of city.tradeRoutes) if ((r.commodity ?? (r.food ? -1 : 0)) < 0) y.food -= 1;
+  // Food routes from other cities feed this one (0x004b6d9c).
+  for (const c of world.cities) {
+    if (c === city) continue;
+    for (const r of c.tradeRoutes)
+      if (r.partner === city.id && (r.commodity ?? (r.food ? -1 : 0)) < 0) y.food += 1;
+  }
   return y;
 }
 

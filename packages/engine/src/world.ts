@@ -158,7 +158,14 @@ export interface City {
   capturedTurn?: number;
   celebrating: boolean;
   /** Owners of outgoing trade routes' partner cities and whether each carries food. */
-  tradeRoutes: { partner: number; food: boolean }[];
+  /** Up to three routes: the partner city id and the commodity (−1 = food). */
+  tradeRoutes: { partner: number; food: boolean; commodity?: number }[];
+  /** Commodities offered, three signed bytes; negative = carried by a route (city record +59). */
+  supplied?: Int8Array;
+  /** Commodities wanted, three signed bytes; negative = already received (city record +62). */
+  demanded?: Int8Array;
+  /** Trade after corruption and before routes, from the last city turn (city record +30). */
+  lastTrade?: number;
   /** AI: a wanted settler stands within four squares (city flag 0x40). */
   workerNearby?: boolean;
 }

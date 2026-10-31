@@ -20,6 +20,7 @@ import {
   tradeSplit,
   unitSupport,
   type CityContext,
+  corruption,
 } from './city.js';
 import {
   applyCityMood,
@@ -44,6 +45,7 @@ import { cityPollution, meltdownRoll, pollutionRoll, type PollutionEvent } from 
 import { aiChooseProduction } from './aiBuild.js';
 import { runStrategy, type StrategyEvent } from './aiStrategy.js';
 import { gameYear } from './calendar.js';
+import { routeIncomeTotal, type TradeContext } from './trade.js';
 import {
   barbarianMoves,
   spawnBarbarians,
@@ -51,6 +53,7 @@ import {
   type BarbarianEvent,
 } from './barbarians.js';
 import {
+  attitude,
   atPeace as treatyAtPeace,
   atWar as treatyAtWar,
   canAttack as treatyCanAttack,
@@ -157,6 +160,26 @@ export class Game {
 
   /** The human's answer to a computer proposal; unset accepts peace and declines alliances. */
   humanAccepts?: (kind: 'peace' | 'alliance', human: number, other: number) => boolean;
+
+  tradeContext(): TradeContext {
+    return {
+      turn: this.state.turn,
+      knows: (s, a) => this.knows(s, a),
+      researchCost: (s) => {
+        const c = this.world.civs.find((x) => x.slot === s);
+        return c ? this.researchCostFor(c) : 100;
+      },
+      foodBoxRows: (s) => {
+        const c = this.world.civs.find((x) => x.slot === s);
+        return boxRows(
+          this.rules,
+          { isHuman: c?.isHuman ?? true, difficulty: this.state.difficulty },
+          false,
+        );
+      },
+      nextInt: (n) => this.rng.nextInt(n),
+    };
+  }
 
   diplomacyContext(): DiplomacyContext {
     const humans = this.world.civs.filter((c) => c.isHuman).map((c) => c.slot);
@@ -311,7 +334,12 @@ export class Game {
       const raw = rawYields(this.world, this.rules, city, ctx);
       const support = unitSupport(this.world, this.rules, city, ctx, homed());
       const shields = shieldTotals(this.rules, city, ctx, raw.shields, support.shields);
-      const trade = tradeSplit(this.rules, city, ctx, raw.trade);
+      // Trade routes (0x004b6359): the net trade before routes is the city's term and is kept
+      // for its partners; the route income joins the trade before the split.
+      const ownNet = raw.trade - corruption(this.rules, city, ctx, raw.trade, false);
+      city.lastTrade = ownNet;
+      const routes = routeIncomeTotal(this.world, this.rules, city, ownNet);
+      const trade = tradeSplit(this.rules, city, ctx, raw.trade + routes);
       const m = mood(this.rules, city, ctx, {
         luxuries: trade.luxuries,
         militaryInCity: support.inCity,
@@ -585,6 +613,8 @@ export class Game {
         nextCityName: () => `${civ.adjective} City ${++names}`,
         guerillaWarfareDiscovered: (this.state.firstDiscoveredBy[34] ?? 0) !== 0,
         ...(civ.strategy ? { strategy: civ.strategy } : {}),
+        trade: this.tradeContext(),
+        attitude: (other) => attitude(this.world, slot, other),
         nuclearPower: this.knows(slot, ADVANCE.nuclearPower),
         magellans: this.ownsWonder(slot, IMPROVEMENT.magellans),
         lighthouse: this.ownsWonder(slot, IMPROVEMENT.lighthouse),

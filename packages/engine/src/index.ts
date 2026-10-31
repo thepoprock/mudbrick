@@ -5,6 +5,7 @@ export * from './movement.js';
 export * from './pathfinding.js';
 export * from './combat.js';
 export * from './terrainSpecials.js';
+export * from './trade.js';
 export * from './defender.js';
 export * from './city.js';
 export * from './production.js';
