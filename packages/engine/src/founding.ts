@@ -4,6 +4,7 @@
  * Specification: docs/engine/rules-units.md, "Founding and joining a city" — VERIFIED against the
  * original's found-city (0x005352e6), settle (0x00497dbe) and create-city (0x0042e8ff) routines.
  */
+import { claimCitySite } from './fertility.js';
 import { advanceIndex, IMPROVEMENT, type EngineRules } from './rules.js';
 import { ROLE_SETTLERS } from './terraform.js';
 import {
@@ -116,13 +117,7 @@ export function foundCity(
     world.setFlag(x, y, f, false);
   }
   world.cities.push(city);
-  // Territory (map byte 2) and sight: the radius squares not yet claimed become the founder's.
-  for (let i = 0; i < 21; i++) {
-    const q = world.radiusSquare(city.position.x, city.position.y, i);
-    if (!q) continue;
-    const k = world.index(q.x, q.y);
-    if ((world.territory[k] ?? 0) === 0) world.territory[k] = city.owner;
-  }
+  claimCitySite(world, city); // VERIFIED: 45-square demotion, 21-square territory
   world.revealRadius(city.position.x, city.position.y, city.owner);
   world.units.splice(world.units.indexOf(unit), 1);
   return city;

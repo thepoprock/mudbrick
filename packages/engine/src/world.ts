@@ -193,6 +193,8 @@ export class World {
   readonly seen: Uint8Array;
   /** Per square: civilization slot whose city radius claims it, 0 none (map byte 2). */
   readonly territory: Uint8Array;
+  /** Per square: fertility rating 0 or 8–15 (map byte 5, low nibble; fertility.ts). */
+  readonly fertility: Uint8Array;
   readonly civs: Civ[] = [];
   readonly cities: City[] = [];
   readonly units: Unit[] = [];
@@ -209,6 +211,7 @@ export class World {
     this.landmass = new Uint8Array(area);
     this.seen = new Uint8Array(area);
     this.territory = new Uint8Array(area);
+    this.fertility = new Uint8Array(area);
   }
 
   /** Has civilization `slot` seen square (x, y)? Map byte 4 bit n (VERIFIED). */

@@ -101,24 +101,27 @@ target) × distance / 24`, halved for own cities, scaled by `(200 − attitude) 
   ones, halved when a route to it already exists, times `(5 − routes of the target) / 5`, and
   divided by three (halved again for a human) when a foreign city of a different owner is
   nearer. Without a candidate they go home, or to any own city on the land mass.
-- **Settlers (role 5, and the "transform" role 21)** use the land value of the square
-  (0x00559162: the territory owner when claimed — such squares are never sites — else `max(8,
-fertility nibble)`, 0 when the nibble is 0). Within a city's radius the value is capped at 8
-  when the city is on the same land mass and nearer than 4. A settler founds when the value is
-  above 7, the square is not in a zone of control and either `value ≥ 15 − distance to the
-nearest city`, the land mass has no own city yet, or the settler has waited more than four turns
-  (unit byte 14 counts the waits). Otherwise it steps to the best adjacent square by land value,
-  and a combat unit next to a village steps onto it. The very first settler founds at its start
-  position on turn 1. When a non-settler finds a square worth more than 7 nearby, it adds a
-  "settle" objective there. At Prince and above a settler that finds a square of value above 8 and
-  `≥ 14 − distance` next to a stronger human's city also founds at once.
+- **Settlers (role 5, and the "transform" role 21)** use the land value (0x00559162: the
+  territory owner when a city radius claims the square — never a site — else the fertility
+  rating raised to at least 8, else 0; docs/formats/map-format.md explains the rating and how
+  founding a city takes 8 off the 45 squares around it). The value here is capped at 8 within
+  three squares of a city on the same land mass, then compared with the 20 squares around (same
+  land mass, not ocean); a strictly better square becomes the candidate. When the best is above
+  7 and the settler is not in a foreign zone of control, it acts if `best ≥ 15 − distance to the
+nearest city`, or the best is here and the land mass has no own city yet, or the best is here
+  and the settler has waited more than four turns (unit byte 14 counts): found when the best is
+  here, else step toward it (a go-to for the outer squares). The very first settler founds at
+  its start position on turn 1. A combat unit that finds a better square nearby adds a "settle"
+  objective there, and a combat unit next to a village steps onto it. At Prince and above a
+  settler next to a stronger human's city with a square of value above 8 and `≥ 14 − distance`
+  founds at once.
 - **Paratroopers** (flag bit 0 of byte 5) in a city with full moves drop next to an enemy city of
   a civilization we are at war with and within the paradrop range (cosmic byte 0x13): the city
   square itself scores 500, a fortress +50, defensive terrain ×3, plus distance; the drop is
   refused when an own unit already stands there.
-- **Defenders in a city.** The city wants `size / (3 if in a zone of control else 4) + 1`
-  defenders, +1 under plan 5 without a Palace, −1 with one; a capital wants at least 1, 2 (size
-  above 3), 3 (eight or more cities) or 4 (twelve or more). The best defender (0x0052b823) stays
+- **Defenders in a city.** The city wants `size / d + 1` defenders where `d` is 3 in a foreign
+  zone of control, else 4, +1 under plan 5 without a Palace and −1 with one; a capital wants at
+  least 1, 2 (size above 3), 3 (eight or more cities) or 4 (twelve or more). The best defender (0x0052b823) stays
   fortified; when the city holds more than it wants, a surplus unit whose index matches
   `(turn + index) & 7 == 0` is released; a lone defender in a city with a weaker neighbour adds a
   "defend" objective (type 5, priority 1).
@@ -213,14 +216,21 @@ square · 0x00556aea units of a role in a stack · 0x005567e1 stack totals (mode
 defence, 2 count, 3 attack, 4 homed defenders, 5 sea units, 6 free cargo room, 7 ranged aircraft,
 8–10 flag counts).
 
-## What the engine does instead (INFERRED)
+## What the engine does
 
-`packages/engine/src/aiUnits.ts` is an interim controller, labelled INFERRED throughout: settlers
-found cities on scored sites (land in the radius, rivers, grassland or plains, no city within two
-squares) or irrigate, mine and build roads near their cities; defenders fortify where a city has
-fewer than `size / 4 + 1` (+1 in the capital) and walk to cities that lack them; attackers strike
-adjacent enemies at odds of 1.3 or better, advance on enemy cities within ten squares on their land
-mass, and otherwise garrison; caravans deliver their cost in shields to a city building a wonder;
-ships and aircraft stay put. Barbarians are everyone's enemy; other wars come from an explicit list
-until diplomacy is read. The objective and plan machinery above is what should replace this, now that the move
-chooser has been read; the barbarian, air and nuclear choosers remain to be read.
+`packages/engine/src/aiUnits.ts` ports the direction choice above for ground units: the random
+base, terrain and stacking terms, the turning penalty, the treaty avoidance (with the engine's
+war-by-default stand-in for treaties), the undefended-city and village bonuses, the exploration
+terms over a per-civilization "seen" mask (map byte 4, kept by the world and revealed with a
+sight radius of one around units and the city radius around cities — INFERRED radii), the
+attack gate and the fatigue rule. Settlers follow the verified site rule over the fertility
+rating and territory (`fertility.ts`, exact against the shipped fresh game), and the defender
+quota is the verified formula. Stand-ins marked INFERRED in the code: the combat evaluator
+(eight times the strength ratio replaces 0x0052d472), continent plan 5 for the quota, the
+go-to toward an outer site square as greedy steps. Still interim: settlers with nothing to found
+improve squares near their cities or explore; caravans deliver their cost to a wonder in
+progress; surplus defenders walk to a city short of its quota in place of "defend" objectives;
+ships and aircraft hold. Barbarians are everyone's enemy; every other pair of civilizations is
+at war unless listed in the game state's peace list, the original's state before contact. The
+objective and plan machinery, the barbarian, air and nuclear choosers and the combat evaluator
+remain to be read and ported.

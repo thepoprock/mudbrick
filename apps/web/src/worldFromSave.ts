@@ -29,7 +29,8 @@ export function worldFromSave(save: SaveFile, rules: Rules): World {
     world.terrain[i] = s.terrain;
     world.landmass[i] = s.landmassId;
     world.seen[i] = s.visibilityMask;
-    world.territory[i] = s.cityRadiusOwnerRaw;
+    world.territory[i] = s.cityRadiusOwnerRaw >> 5;
+    world.fertility[i] = s.fertility;
     let f = 0;
     if (s.river) f |= SquareFlag.River;
     if (s.road) f |= SquareFlag.Road;

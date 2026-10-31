@@ -11,8 +11,16 @@ import { resolveAttack } from './attack.js';
 import { distance } from './city.js';
 import { attackStrength, defenceStrength, hitPoints, maxHitPoints } from './combat.js';
 import { chooseDefender } from './defender.js';
+import { landValue } from './fertility.js';
 import { canFoundCity, foundCity } from './founding.js';
-import { checkMove, movesLeft, THIRDS, tryMove, type MovementContext } from './movement.js';
+import {
+  checkMove,
+  inEnemyZoc,
+  movesLeft,
+  THIRDS,
+  tryMove,
+  type MovementContext,
+} from './movement.js';
 import { fortify, sentry } from './orders.js';
 import type { Rng } from './rng.js';
 import { DOMAIN_AIR, DOMAIN_GROUND, IMPROVEMENT, type EngineRules } from './rules.js';
@@ -450,27 +458,6 @@ function stepToward(
   return r.kind === 'moved';
 }
 
-/** Score a city site (INFERRED stand-in for the fertility rating). */
-function siteScore(world: World, p: Point): number {
-  if (world.terrainAt(p.x, p.y) === OCEAN) return -1;
-  for (const c of world.cities) if (distance(world, c.position, p) < 3) return -1;
-  let land = 0;
-  let water = 0;
-  for (let i = 0; i < 21; i++) {
-    const q = world.radiusSquare(p.x, p.y, i);
-    if (!q) continue;
-    if (world.terrainAt(q.x, q.y) === OCEAN) water += 1;
-    else land += 1;
-  }
-  if (land < 12) return -1;
-  let score = land + Math.min(water, 6);
-  if (world.hasFlag(p.x, p.y, SquareFlag.River)) score += 3;
-  const t = world.terrainAt(p.x, p.y);
-  if (t === 1 || t === 2) score += 4; // plains, grassland
-  if (t === 4) score += 2; // hills
-  return score;
-}
-
 /** Carry out the chosen step or attack. Returns false when the unit should stop for this turn. */
 function act(
   world: World,
@@ -599,18 +586,63 @@ function settlersAct(
   events: AiUnitEvent[],
 ): boolean {
   const here = unit.position;
-  const verdict = canFoundCity(world, rules, unit);
-  const ownCities = world.cities.filter((c) => c.owner === unit.owner).length;
-  // INFERRED site test; the original uses the fertility rating (docs/engine/ai-units.md).
-  if (verdict.ok && verdict.joins === null && (ownCities === 0 || siteScore(world, here) >= 20)) {
-    const city = foundCity(world, rules, ctx.civ, unit, { name: ctx.nextCityName() });
-    events.push({ kind: 'ai-unit', text: `founds ${city.name}` });
-    return false;
+  const me = unit.owner;
+  const landmass = world.landmass[world.index(here.x, here.y)];
+  const nearestAny = nearestCity(world, here, () => true);
+  const nearestDist = nearestAny ? distance(world, here, nearestAny.position) : 99;
+  const ownCitiesHere = world.cities.some(
+    (c) => c.owner === me && world.landmass[world.index(c.position.x, c.position.y)] === landmass,
+  );
+  // VERIFIED site rule (docs/engine/ai-units.md, "Settlers"): the land value here, capped at 8
+  // within three squares of a city on the same land mass, against the best of the 20 squares
+  // around; found when the best is here and far enough from the nearest city, or when the land
+  // mass has no own city yet, or after waiting more than four turns (unit byte 14).
+  let best = world.terrainAt(here.x, here.y) === OCEAN ? 0 : landValue(world, here.x, here.y);
+  if (
+    nearestAny &&
+    nearestDist < 4 &&
+    best > 7 &&
+    world.landmass[world.index(nearestAny.position.x, nearestAny.position.y)] === landmass
+  )
+    best = 8;
+  if (best !== 0) {
+    let bestIndex = -1;
+    for (let i = 0; i < 20; i++) {
+      const q = world.radiusSquare(here.x, here.y, i);
+      if (!q || world.terrainAt(q.x, q.y) === OCEAN) continue;
+      if (world.landmass[world.index(q.x, q.y)] !== landmass) continue;
+      const v = landValue(world, q.x, q.y);
+      if (v > best) {
+        best = v;
+        bestIndex = i;
+      }
+    }
+    if (best > 7 && !inEnemyZoc(world, here.x, here.y, me)) {
+      const ready =
+        best >= 15 - nearestDist ||
+        (bestIndex < 0 && !ownCitiesHere) ||
+        (bestIndex < 0 && ++unit.gotoSteps > 4);
+      if (ready) {
+        if (bestIndex < 0) {
+          const verdict = canFoundCity(world, rules, unit);
+          if (verdict.ok && verdict.joins === null) {
+            const city = foundCity(world, rules, ctx.civ, unit, { name: ctx.nextCityName() });
+            events.push({ kind: 'ai-unit', text: `founds ${city.name}` });
+            return false;
+          }
+        } else {
+          const target = world.radiusSquare(here.x, here.y, bestIndex);
+          if (target) return stepToward(world, rules, unit, target, ctx);
+        }
+      }
+    }
   }
+  // INFERRED interim duties: improve squares near own cities, else explore.
+  const ownCities = ctx.cityCount(me);
   const near = nearestCity(
     world,
     here,
-    (c) => c.owner === unit.owner && distance(world, here, c.position) <= 2,
+    (c) => c.owner === me && distance(world, here, c.position) <= 2,
   );
   if (near && !world.cityAt(here.x, here.y) && ownCities >= 2) {
     for (const order of [ORDER.irrigation, ORDER.mine, ORDER.road]) {
@@ -621,26 +653,6 @@ function settlersAct(
       }
     }
   }
-  let best: Point | null = null;
-  let bestScore = ownCities === 0 ? 0 : 19;
-  for (let dy = -8; dy <= 8; dy++) {
-    for (let dx = -8; dx <= 8; dx++) {
-      if (((here.x + dx + here.y + dy) & 1) !== 0) continue;
-      const y = here.y + dy;
-      if (y < 0 || y >= world.rows) continue;
-      const x = world.wrapX(here.x + dx, y);
-      if (x === null) continue;
-      if (world.landmass[world.index(x, y)] !== world.landmass[world.index(here.x, here.y)])
-        continue;
-      const s = siteScore(world, { x, y }) - Math.trunc(distance(world, here, { x, y }) / 2);
-      if (s > bestScore) {
-        bestScore = s;
-        best = { x, y };
-      }
-    }
-  }
-  if (best) return stepToward(world, rules, unit, best, ctx);
-  // No site in reach: explore with the verified direction choice.
   const c = chooseDirection(world, rules, unit, ctx);
   if (!c || c.attack) {
     sentry(unit);

@@ -5,6 +5,7 @@ import {
   wantedDefenders,
   type AiUnitContext,
 } from '../src/aiUnits.js';
+import { computeFertility } from '../src/fertility.js';
 import { Rng } from '../src/rng.js';
 import { GOVERNMENT, IMPROVEMENT, type EngineRules } from '../src/rules.js';
 import { ORDER } from '../src/terraform.js';
@@ -164,6 +165,7 @@ function world(): World {
   const w = new World({ columns: 30, rows: 40, flatEarth: true });
   w.terrain.fill(2);
   w.landmass.fill(1);
+  computeFertility(w, rules);
   return w;
 }
 function ctx(

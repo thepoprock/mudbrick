@@ -41,8 +41,10 @@ export function saveFromGame(original: Uint8Array, parsed: SaveFile, game: Game)
     if (has(SquareFlag.Fortress) || has(SquareFlag.Airbase)) b1 |= 1 << 6;
     if (has(SquareFlag.Pollution)) b1 |= 1 << 7;
     squares[o + 1] = b1;
-    squares[o + 2] = world.territory[i] ?? 0;
+    squares[o + 2] = ((squares[o + 2] ?? 0) & 0x1f) | (((world.territory[i] ?? 0) & 7) << 5);
     squares[o + 4] = world.seen[i] ?? 0;
+    const standing = world.cityAt(p.x, p.y)?.owner ?? world.unitsAt(p.x, p.y)[0]?.owner ?? 15;
+    squares[o + 5] = ((standing & 0x0f) << 4) | ((world.fertility[i] ?? 0) & 0x0f);
   }
 
   const units: UnitWrite[] = world.units.map((u) => ({

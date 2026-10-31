@@ -7,6 +7,7 @@
  * commodity, ghost-town confirmation) are taken from `ProductionChoices`.
  */
 import { boxRows } from './city.js';
+import { releaseCitySite } from './fertility.js';
 import type { Rng } from './rng.js';
 import {
   advanceIndex,
@@ -255,6 +256,7 @@ export function processProduction(
     city.size -= 1;
     if (city.size < 1) {
       world.cities.splice(world.cities.indexOf(city), 1);
+      releaseCitySite(world, city);
       events.push({ kind: 'ghost-town', unit });
       return events;
     }

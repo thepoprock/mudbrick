@@ -16,6 +16,7 @@ import {
   type CombatResult,
 } from './combat.js';
 import { chooseDefender } from './defender.js';
+import { releaseCitySite } from './fertility.js';
 import type { Rng } from './rng.js';
 import { DOMAIN_GROUND, IMPROVEMENT, type EngineRules } from './rules.js';
 import {
@@ -137,6 +138,7 @@ export function resolveAttack(
         cityShrunk = city;
         if (city.size <= 0) {
           world.cities.splice(world.cities.indexOf(city), 1);
+          releaseCitySite(world, city);
           cityDestroyed = true;
         }
       }

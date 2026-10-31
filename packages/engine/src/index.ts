@@ -22,3 +22,4 @@ export * from './conquest.js';
 export * from './pollution.js';
 export * from './aiBuild.js';
 export * from './aiUnits.js';
+export * from './fertility.js';

@@ -42,6 +42,7 @@ import { beginUnitsTurn, type UnitTurnEvent } from './turnStart.js';
 import { cityPollution, meltdownRoll, pollutionRoll, type PollutionEvent } from './pollution.js';
 import { aiChooseProduction } from './aiBuild.js';
 import { aiMoveUnits, type AiUnitEvent } from './aiUnits.js';
+import { releaseCitySite } from './fertility.js';
 import { inEnemyZoc } from './movement.js';
 import { payUpkeep, type UpkeepEvent } from './upkeep.js';
 import { CITY_CENTRE_INDEX, type City, type Civ, type World } from './world.js';
@@ -233,6 +234,7 @@ export class Game {
     if (growth.starved) push({ kind: 'starved' });
     if (growth.destroyed) {
       this.world.cities.splice(this.world.cities.indexOf(city), 1);
+      releaseCitySite(this.world, city);
       push({ kind: 'destroyed' });
       return out;
     }

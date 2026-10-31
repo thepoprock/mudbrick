@@ -5,6 +5,7 @@
  * capture routine (0x00528720), its plunder formula (0x00526efb) and its conquest-advance routine
  * (0x005273ba). Diplomacy side effects (attitudes, civil war, the Palace escape) are not modelled.
  */
+import { releaseCitySite, remarkTerritory } from './fertility.js';
 import { initialProduction, canBuildUnit } from './founding.js';
 import { grantAdvance } from './research.js';
 import type { Rng } from './rng.js';
@@ -121,6 +122,7 @@ export function captureCity(
     lostCitizen = true;
     if (city.size <= 0) {
       world.cities.splice(world.cities.indexOf(city), 1);
+      releaseCitySite(world, city);
       cityDestroyed = true;
     }
   }
@@ -134,6 +136,7 @@ export function captureCity(
     city.previousOwner = loser.slot;
     city.capturedTurn = ctx.turn;
     city.owner = captor.slot;
+    remarkTerritory(world, city, loser.slot);
     for (const u of [...world.units]) {
       if (u.owner !== loser.slot || u.homeCity !== city.id) continue;
       if (u.type === PARTISANS_TYPE) {
