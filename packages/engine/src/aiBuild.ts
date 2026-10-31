@@ -61,6 +61,10 @@ export interface AiBuildFacts {
   workerNearby?: boolean;
   /** Knows the advance that doubles the attack personality's pull (INFERRED: unused when absent). */
   knowsAttackDoubler?: boolean;
+  /** A caravan is homed here (city flag bit 12), which stops another being built. */
+  cityHasCaravan?: boolean;
+  /** The civilization's caravans on the city's land mass (the strategic tally). */
+  caravansOnContinent?: number;
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -536,7 +540,7 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
   if (totalUnits < 512) {
     for (let t = 0; t < rules.units.length; t++) {
       const u = rules.units[t];
-      if (!u || !buildable(t) || u.role > 5) continue;
+      if (!u || !buildable(t) || (u.role > 5 && u.role !== 7)) continue;
       const onContinent = myUnits.filter(
         (x) => x.type === t && world.landmass[world.index(x.position.x, x.position.y)] === mass,
       ).length;
@@ -559,6 +563,20 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
       let n = building * 2 + onContinent;
       // VERIFIED: with an urgent defence need nothing but a defender is considered.
       if (need === 2 && u.role !== 1) continue;
+      if (u.role === 7) {
+        // VERIFIED caravans (0x00474edb): `10 − (5 − expand) × trade / 10` while the city has
+        // fewer than three routes, +2 per route, at least 2, plus the civilization's caravans on
+        // the land mass; then the non-combat scaling `× 10 × 3 / (civilize + 3)` (×20 under a
+        // military plan), +¼ with Barracks. A city flagged for a caravan builds none.
+        if (f.cityHasCaravan) continue;
+        let v = 10;
+        if (city.tradeRoutes.length < 3) v = 10 - Math.trunc(((5 - f.expand) * f.trade) / 10);
+        v = Math.max(2, v + city.tradeRoutes.length * 2) + (f.caravansOnContinent ?? 0);
+        v = Math.trunc(((f.expanding ? 20 : 10) * v * 3) / (f.civilize + 3));
+        if (city.improvements[IMPROVEMENT.barracks]) v += v >> 2;
+        consider(v, { kind: 'unit', index: t });
+        continue;
+      }
       // VERIFIED: on a full land mass (plan 4) every unit costs `1 − expand` more (twice for
       // non-settlers), halved when an enemy at war has no city there; attackers then shed the
       // attack personality + 1 (doubled with the advance) and clamp to 0–99.

@@ -886,6 +886,10 @@ export class Game {
             warWithoutCitiesHere,
             nearestOwnCityDistance: nearest,
             workerNearby: city.workerNearby === true,
+            cityHasCaravan: this.world.units.some(
+              (u) => u.homeCity === city.id && this.rules.units[u.type]?.role === 7,
+            ),
+            caravansOnContinent: civ.strategy?.caravansOn[lm] ?? 0,
           };
         })(),
         expanding: (() => {
