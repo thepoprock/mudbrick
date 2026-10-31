@@ -297,6 +297,8 @@ export interface AiBuildEnv {
   wonderCity: (improvement: number) => number | null;
   ownsWonder: (improvement: number) => boolean;
   canBuildImprovement: (improvement: number) => boolean;
+  /** Debug hook: every candidate and its score (lower wins). */
+  trace?: (score: number, p: Production) => void;
 }
 
 /** Choose what a computer-controlled city builds next. */
@@ -392,6 +394,7 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
   let best = NEVER * 100;
   let pick: Production | null = null;
   const consider = (n: number, p: Production) => {
+    env.trace?.(n, p);
     if (n < best) {
       best = n;
       pick = p;

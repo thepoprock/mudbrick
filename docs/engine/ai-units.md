@@ -134,6 +134,44 @@ nearest city`, or the best is here and the land mass has no own city yet, or the
   objective there, and a combat unit next to a village steps onto it. At Prince and above a
   settler next to a stronger human's city with a square of value above 8 and `≥ 14 − distance`
   founds at once.
+- **Workers (VERIFIED, the handler's block after the settle rule; `aiTerraform.ts`).** The setup
+  clears a computer settler's "wanted" flag when its nearest own city is more than eight away or
+  on another land mass. Then, for any settler-type unit on a square without a city: alone (no
+  stack, no unit on a neighbour) it adds a defend objective (type 1, priority 2) on its square
+  and consumes work goals there; polluted → clean it; at an isthmus (chokepoint 2, below) with no
+  foreign non-allied unit adjacent or in a stack → fortress; a square holding a work objective
+  counts as wanted (`want = 1`); within two of a city whose size is at least `irrigate turns / 5
+× 3 − 3` for the terrain (or on a special) and improvable (0x00558029: no city, mine or
+  irrigation; irrigation needs water on the square or a corner neighbour, a result terrain and an
+  AI government level 1 … the owner's government; a mine likewise without irrigation) — or on a
+  "full" land mass — counts doubly (`want |= 2`): then irrigate or mine; else a road where
+  something is already built on a river or on desert, plains or grassland, or (road present,
+  Railroad known) a railroad on a special, a mine or two-shield terrain; a chokepoint of either
+  kind → fortress; next to a city, the first of the eight neighbours (from `turn & 7`) without a
+  city, holding no foreign unit or settler, improvable, fitting the size rule, within two → step
+  there; a bare desert, plains or grassland square within two of a city → road. For a wanted
+  worker (role 21) away from any city: home (the home city, or the nearest own city when the home
+  lies on another land mass) when more than four away; a road here when none; the nearest own
+  city when a non-allied foreign unit is adjacent; within two of a city: a mine when the terrain's
+  mine AI level is below its irrigation level, else irrigation (bare squares only), pollution,
+  a railroad (Railroad known), then a go-to to the first radius square of the nearest city that
+  is bare (mine or irrigation by the same priority) or lacks a road (or a railroad once known);
+  farther out only the railroad applies. The engine skips water squares the original would
+  order a go-to onto (INFERRED). Rivers need Bridge Building for roads throughout.
+  **Chokepoint** (Construction known, settler-type or defender, next to no own-only city, no
+  fortress here, not ocean): a neighbour with a lone fortress or a city, four or more ocean
+  neighbours, or a defend objective on a neighbour → none; a road square two or three from the
+  nearest city (own = nearest of anyone) → 1; ocean or lone fortresses two squares away on both
+  north and south (and not both east and west) or both east and west (and not both north and
+  south) → 2. A settler-type unit adds a defend goal (type 1, priority 2) there; another unit a
+  work goal of priority `chokepoint + (distance < 4)`.
+- **Terrain tasks from the city turn (0x004bc284, VERIFIED):** each polluted radius square
+  becomes a work objective of priority 6; else the first missing link toward another city of the
+  owner's on the land mass within 22 squares (then of a civilization at peace or allied): the
+  go-to path is walked up to 50 steps and the first square without a road (rivers need Bridge
+  Building) or, Railroad known, without a railroad, becomes the objective when nobody else claims
+  or stands on it — priority 2 for a road, 5 for a railroad, +1 above size 4, +1 with the
+  Palace, −1 below size 4. The city remembers an open task (flag bit 19).
 - **Paratroopers** (flag bit 0 of byte 5) in a city with full moves drop next to an enemy city of
   a civilization we are at war with and within the paradrop range (cosmic byte 0x13): the city
   square itself scores 500, a fortress +50, defensive terrain ×3, plus distance; the drop is

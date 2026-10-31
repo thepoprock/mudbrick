@@ -29,8 +29,11 @@ export interface TerrainRule {
   /** Irrigate / mine / transform columns: `yes`, `no`, or the terrain the square becomes. */
   irrigate: TerrainChangeRule;
   irrigateTurns: number;
+  /** Minimum government index before the computer irrigates (0 never); the rules' ai_govt column. */
+  irrigateAiGovt?: number;
   mine: TerrainChangeRule;
   mineTurns: number;
+  mineAiGovt?: number;
   transformTo: TerrainChangeRule;
 }
 

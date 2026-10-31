@@ -47,6 +47,7 @@ import { runStrategy, type StrategyEvent } from './aiStrategy.js';
 import { gameYear } from './calendar.js';
 import { routeIncomeTotal, type TradeContext } from './trade.js';
 import { computeSupplyDemand, supplyDemandDue } from './supplyDemand.js';
+import { terraformTasks } from './aiTerraform.js';
 import {
   barbarianMoves,
   spawnBarbarians,
@@ -75,7 +76,7 @@ import { aiMoveUnits, type AiUnitEvent } from './aiUnits.js';
 import { releaseCitySite } from './fertility.js';
 import { inEnemyZoc } from './movement.js';
 import { payUpkeep, type UpkeepEvent } from './upkeep.js';
-import { CITY_CENTRE_INDEX, type City, type Civ, type World } from './world.js';
+import { CITY_CENTRE_INDEX, type City, type Civ, type World, type Production } from './world.js';
 
 export interface GameState {
   turn: number;
@@ -119,6 +120,9 @@ export const AI_SPACE_ADVANCES = [32, 41] as const;
 
 export class Game {
   private nextUnitId: number;
+
+  /** Debug hook: the build advisor's candidates for a city (score, production). */
+  buildTrace?: (city: City, score: number, p: Production) => void;
 
   constructor(
     public readonly world: World,
@@ -324,6 +328,9 @@ export class Game {
         combustionKnown: (this.state.firstDiscoveredBy[14] ?? 0) !== 0,
       });
     }
+    // Terrain work the city asks for (0x004bc284): pollution, then the road or railroad link.
+    if (!civ.isHuman && civ.strategy)
+      terraformTasks(this.world, this.rules, city, civ.strategy, (a) => this.knows(slot, a));
     // 1. Growth and starvation on last turn's stored food.
     const growth = processGrowth(this.rules, city, ctx, settlers());
     if (growth.disbandedSettler) {
@@ -915,6 +922,7 @@ export class Game {
       cityCount,
       wonderCity: (i) => this.wonderCity(i),
       ownsWonder: (i) => this.ownsWonder(city.owner, i),
+      ...(this.buildTrace ? { trace: (n, p) => this.buildTrace?.(city, n, p) } : {}),
       canBuildImprovement: (i) => this.canBuildImprovement(city, i),
     });
   }

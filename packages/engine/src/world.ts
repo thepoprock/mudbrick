@@ -168,6 +168,8 @@ export interface City {
   lastTrade?: number;
   /** The commodity lists must be recomputed at the next city turn (city flag bit 17). */
   recomputeTrade?: boolean;
+  /** AI: the city has a terrain-work objective out (city flag bit 19). */
+  terraformTask?: boolean;
   /** AI: a wanted settler stands within four squares (city flag 0x40). */
   workerNearby?: boolean;
 }

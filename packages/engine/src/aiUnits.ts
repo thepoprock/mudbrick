@@ -27,7 +27,8 @@ import {
 import { fortify, sentry } from './orders.js';
 import type { Rng } from './rng.js';
 import { DOMAIN_AIR, DOMAIN_GROUND, IMPROVEMENT, type EngineRules } from './rules.js';
-import { canOrder, doWork, ORDER } from './terraform.js';
+import { ORDER } from './terraform.js';
+import { workerRules } from './aiTerraform.js';
 import { hutAt } from './terrainSpecials.js';
 import {
   aiCaravanDestination,
@@ -741,6 +742,17 @@ function settlersAct(
   const landmass = world.landmass[world.index(here.x, here.y)];
   const nearestAny = nearestCity(world, here, () => true);
   const nearestDist = nearestAny ? distance(world, here, nearestAny.position) : 99;
+  const nearestOwn = nearestCity(world, here, (c) => c.owner === me);
+  const ownDist = nearestOwn ? distance(world, here, nearestOwn.position) : 99;
+  // VERIFIED (the handler's setup): more than eight squares from the nearest own city, or on
+  // another land mass, a computer settler stops being a "wanted" worker for this move.
+  if (
+    unit.wanted &&
+    (ownDist > 8 ||
+      (nearestOwn &&
+        world.landmass[world.index(nearestOwn.position.x, nearestOwn.position.y)] !== landmass))
+  )
+    unit.wanted = false;
   const ownCitiesHere = world.cities.some(
     (c) => c.owner === me && world.landmass[world.index(c.position.x, c.position.y)] === landmass,
   );
@@ -748,7 +760,10 @@ function settlersAct(
   // within three squares of a city on the same land mass, against the best of the 20 squares
   // around; found when the best is here and far enough from the nearest city, or when the land
   // mass has no own city yet, or after waiting more than four turns (unit byte 14).
-  let best = world.terrainAt(here.x, here.y) === OCEAN ? 0 : landValue(world, here.x, here.y);
+  let best =
+    world.terrainAt(here.x, here.y) === OCEAN || unit.wanted === true
+      ? 0
+      : landValue(world, here.x, here.y);
   if (
     nearestAny &&
     nearestDist < 4 &&
@@ -798,21 +813,29 @@ function settlersAct(
       }
     }
   }
-  // INFERRED interim duties: improve squares near own cities, else explore.
-  const ownCities = ctx.cityCount(me);
-  const near = nearestCity(
+  // VERIFIED worker rules (aiTerraform.ts): pollution, fortresses, irrigation, mines, roads,
+  // railroads here or on a neighbour, and the wanted worker's duties around its home city.
+  const verdict = workerRules(
     world,
-    here,
-    (c) => c.owner === me && distance(world, here, c.position) <= 2,
+    rules,
+    unit,
+    { nearestOwn, ownDist, nearestAny, anyDist: nearestDist },
+    {
+      knows: ctx.knows,
+      turn: ctx.turn,
+      government: ctx.civ.government,
+      ...(ctx.strategy ? { strategy: ctx.strategy } : {}),
+      isHuman: false,
+    },
   );
-  if (near && !world.cityAt(here.x, here.y) && ownCities >= 2) {
-    for (const order of [ORDER.irrigation, ORDER.mine, ORDER.road]) {
-      if (order === ORDER.mine && world.terrainAt(here.x, here.y) !== 4) continue;
-      if (canOrder(world, rules, unit, order, ctx).ok) {
-        doWork(world, rules, unit, order, ctx);
-        return false;
-      }
-    }
+  if (verdict.kind === 'worked') return false;
+  if (verdict.kind === 'goto') {
+    unit.order = ORDER.goTo;
+    unit.gotoTarget = { x: verdict.target.x, y: verdict.target.y };
+    return true;
+  }
+  if (verdict.kind === 'step') {
+    if (stepToward(world, rules, unit, verdict.target, ctx)) return true;
   }
   const c = chooseDirection(world, rules, unit, ctx);
   if (!c || c.attack) {
