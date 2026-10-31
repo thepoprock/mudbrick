@@ -593,6 +593,12 @@ export class Game {
         out.push({ slot, event: e });
       }
     }
+    {
+      // Contacts made by this turn's moves (the original notices them as each unit arrives).
+      const events: DiplomacyEvent[] = [];
+      contactSweep(this.world, slot, this.diplomacyContext(), events);
+      for (const e of events) out.push({ slot, event: e });
+    }
     if (!civ.isHuman) {
       const civilize = this.rules.leaders?.[civ.tribe ?? -1]?.civilize ?? 0;
       const space = [

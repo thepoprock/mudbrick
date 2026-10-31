@@ -45,6 +45,9 @@ import {
   type Point,
   type TurnEvent,
   type Unit,
+  changeGovernment,
+  governmentAllowed,
+  startRevolution,
 } from '@mudbrick/engine';
 import { ADVANCE, IMPROVEMENT } from '@mudbrick/engine';
 import { sprites } from '@mudbrick/formats';
@@ -94,6 +97,10 @@ export interface PlayElements {
 }
 
 export class PlaySession {
+  /** Anarchy has ended and the engine waits for the player's choice. */
+  governmentChoiceDue = false;
+  /** The government chosen when the revolution started, applied when anarchy ends. */
+  wantedGovernment: number | null = null;
   selected: Unit | null = null;
   openCity: City | null = null;
   gotoMode = false;
@@ -589,6 +596,14 @@ export class PlaySession {
       case 'diplomacy':
         return 'text' in e.event ? `${e.event.text}.` : null;
       case 'government':
+        if ('choose' in e.event && e.event.choose && e.slot === this.humanSlot) {
+          if (this.wantedGovernment !== null) {
+            changeGovernment(this.world, this.civ, this.wantedGovernment, true);
+            this.wantedGovernment = null;
+            return `The anarchy ends: ${this.civ.name} become a new government.`;
+          }
+          this.governmentChoiceDue = true;
+        }
         return 'text' in e.event ? `${e.event.text}.` : null;
       case 'barbarians':
         return `Barbarians: ${'text' in e.event ? e.event.text : ''}.`;
@@ -825,6 +840,54 @@ export class PlaySession {
       this.refresh();
     });
     label.append(select);
-    el.replaceChildren(text, label);
+    const govLabel = document.createElement('label');
+    govLabel.textContent = ' Government: ';
+    const govSelect = document.createElement('select');
+    const names = [
+      'Anarchy',
+      'Despotism',
+      'Monarchy',
+      'Communism',
+      'Fundamentalism',
+      'Republic',
+      'Democracy',
+    ];
+    const ownsStatue = this.game.ownsWonder(this.humanSlot, 58);
+    for (let g = 1; g < 7; g++) {
+      const opt = document.createElement('option');
+      opt.value = String(g);
+      opt.textContent = names[g] ?? String(g);
+      opt.disabled = !governmentAllowed(
+        g,
+        (adv) => this.game.knows(this.humanSlot, adv),
+        ownsStatue,
+      );
+      if (g === civ.government) opt.selected = true;
+      govSelect.append(opt);
+    }
+    if (civ.government === 0) {
+      const opt = document.createElement('option');
+      opt.value = '0';
+      opt.textContent = this.governmentChoiceDue ? 'Anarchy (choose now)' : 'Anarchy';
+      opt.selected = true;
+      govSelect.append(opt);
+    }
+    govSelect.addEventListener('change', () => {
+      const g = Number(govSelect.value);
+      if (civ.government === 0 && this.governmentChoiceDue) {
+        changeGovernment(this.world, civ, g, true);
+        this.governmentChoiceDue = false;
+        this.log(`${civ.name} become a ${names[g] ?? 'new government'}.`);
+      } else if (civ.government !== 0 && g !== civ.government) {
+        startRevolution(this.world, civ);
+        this.wantedGovernment = g;
+        this.log(
+          'Revolution! Anarchy until a turn divisible by four (at once with the Statue of Liberty).',
+        );
+      }
+      this.refresh();
+    });
+    govLabel.append(govSelect);
+    el.replaceChildren(text, label, govLabel);
   }
 }
