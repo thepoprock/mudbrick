@@ -8,5 +8,15 @@
     "types": ["node"]
   },
   "include": ["."],
-  "references": [{ "path": "../packages/formats" }]
+  "references": [
+    {
+      "path": "../packages/formats"
+    },
+    {
+      "path": "../packages/engine"
+    },
+    {
+      "path": "../apps/web"
+    }
+  ]
 }

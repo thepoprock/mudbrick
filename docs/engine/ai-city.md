@@ -13,10 +13,11 @@ number is an emergency. At the end the candidate with the lowest number is built
 
 - The city's totals (yields, support, happy and unhappy counts); `borderline` = happy equals
   unhappy; `disorder` = in disorder or flagged for it.
-- The continent's AI plan (per-civilization, per-land-mass byte): plans 0 and 1 mean
-  **expanding**; so does plan 4 when the "no barbarians" option bit is set; a continent where
-  human-held cities of the civilization's own founding exceed `attack personality + 1` also counts
-  as expanding (reconquest).
+- The continent's AI plan (per-civilization, per-land-mass byte, assigned in ai-units.md): plans 0
+  (an enemy there is stronger) and 1 (the civilization is the stronger party) make the land mass
+  **contested**, which favours military builds below; so does plan 4 when the "no barbarians"
+  option bit is set, and a continent where human-held cities of the civilization's own founding
+  exceed `attack personality + 1` (reconquest). The code calls this flag `expanding`.
 - Counts: own cities on the continent with Barracks (+4 if the civilization holds Sun Tzu's),
   Airports, Port Facilities; own cities building the same item; other civilizations building each
   wonder; own units of each type on the continent; total units; settlers without a home; enemy

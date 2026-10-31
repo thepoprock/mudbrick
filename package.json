@@ -24,7 +24,8 @@
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run test",
     "render-map": "vite-node scripts/render-map.ts",
     "screenshot": "vite-node scripts/screenshot.ts",
-    "play-smoke": "vite-node scripts/play-smoke.ts"
+    "play-smoke": "vite-node scripts/play-smoke.ts",
+    "save-roundtrip": "vite-node scripts/save-roundtrip.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",

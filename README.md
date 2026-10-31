@@ -105,7 +105,8 @@ ln -s /path/to/your/copy apps/web/dev-game
 The dev build then shows a "Load dev-game folder" button and an input for a game file, and
 `http://localhost:5173/?game=WWII.SCN` loads both straight away, which is handy for screenshots
 and browser tests. None of this exists in the production build. `npm run play-smoke TUTORIAL.SAV out.png http://localhost:5173 5`
-plays a few turns headless and fails on any browser error.
+plays a few turns headless and fails on any browser error; `npm run save-roundtrip apps/web/dev-game TUTORIAL.SAV 12`
+plays turns with the engine alone, writes the game back as a save and re-parses it.
 
 ## License
 
