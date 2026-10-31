@@ -16,6 +16,7 @@ import { chooseDefender } from './defender.js';
 import { landValue } from './fertility.js';
 import { canFoundCity, foundCity } from './founding.js';
 import {
+  applyMove,
   checkMove,
   inEnemyZoc,
   movesLeft,
@@ -52,8 +53,6 @@ export interface AiUnitContext extends MovementContext {
   wondersOf: (slot: number) => boolean[];
   cityCount: (slot: number) => number;
   nextCityName: () => string;
-  /** Bloodlust option: attack odds double against a defender at a third of its hit points or less. */
-  bloodlust?: boolean;
   /** Scenario flag: computer units do not explore. */
   noExploration?: boolean;
   /** Has anyone discovered Guerilla Warfare (partisans on capture)? */
@@ -357,7 +356,12 @@ export function chooseDirection(
           bonus = 1;
         }
       }
-      if (ctx.bloodlust && hitPoints(rules, defender) * 3 <= maxHitPoints(rules, defender.type)) {
+      // VERIFIED: with simplified combat off (hit points matter) a defender at a third of its
+      // hit points or less doubles the odds.
+      if (
+        ctx.realisticCombat &&
+        hitPoints(rules, defender) * 3 <= maxHitPoints(rules, defender.type)
+      ) {
         odds *= 2;
         bonus = 1;
       }
@@ -502,8 +506,17 @@ function act(
   const r = tryMove(world, rules, ctx.rng, unit, c.to, ctx);
   if (r.kind === 'moved') {
     unit.lastDirection = c.dir;
-    takeCityHere(world, rules, unit, ctx, events);
     return true;
+  }
+  if (r.kind === 'attack') {
+    // The movement rules report any foreign city as an attack; an empty one is simply taken.
+    const city = world.cityAt(c.to.x, c.to.y);
+    if (city && city.owner !== unit.owner && world.unitsAt(c.to.x, c.to.y).length === 0) {
+      applyMove(rules, unit, c.to, THIRDS, ctx);
+      unit.lastDirection = c.dir;
+      takeCityHere(world, rules, unit, ctx, events);
+      return true;
+    }
   }
   return false;
 }

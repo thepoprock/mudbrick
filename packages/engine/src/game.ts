@@ -42,6 +42,13 @@ import { beginUnitsTurn, type UnitTurnEvent } from './turnStart.js';
 import { cityPollution, meltdownRoll, pollutionRoll, type PollutionEvent } from './pollution.js';
 import { aiChooseProduction } from './aiBuild.js';
 import { runStrategy, type StrategyEvent } from './aiStrategy.js';
+import { gameYear } from './calendar.js';
+import {
+  barbarianMoves,
+  spawnBarbarians,
+  type BarbarianContext,
+  type BarbarianEvent,
+} from './barbarians.js';
 import { aiMoveUnits, type AiUnitEvent } from './aiUnits.js';
 import { releaseCitySite } from './fertility.js';
 import { inEnemyZoc } from './movement.js';
@@ -68,8 +75,8 @@ export interface GameState {
   pollutionSquares?: number;
   /** Pairs of slots at peace; every other pair is at war (INFERRED stand-in for the treaty table). */
   peace?: [number, number][];
-  /** The bloodlust option (damaged enemy units draw attacks). */
-  bloodlust?: boolean;
+  /** Header barbarian activity: 0 villages only, 1 roving, 2 restless, 3 raging. */
+  barbarianActivity?: number;
 }
 
 export type GrowthNote =
@@ -82,6 +89,7 @@ export type TurnEvent =
   | { slot: number; event: UnitTurnEvent }
   | { slot: number; event: AiUnitEvent }
   | { slot: number; event: StrategyEvent }
+  | { slot: number; event: BarbarianEvent }
   | { slot: number; event: { kind: 'rates'; science: number; tax: number; luxuries: number } };
 
 /** Advances that end the AI's science: Fusion Power, The Laser, and the spaceship parts' prerequisites. */
@@ -421,7 +429,7 @@ export class Game {
       },
       strategyOf: (s) => this.world.civs.find((c) => c.slot === s)?.strategy,
       mainHuman: humans[0] ?? null,
-      ...(this.state.bloodlust !== undefined ? { bloodlust: this.state.bloodlust } : {}),
+      realisticCombat: this.state.realisticCombat,
     })) {
       out.push({ slot, event: e });
     }
@@ -479,12 +487,62 @@ export class Game {
   /** End the turn: every civilization in play, in slot order (INFERRED), then the counter. */
   endTurn(): TurnEvent[] {
     const out: TurnEvent[] = [];
+    // The turn driver spawns barbarians before the civilizations move (0x00467591, turn ≠ 0).
+    if (this.state.turn !== 0) {
+      for (const e of spawnBarbarians(this.world, this.rules, this.barbarianContext()))
+        out.push({ slot: 0, event: e });
+    }
     for (const civ of this.world.civs) {
       if (civ.slot === 0 || !civ.inPlay) continue;
       civ.treasury = civ.treasury > 30000 ? 30000 : civ.treasury < 0 ? 0 : civ.treasury;
       out.push(...this.processCivilization(civ.slot));
     }
+    out.push(...this.processBarbarians());
     this.state.turn += 1;
+    return out;
+  }
+
+  private barbarianContext(): BarbarianContext {
+    const humans = this.world.civs.filter((c) => c.isHuman).map((c) => c.slot);
+    return {
+      rng: this.rng,
+      turn: this.state.turn,
+      year: gameYear(this.state.turn, this.state.difficulty),
+      difficulty: this.state.difficulty,
+      activity: this.state.barbarianActivity ?? 0,
+      realisticCombat: this.state.realisticCombat,
+      anyoneKnows: (a) => this.world.civs.some((c) => c.slot !== 0 && c.knownAdvances[a] === true),
+      humanKnows: (a) => this.world.civs.some((c) => c.isHuman && c.knownAdvances[a] === true),
+      isHuman: (s) => this.world.civs.find((c) => c.slot === s)?.isHuman ?? false,
+      mainHuman: humans[0] ?? null,
+      cityCount: (s) => this.citiesOf(s).length,
+      wondersOf: (s) => this.wondersOf(s),
+      guerillaWarfareDiscovered: (this.state.firstDiscoveredBy[34] ?? 0) !== 0,
+      ...(this.payRansom ? { payRansom: this.payRansom } : {}),
+      damageSlowsUnits: this.state.realisticCombat,
+    };
+  }
+
+  /** A human's answer to a barbarian ransom demand; unset means refuse (INFERRED default). */
+  payRansom?: (city: City, amount: number) => boolean;
+
+  /** The barbarians' turn: unit upkeep as for anyone, then the barbarian move chooser. */
+  private processBarbarians(): TurnEvent[] {
+    const out: TurnEvent[] = [];
+    const barbarians = this.world.civs.find((c) => c.slot === 0);
+    if (!barbarians) return out;
+    if (!this.world.units.some((u) => u.owner === 0)) return out;
+    for (const e of beginUnitsTurn(this.world, this.rules, this.rng, barbarians, {
+      knows: () => false,
+      nuclearPower: false,
+      magellans: false,
+      lighthouse: false,
+      damageSlowsUnits: this.state.realisticCombat,
+    })) {
+      out.push({ slot: 0, event: e });
+    }
+    for (const e of barbarianMoves(this.world, this.rules, barbarians, this.barbarianContext()))
+      out.push({ slot: 0, event: e });
     return out;
   }
 

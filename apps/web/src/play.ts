@@ -586,6 +586,8 @@ export class PlaySession {
       case 'ai-unit':
       case 'ai-strategy':
         return null;
+      case 'barbarians':
+        return `Barbarians: ${'text' in e.event ? e.event.text : ''}.`;
       case 'polluted':
         return `Pollution near ${cityName}.`;
       case 'meltdown':

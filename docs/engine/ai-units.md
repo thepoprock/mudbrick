@@ -23,7 +23,7 @@ unless marked INFERRED; the engine does not implement this layer yet — see the
 5. **Order hygiene for computer units:** a sentried unit wakes unless it is a ground unit at
    sea; orders above 15 are cleared; a unit with no order standing in a foreign zone of control
    gets the AI's hold order (16), which keeps it out of this turn's assignment. Fortify orders
-   set the "fortified" flag bit. Under the **bloodlust** option, enemy units at half hit points
+   set the "fortified" flag bit. With simplified combat off (hit points matter), enemy units at half hit points
    or less that the civilization can see become attack objectives (type 0 on land, 2 at sea).
 6. **City objectives.** Every own city with no unit on it posts a **defend** objective (type 1,
    priority 5). Every foreign city the civilization may act against — once
@@ -211,7 +211,7 @@ best one (tag `9`), or stays when nothing scores above the floor of −999.
 stack + 1) / own cost`, ×3 for a city, ×2 for a naval unit attacking a transport; for a unit
    not needed as a defender ×2 under plan 0, ×2 when the stack's attack total is more than
    twice its own, ×2 when the enemy stack has attackers, ×2 with an attack objective on our
-   square, ×2 under the bloodlust option when the defender has a third of its hit points or less,
+   square, ×2 with simplified combat off when the defender has a third of its hit points or less,
    ×3 against a defender type with flag bit 3; a unit needed as a defender halves the odds and
    drops to 0 unless its attack beats the target's. Against barbarians non-combat targets +12;
    diplomats double. Odds of 6 or more (12 against barbarians) add `4 × odds`; below that the
@@ -234,6 +234,75 @@ any) · 0x00559085 square seen by civilization (map byte 4 bit n) · 0x00558fc8 
 square · 0x00556aea units of a role in a stack · 0x005567e1 stack totals (mode 0 cost, 1
 defence, 2 count, 3 attack, 4 homed defenders, 5 sea units, 6 free cargo room, 7 ranged aircraft,
 8–10 flag counts).
+
+## Barbarians
+
+**Where they appear (0x00465e35, once per turn from the turn driver, VERIFIED).** Nothing
+with barbarian activity 0. The schedule starts at turn `((3 − activity) × 3 + 30) × (5 −
+difficulty)` below Deity, `(3 − activity) × 3 + 15` at Deity.
+
+- **Sea landings** every 16 turns at Roving and every 8 at Restless and Raging (`(turn + 1) &
+mask == 0`), only while nobody knows the prerequisite of unit type 22 (Armor — Mobile
+  Warfare in the shipped rules). A random empty ocean square (rows 3 to height − 4) in a water
+  body of at least 16 squares is tried up to 1000 times. The party is `clamp(turn / (250 − 50 ×
+activity) + 1, 1, 5)` plus 1 (plus 2 at Raging) units: the last is the **leader** (the
+  Diplomat type, 46), the rest a troop type — Warriors; Archers with options byte 0 bit 0 (set
+  in every shipped file); Legion when a human knows Iron Working; Knights (Crusaders on odd x
+  with that option bit) when anyone knows Metallurgy, or Chivalry at Raging; Dragoons when a
+  human knows Tactics with the option bit. They board a Trireme, a Caravel once anyone knows
+  Navigation, a Frigate with Magnetism.
+- **Uprisings** every turn near one random city when it is a human's: the chance in percent is
+  the city's plunder value (conquest.ts). The square is picked within six squares (x offsets −6
+  to +18 in steps of two, as the original rolls them, y −6 to +6) at distance 5 or more from
+  every city, outside the barbarians' zone of control, on land, empty and on the land mass of
+  the nearest city, with `50 × activity` tries. The party is `random(size)` units (at Raging
+  after turn 149, one time in `10 − difficulty`, half the size more plus `random(size / 2)`),
+  clamped to 2–99, plus the leader; every fourth index is type A, the rest type B: Chariot/
+  Horsemen (swapped one time in three); Archers/Elephant with Gunpowder and the option bit;
+  Cannon/Musketeers with Industrialization, Riflemen for B once Mobile Warfare is known, then
+  Artillery for A with the option bit, and with Guerrilla Warfare Cavalry/Partisans when the
+  human is below Republic or the city was taken from its founder, else Fanatics for B.
+
+**How they move (0x004f0c4c, VERIFIED).** A barbarian on the two polar rows is removed.
+
+- **Ships** vanish with fewer than two passengers (leaders excepted) or after thirty turns at
+  sea (unit byte 13 counts). Beside land on the land mass of a city within eight squares, with
+  no city on the square, they unload — unless the party is fewer than three without an attacker
+  or defender and the city is within two squares, when the ship vanishes. A foreign ship
+  alongside is attacked. Otherwise the ship sails for the city with the highest `(plunder +
+
+50. / (distance + 1)`, or vanishes when there is none.
+
+- **On a city or a fortress** a unit stays fortified unless the stack (leaders excepted) is
+  larger than one or it stands in a zone of control and it is not a defender, or the stack is
+  at least 2 (+1 on a city, +1 outside zones of control) and its attack is at least its
+  defence.
+- Every fourth turn (`(turn + unit index) & 3`), a land unit whose nearest city is on another
+  land mass or more than eight squares away vanishes.
+- The preferred heading points at the nearest city when it is a human's on the same land
+  mass and its owner has at least two cities and 100 gold.
+- **Leaders** stay with a stack; alone on land they go to the nearest barbarian stack within
+  three squares when it is led by an attacker or defender, else vanish once the nearest city
+  is `(turn & 7) + 4` or more away; at sea they vanish within two squares of a city.
+- **Direction scoring** over the eight neighbours of the unit's domain. For combat roles: a
+  foreign city with no unit in it is taken outright — for a human owner first a **ransom** of
+  the larger of `size × 25` and `max(50, treasury / 2)` is demanded (a human with more than
+  four cities after 200 AD: the treasury rounded down to hundreds, or the treasury plus one
+  when that is below 1000); paying clears every barbarian unit in the city's radius. Otherwise
+  the square scores +4 when someone else stands or lives there, +8 for a fortress, else +6 for
+  irrigation or a mine, plus random 0–5; an empty square must pass the zone-of-control gate (not
+  in a zone of control now, or not an attacker, or the square is outside one, or the unit
+  ignores zones); the last direction +6, each matching heading sign +2; a square with a foreign
+  unit that is not a leader scores +99 (Partisans only attack non-combat units); a barbarian
+  unit's square is skipped on land and −20 at sea. Ships and leaders score +99 for a barbarian
+  unit, −99 for a foreign one, plus the move cost, random 0–2 and four times the distance to
+  the nearest city. The best (later ties win) is taken.
+- A lone unit in a city stays unless an attack scores. With no attack, full movement and a
+  human's city nearest, a square with irrigation, a mine or a fortress (a road for Partisans)
+  is **pillaged** instead of moving.
+
+The engine's `barbarians.ts` ports both routines; the RANSOMCITY dialog is a callback the web
+app may answer (unset means refuse), and barbarians take an empty city by moving in.
 
 ## What the engine does
 

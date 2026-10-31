@@ -25,6 +25,7 @@ const state: GameState = {
   turn: parsed.parameters.turn,
   difficulty: parsed.parameters.difficulty,
   realisticCombat: !parsed.options.simplifiedCombat,
+  barbarianActivity: parsed.parameters.barbarianActivity,
   firstDiscoveredBy: [...parsed.techs.firstDiscoveredBy],
 };
 const game = new Game(world, engineRules(rules), new Rng(42), state);

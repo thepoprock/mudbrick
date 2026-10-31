@@ -101,8 +101,8 @@ export interface StrategyContext {
   strategyOf: (slot: number) => CivStrategy | undefined;
   /** The leading human's slot, or null. */
   mainHuman: number | null;
-  /** The bloodlust option: damaged enemy units become attack objectives. */
-  bloodlust?: boolean;
+  /** Simplified combat off (hit points matter): damaged enemy units become attack objectives. */
+  realisticCombat?: boolean;
 }
 
 /** Land squares and rated squares per land mass (the map maker's tables, 0x5ead50/0x5ead52). */
@@ -344,7 +344,7 @@ export function runStrategy(
       s.strengthSum += type.attack + type.defence;
       if (lm >= 0) s.attackOn[lm] = (s.attackOn[lm] ?? 0) + type.attack;
     } else if (
-      ctx.bloodlust &&
+      ctx.realisticCombat &&
       ctx.atWar(slot, u.owner) &&
       world.isSeen(u.position.x, u.position.y, slot) &&
       hitPoints(rules, u) * 2 <= maxHitPoints(rules, u.type)

@@ -23,4 +23,5 @@ export * from './pollution.js';
 export * from './aiBuild.js';
 export * from './aiStrategy.js';
 export * from './aiUnits.js';
+export * from './barbarians.js';
 export * from './fertility.js';

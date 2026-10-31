@@ -11,6 +11,7 @@ export function gameFromSave(save: SaveFile, rules: Rules, world: World): Game {
     turn: save.parameters.turn,
     difficulty: save.parameters.difficulty,
     realisticCombat: !save.options.simplifiedCombat,
+    barbarianActivity: save.parameters.barbarianActivity,
     firstDiscoveredBy: [...save.techs.firstDiscoveredBy],
     pollutionSquares: save.parameters.pollutionSquares,
     ...(save.scenario
