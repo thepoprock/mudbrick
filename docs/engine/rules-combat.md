@@ -145,7 +145,8 @@ condition, nuclear attacks (attack 99), and what status bit 4 means.
 
 ## After the fight (VERIFIED, 0x0052d472)
 
-- A real attack costs the attacker **one full move** (3 thirds), whatever it had left.
+- A real attack costs the attacker **one full move** (the road multiplier in thirds, 3 in the
+  shipped rules), whatever it had left.
 - With **simplified combat on** a single round decides the battle and the loser is destroyed; with
   it off the units fight to the death, damage accumulating by the winner's firepower each round.
 - The loser is destroyed. When the **defender** loses **in the open** — no city, fortress or

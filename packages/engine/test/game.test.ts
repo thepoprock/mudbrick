@@ -3,6 +3,7 @@ import { rawYields, shieldTotals, tradeSplit, unitSupport } from '../src/city.js
 import { removeCity } from '../src/fertility.js';
 import { Game } from '../src/game.js';
 import { longMoveCount } from '../src/turnStart.js';
+import { researchChoices, researchableAdvances } from '../src/outcome.js';
 import { applyCityMood, researchableAdvances } from '../src/outcome.js';
 import { Rng } from '../src/rng.js';
 import { GOVERNMENT, IMPROVEMENT, type EngineRules } from '../src/rules.js';
@@ -228,6 +229,17 @@ describe('Game turn loop', () => {
     game.playUntilHuman();
     expect(game.state.movingHuman).toBe(1);
     expect(game.state.turn).toBe(11);
+  });
+
+  it('above Chieftain the research list hides a third of its choices, never the first', () => {
+    const civ = setup().world.civs[0];
+    if (!civ) throw new Error('no civ');
+    civ.advancesCount = 1;
+    const all = researchableAdvances(rules, civ);
+    const hard = researchChoices(rules, civ, 2);
+    expect(researchChoices(rules, civ, 0)).toEqual(all);
+    expect(hard[0]).toBe(all[0]);
+    expect(hard.slice(1).every((a) => (a - 1) % 3 !== 0)).toBe(true);
   });
 
   it('the go-to counter adds one a step and fifteen more for turning back', () => {

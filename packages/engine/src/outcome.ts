@@ -198,6 +198,16 @@ export function disbandForDisorder(
 }
 
 /** Advances a civilization may research now: unknown, reachable, prerequisites known. */
+/**
+ * What a human may choose from (VERIFIED 0x00495ee8, 0x00494f3a): above Chieftain the list hides
+ * every advance a multiple of three past the count of advances known, but never the first.
+ */
+export function researchChoices(rules: EngineRules, civ: Civ, difficulty: number): number[] {
+  const all = researchableAdvances(rules, civ);
+  if (difficulty === 0) return all;
+  return all.filter((a, i) => i === 0 || (a - civ.advancesCount) % 3 !== 0);
+}
+
 export function researchableAdvances(rules: EngineRules, civ: Civ): number[] {
   const out: number[] = [];
   const known = (ref: { kind: string; index?: number }) => {

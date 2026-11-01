@@ -53,6 +53,7 @@ import {
   improvementSound,
   parseCouncil,
   scienceReport,
+  researchChoices,
   spaceshipRows,
   topCities,
   tradeReport,
@@ -63,7 +64,6 @@ import {
   pillage,
   pillageOptions,
   rawYields,
-  researchableAdvances,
   resolveAttack,
   sentry,
   shieldTotals,
@@ -1177,6 +1177,40 @@ export class PlaySession {
     this.el.canvas.parentElement?.prepend(bar);
   }
 
+  /** Choosing what to research (0x00495ee8): the advisor's pick first. */
+  private showResearch(): void {
+    if (this.researchOpen) return;
+    const civ = this.civ;
+    const options = researchChoices(this.rules, civ, this.game.state.difficulty);
+    if (options.length === 0) return;
+    this.researchOpen = true;
+    const advised = this.game.suggestResearch(civ);
+    const box = this.talkBox();
+    box.replaceChildren();
+    const heading = document.createElement('h3');
+    heading.textContent = 'Research';
+    const body = document.createElement('p');
+    // The label changes once the civilization knows advance 38 (0x00495ee8).
+    const who = civ.knownAdvances[38] === true ? 'scientists' : 'wise men';
+    body.textContent = `What should our ${who} study next?`;
+    box.append(heading, body);
+    const close = (pick: number | null) => {
+      this.researchOpen = false;
+      if (pick !== null) civ.researching = pick;
+      this.closeTalk();
+      this.refresh();
+    };
+    const ordered = [...options].sort((a, b) => Number(b === advised) - Number(a === advised));
+    for (const a of ordered) {
+      const name = this.rules.advances[a]?.name ?? `advance ${a}`;
+      this.talkButton(box, a === advised ? `${name} (advised)` : name, () => close(a));
+    }
+    this.talkButton(box, 'Civilopedia', () => {
+      this.researchOpen = false;
+      this.showPedia();
+    });
+  }
+
   /** The Casualty Timeline: units of ours lost, newest first. */
   private showCasualties(): void {
     const box = this.talkBox();
@@ -1809,16 +1843,22 @@ export class PlaySession {
 
   private closeTalk(): void {
     this.talk = null;
+    this.researchOpen = false;
     const box = document.getElementById('talkBox');
     if (box) box.style.display = 'none';
     this.refresh();
     this.nextTalk();
   }
 
+  private researchOpen = false;
+
   private nextTalk(): void {
     if (this.talk || this.seatPending) return;
     const talk = this.game.nextPendingTalk(this.humanSlot);
-    if (!talk) return;
+    if (!talk) {
+      if (this.civ.researching === null && this.game.state.turn > 0) this.showResearch();
+      return;
+    }
     this.talk = talk;
     this.showDialog(talk.next());
   }
@@ -2201,7 +2241,7 @@ export class PlaySession {
     none.value = '';
     none.textContent = '(choose)';
     select.append(none);
-    for (const a of researchableAdvances(this.rules, civ)) {
+    for (const a of researchChoices(this.rules, civ, this.game.state.difficulty)) {
       const opt = document.createElement('option');
       opt.value = String(a);
       opt.textContent = this.rules.advances[a]?.name ?? String(a);

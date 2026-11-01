@@ -101,8 +101,8 @@ export function resolveAttack(
   const result = resolveCombat(world, rules, rng, attacker, defender, combatCtx);
   applyCombat(rules, result, attacker, defender);
 
-  const full = aType.move * 3;
-  attacker.movesSpent = Math.min(Math.max(full, attacker.movesSpent + 3), attacker.movesSpent + 3);
+  // VERIFIED 0x0052d472: every caller of the mover asks for this (0x00539099 with mode 3).
+  attacker.movesSpent += rules.cosmic.roadMoveMultiplier;
   attacker.moved = true;
   attacker.order = null;
   attacker.fortified = false;

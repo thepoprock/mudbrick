@@ -27,6 +27,7 @@ import {
   applyCityMood,
   disbandForDisorder,
   disbandForShortage,
+  researchChoices,
   researchableAdvances,
   type CityEvent,
 } from './outcome.js';
@@ -459,10 +460,13 @@ export class Game {
   /**
    * Darwin's Voyage, one of its two advances (VERIFIED, 0x0049675f): the current research target
    * completes at once and the beakers go. With no target the original picks one, asking a human;
-   * the engine's picker stands in for that question (INFERRED harmless, the UI has no prompt here).
+   * here the advisor's recommendation stands in for that question.
    */
   private darwinAdvance(civ: Civ): void {
-    if (civ.researching === null) this.aiChooseResearch(civ);
+    if (civ.researching === null) {
+      if (civ.isHuman) civ.researching = this.suggestResearch(civ);
+      else this.aiChooseResearch(civ);
+    }
     const advance = civ.researching;
     if (advance === null) return;
     grantAdvance(civ, advance, 'research');
@@ -1694,6 +1698,21 @@ export class Game {
    * The AI's research choice (VERIFIED, 0x00494f3a): every researchable advance scores
    * `rand() % value` with the value of 0x004920ac (aiResearch.ts) and the highest wins.
    */
+  /** What the science advisor recommends to a human (0x00494f3a): value, give or take one. */
+  suggestResearch(civ: Civ): number | null {
+    const ctx = this.researchValueContext(civ);
+    let best = -1;
+    let pick: number | null = null;
+    for (const a of researchChoices(this.rules, civ, this.state.difficulty)) {
+      const score = advanceValue(this.rules, civ.slot, a, ctx) + this.rng.nextInt(3) - 1;
+      if (score > best) {
+        best = score;
+        pick = a;
+      }
+    }
+    return pick;
+  }
+
   aiChooseResearch(civ: Civ): void {
     const options = researchableAdvances(this.rules, civ);
     const slot = civ.slot;

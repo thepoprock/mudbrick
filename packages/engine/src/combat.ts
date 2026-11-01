@@ -93,9 +93,10 @@ export function attackStrength(
     b.value = halfMore(b.value);
     note(b, 'veteran', 1.5);
   }
-  if (movesLeft !== undefined && movesLeft < 3) {
-    b.value = Math.trunc((b.value * Math.max(0, movesLeft)) / 3);
-    note(b, 'fatigue', Math.max(0, movesLeft) / 3);
+  const oneMove = rules.cosmic?.roadMoveMultiplier ?? 3;
+  if (movesLeft !== undefined && movesLeft < oneMove) {
+    b.value = Math.trunc((b.value * Math.max(0, movesLeft)) / oneMove);
+    note(b, 'fatigue', Math.max(0, movesLeft) / oneMove);
   }
   return b;
 }

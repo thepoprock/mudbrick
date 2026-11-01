@@ -107,8 +107,9 @@ At the start of its turn, after its cities are processed, an AI civilization set
 
 Every researchable advance (unknown, prerequisites known, reachable) scores `rand() % value`,
 and the highest score is researched (the earliest index on ties). For a human the science
-advisor suggests `value + rand() % 3 − 1`; at Chieftain the research list hides every advance
-for which `(index − advances known) % 3 == 0` except the first.
+advisor suggests `value + rand() % 3 − 1`; above Chieftain the research list hides every advance
+for which `(index − advances known) % 3 == 0` except the first (0x00495ee8, 0x00494f3a; the cheat
+menu's call and a scenario flag, 0x005da710 bit 7, show them all).
 
 The value (`aiResearch.ts`, `advanceValue`) is built as follows, with "leads to X" meaning the
 advance is X or one of X's prerequisite ancestors (0x00492025):
