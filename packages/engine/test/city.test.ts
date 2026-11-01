@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  assignWorkers,
   boxRows,
   corruption,
   foodBox,
@@ -12,6 +13,7 @@ import {
   tradeSplit,
   unitSupport,
   type CityContext,
+  workerStatus,
 } from '../src/city.js';
 import { disbandForDisorder } from '../src/outcome.js';
 import { GOVERNMENT, IMPROVEMENT, ADVANCE, type EngineRules } from '../src/rules.js';
@@ -556,5 +558,80 @@ describe('disorder under a senate (verified)', () => {
     );
     // Off the cycle (turn 41: 41 & 7, 57 & 7 are not 0) nothing happens either.
     expect(disbandForDisorder(w, rules, c, { ...ctx, turn: 41 })).toEqual([]);
+  });
+});
+
+describe('worker placement (verified)', () => {
+  const opts = {
+    turn: 0,
+    isHuman: false,
+    inCityTurn: false,
+    settlers: 0,
+    support: 0,
+    isAlly: () => false,
+    isHumanSlot: () => false,
+  };
+  function seen(w: World): void {
+    for (let y = 0; y < w.rows; y++)
+      for (let x = 0; x < w.columns; x++) if (w.isSquare(x, y)) w.reveal(x, y, 1);
+  }
+  it('works the centre and three squares for a size-3 city, none twice with a neighbour', () => {
+    const w = grassWorld();
+    seen(w);
+    const c = city(w, { size: 3, worked: 1 << CITY_CENTRE_INDEX });
+    if (!w.cities.includes(c)) w.cities.push(c);
+    assignWorkers(w, rules, c, ctx({ government: GOVERNMENT.despotism }), opts);
+    const worked = Array.from({ length: 21 }, (_, i) => i).filter((i) => (c.worked >> i) & 1);
+    expect(worked).toContain(CITY_CENTRE_INDEX);
+    expect(worked.length).toBe(4);
+    expect(
+      c.specialists.entertainers + c.specialists.taxCollectors + c.specialists.scientists,
+    ).toBe(0);
+    // A neighbour two squares east working its own radius blocks the squares both share.
+    const other = city(w, {
+      id: 1,
+      position: { x: 12, y: 10 },
+      size: 2,
+      worked: 1 << CITY_CENTRE_INDEX,
+    });
+    w.cities.push(other);
+    assignWorkers(w, rules, other, ctx({ government: GOVERNMENT.despotism }), opts);
+    const st = workerStatus(w, rules, c, opts);
+    const shared = Array.from({ length: 20 }, (_, i) => i).filter(
+      (i) => ((st[i] ?? 0) & 0x10) !== 0,
+    );
+    expect(shared.length).toBeGreaterThan(0);
+    assignWorkers(w, rules, c, ctx({ government: GOVERNMENT.despotism }), opts);
+    for (const i of shared) expect((c.worked >> i) & 1).toBe(0);
+    // A square under a foreign soldier is off limits; a human's soldier keeps the workers as they are.
+    const unseen = workerStatus(w, rules, c, { ...opts, isHumanSlot: () => true });
+    expect(unseen[CITY_CENTRE_INDEX]).toBe(8); // our own centre: a city stands there
+  });
+
+  it('a computer city in disorder gains an entertainer during the city turn, a human keeps its workers', () => {
+    const w = grassWorld();
+    seen(w);
+    const c = city(w, { size: 4, worked: 1 << CITY_CENTRE_INDEX });
+    if (!w.cities.includes(c)) w.cities.push(c);
+    assignWorkers(w, rules, c, ctx({ government: GOVERNMENT.despotism }), opts);
+    c.inDisorder = true;
+    assignWorkers(w, rules, c, ctx({ government: GOVERNMENT.despotism }), {
+      ...opts,
+      inCityTurn: true,
+    });
+    expect(c.specialists.entertainers).toBe(1);
+    c.inDisorder = false;
+    assignWorkers(w, rules, c, ctx({ government: GOVERNMENT.despotism }), {
+      ...opts,
+      inCityTurn: true,
+    });
+    expect(c.specialists.entertainers).toBe(0);
+    // A human city keeps its arrangement: the same worked mask with a citizen to spare stays.
+    const keep = c.worked;
+    assignWorkers(w, rules, c, ctx({ government: GOVERNMENT.despotism }), {
+      ...opts,
+      isHuman: true,
+    });
+    expect(c.worked).toBe(keep);
   });
 });

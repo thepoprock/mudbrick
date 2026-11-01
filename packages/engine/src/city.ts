@@ -679,3 +679,214 @@ export function productionCost(rules: EngineRules, city: City, ctx: CityContext)
 }
 
 export const DOMAIN = { ground: DOMAIN_GROUND, air: DOMAIN_AIR, sea: DOMAIN_SEA } as const;
+
+export interface PlacementContext {
+  turn: number;
+  isHuman: boolean;
+  /** The city turn's own recompute (the original's 0x005b864c flag): computer cities then put
+   * one specialist back to work, or in disorder add an entertainer. */
+  inCityTurn: boolean;
+  /** Settlers the city supports (their food counts toward what it must make). */
+  settlers: number;
+  /** Shields its units cost (the shield weight of the last placement loop). */
+  support: number;
+  isAlly: (a: number, b: number) => boolean;
+  isHumanSlot: (slot: number) => boolean;
+}
+
+/**
+ * Radius-square status for working (VERIFIED, 0x004b30b1 then 0x004b33d7): bit 1 off the map
+ * or not seen by the owner; bit 4 a foreign military unit stands on a land square — the stack
+ * is walked until an own or allied unit (no block) or one with attack (block), with 0x20 besides
+ * when that unit is a human's; bit 8 a city stands there; 0x10 another city within six squares
+ * works it, or stands on it, and it lies within two squares of this city. 0 = free to work.
+ */
+export function workerStatus(
+  world: World,
+  rules: EngineRules,
+  city: City,
+  ctx: PlacementContext,
+): Uint8Array {
+  const st = new Uint8Array(CITY_CENTRE_INDEX + 1);
+  const { x: cx, y: cy } = city.position;
+  for (let i = 0; i <= CITY_CENTRE_INDEX; i++) {
+    const p = world.radiusSquare(cx, cy, i);
+    if (!p || !world.isSeen(p.x, p.y, city.owner)) {
+      st[i] = 1;
+      continue;
+    }
+    if (world.terrainAt(p.x, p.y) !== OCEAN) {
+      for (const u of world.unitsAt(p.x, p.y)) {
+        if (u.owner === city.owner || ctx.isAlly(city.owner, u.owner)) break;
+        if ((rules.units[u.type]?.attack ?? 0) !== 0) {
+          st[i] = (st[i] ?? 0) | 4;
+          if (ctx.isHumanSlot(u.owner)) st[i] = (st[i] ?? 0) | 0x20;
+          break;
+        }
+      }
+    }
+    if (world.cityAt(p.x, p.y)) st[i] = (st[i] ?? 0) | 8;
+  }
+  for (const other of world.cities) {
+    if (other === city || distance(world, city.position, other.position) >= 6) continue;
+    for (let j = 0; j <= CITY_CENTRE_INDEX; j++) {
+      if (j !== CITY_CENTRE_INDEX && ((other.worked >> j) & 1) === 0) continue;
+      const q = world.radiusSquare(other.position.x, other.position.y, j);
+      if (!q || distance(world, city.position, q) >= 3) continue;
+      for (let k = 0; k < CITY_CENTRE_INDEX; k++) {
+        const p = world.radiusSquare(cx, cy, k);
+        if (p && p.x === q.x && p.y === q.y) st[k] = (st[k] ?? 0) | 0x10;
+      }
+    }
+  }
+  return st;
+}
+
+/**
+ * Worker placement (VERIFIED, 0x004b49b5). Every recompute: the citizens are size + 1 (the
+ * centre works too). A computer city not in disorder puts one specialist back to work during
+ * the city turn's recompute (its "keep specialists" flag is INFERRED never set); in disorder it
+ * drops every worker. Workers on blocked squares are freed. A human city, a computer city on
+ * three turns in four (`(turn + city) & 3 ≠ 0`), one in disorder or one blocked by a human's
+ * unit keeps its current workers (centre first, then the radius in order) — unless there are
+ * more workers than citizens, when everything is placed afresh; if the citizens left over are
+ * exactly its specialists, that is all. Then: the centre; then, while the food gathered plus a
+ * citizen's food for each citizen left is short of what the city must make (or the city is
+ * below size 3), the free square with the most food (ties: most 2 × shields + trade), never a
+ * shieldless square for the last citizen of a shieldless city; a computer city in disorder
+ * then gains an entertainer; the rest take the square maximising `16 / (food surplus) × food +
+ * 3 × size / (shields − support) × shields + 2 × size / trade × trade` (each divisor clamped to
+ * 1 … 99, integer weights) — none with a positive score, and the rest are specialists. Finally
+ * a city short of food with nothing stored marks −1 in its store; one fed clears a negative.
+ */
+export function assignWorkers(
+  world: World,
+  rules: EngineRules,
+  city: City,
+  ctx: CityContext,
+  w: PlacementContext,
+): void {
+  const sp = city.specialists;
+  let specialists = sp.entertainers + sp.taxCollectors + sp.scientists;
+  if (!w.isHuman) {
+    if (!city.inDisorder) {
+      if (w.inCityTurn && specialists > 0) {
+        specialists -= 1;
+        if (sp.entertainers > 0) sp.entertainers -= 1;
+        else if (sp.taxCollectors > 0) sp.taxCollectors -= 1;
+        else sp.scientists -= 1;
+      }
+    } else city.worked = 0;
+  }
+  const st = workerStatus(world, rules, city, w);
+  let humanBlocked = false;
+  const taken = new Uint8Array(CITY_CENTRE_INDEX);
+  for (let i = 0; i < CITY_CENTRE_INDEX; i++) {
+    if ((st[i] ?? 0) !== 0) {
+      taken[i] = 1;
+      city.worked &= ~(1 << i);
+      if (((st[i] ?? 0) & 0x20) !== 0) humanBlocked = true;
+    }
+  }
+  const yields = (i: number) => [
+    squareYield(world, rules, city, i, FOOD, ctx),
+    squareYield(world, rules, city, i, SHIELDS, ctx),
+    squareYield(world, rules, city, i, TRADE, ctx),
+  ];
+  const total = { food: 0, shields: 0, trade: 0 };
+  let mask = 0;
+  let remaining = city.size + 1;
+  let centrePlaced = false;
+  const work = (i: number) => {
+    const [f, s, t] = yields(i);
+    total.food += f ?? 0;
+    total.shields += s ?? 0;
+    total.trade += t ?? 0;
+    mask |= 1 << i;
+    if (i < CITY_CENTRE_INDEX) taken[i] = 1;
+    else centrePlaced = true;
+    remaining -= 1;
+  };
+  const need =
+    city.size * rules.cosmic.foodPerCitizen + w.settlers * settlersFood(rules, ctx.government);
+  let done = false;
+  if (w.isHuman || ((w.turn + city.id) & 3) !== 0 || city.inDisorder || humanBlocked) {
+    let count = 0;
+    for (let i = 0; i <= CITY_CENTRE_INDEX; i++) if ((city.worked >> i) & 1) count++;
+    if (remaining - count >= 0) {
+      for (const j of [
+        CITY_CENTRE_INDEX,
+        ...Array.from({ length: CITY_CENTRE_INDEX }, (_, i) => i),
+      ]) {
+        if (((city.worked >> j) & 1) === 0) continue;
+        work(j);
+        if (remaining === 0) break;
+      }
+    }
+    if (remaining === specialists || remaining === 0) done = true;
+  }
+  if (!done) {
+    if (remaining > 0 && !centrePlaced) work(CITY_CENTRE_INDEX);
+    const perCitizen = Math.max(1, rules.cosmic.foodPerCitizen);
+    let found = true;
+    while (
+      (total.food + Math.trunc(remaining / perCitizen) < need || city.size < 3) &&
+      remaining - specialists > 0 &&
+      found
+    ) {
+      found = false;
+      let best = -1;
+      let bestFood = 0;
+      let bestOther = 0;
+      for (let i = 0; i < CITY_CENTRE_INDEX; i++) {
+        if (taken[i]) continue;
+        const [f, s, t] = yields(i);
+        if (remaining === 1 && total.shields === 0 && (s ?? 0) === 0) continue;
+        const other = (s ?? 0) * 2 + (t ?? 0);
+        if ((f ?? 0) > bestFood || ((f ?? 0) === bestFood && other > bestOther)) {
+          best = i;
+          bestFood = f ?? 0;
+          bestOther = other;
+        }
+      }
+      if (best >= 0) {
+        work(best);
+        found = true;
+      }
+    }
+    if (!w.isHuman && city.inDisorder && w.inCityTurn) {
+      specialists += 1;
+      sp.entertainers += 1;
+    }
+    const clamp = (v: number) => Math.max(1, Math.min(99, v));
+    while (remaining - specialists > 0) {
+      let best = -1;
+      let bestScore = 0;
+      const fw = Math.trunc(16 / clamp(total.food - need));
+      const sw = Math.trunc((city.size * 3) / clamp(total.shields - w.support));
+      const tw = Math.trunc((city.size * 2) / clamp(total.trade));
+      for (let i = 0; i < CITY_CENTRE_INDEX; i++) {
+        if (taken[i]) continue;
+        const [f, s, t] = yields(i);
+        const score = fw * (f ?? 0) + sw * (s ?? 0) + tw * (t ?? 0);
+        if (score > bestScore) {
+          best = i;
+          bestScore = score;
+        }
+      }
+      if (best < 0) break;
+      work(best);
+    }
+  }
+  city.worked = mask;
+  // The citizens left over are the specialists; existing tax collectors and scientists stay.
+  let left = remaining;
+  sp.scientists = Math.min(sp.scientists, left);
+  left -= sp.scientists;
+  sp.taxCollectors = Math.min(sp.taxCollectors, left);
+  left -= sp.taxCollectors;
+  sp.entertainers = left;
+  if (total.food < need) {
+    if (city.foodStored === 0) city.foodStored = -1;
+  } else if (city.foodStored < 0) city.foodStored = 0;
+}

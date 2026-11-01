@@ -10,17 +10,16 @@
 import {
   boxRows,
   distance,
-  FOOD,
   mood,
   processGrowth,
   rawYields,
   settlersFood,
   shieldTotals,
-  squareYield,
   tradeSplit,
   unitSupport,
   type CityContext,
   corruption,
+  assignWorkers,
 } from './city.js';
 import {
   applyCityMood,
@@ -442,7 +441,8 @@ export class Game {
     }
     if (growth.grew) push({ kind: 'grew' });
     if (growth.blockedBy) push({ kind: 'growth-blocked', blockedBy: growth.blockedBy });
-    if (growth.grew) this.placeNewWorker(city, ctx);
+    // The city turn's own recompute places the workers again (a new citizen, a specialist back).
+    this.placeNewWorker(city, ctx);
 
     // 2. Totals.
     const shakespeares = this.wonderCity(IMPROVEMENT.shakespeares);
@@ -1020,42 +1020,29 @@ export class Game {
   }
 
   /** Give every citizen a square or a specialist slot (the original's auto-arrange runs on founding and growth). */
-  ensureWorkers(city: City, ctx: CityContext = this.cityContext(city)): void {
-    const specialists =
-      city.specialists.entertainers + city.specialists.taxCollectors + city.specialists.scientists;
-    let working = 0;
-    for (let i = 0; i < CITY_CENTRE_INDEX; i++) if ((city.worked >> i) & 1) working++;
-    let guard = 0;
-    while (working + specialists < city.size && guard++ < 25) {
-      const before = city.worked;
-      this.placeNewWorker(city, ctx);
-      if (city.worked === before) break; // became an entertainer
-      working++;
-    }
+  /**
+   * Place the city's workers as the original does on every recompute (0x004b49b5, city.ts
+   * `assignWorkers`); `inCityTurn` marks the city turn's own recompute.
+   */
+  ensureWorkers(city: City, ctx: CityContext = this.cityContext(city), inCityTurn = false): void {
+    const civ = this.civ(city.owner);
+    const homed = this.world.units.filter((u) => u.homeCity === city.id);
+    const settlers = homed.filter((u) => this.rules.units[u.type]?.role === 5).length;
+    const support = unitSupport(this.world, this.rules, city, ctx, homed).shields;
+    assignWorkers(this.world, this.rules, city, ctx, {
+      turn: this.state.turn,
+      isHuman: civ.isHuman,
+      inCityTurn,
+      settlers,
+      support,
+      isAlly: (a, b) => hasTreaty(this.world, a, b, TREATY.alliance),
+      isHumanSlot: (slot) => this.world.civs.find((c) => c.slot === slot)?.isHuman ?? false,
+    });
   }
 
-  /** Put a new citizen on the best free square by food, then shields and trade (INFERRED simplification of 0x004b49b5). */
+  /** The city turn's recompute of the workers (a new citizen, a specialist back to work). */
   placeNewWorker(city: City, ctx: CityContext): void {
-    let best = -1;
-    let bestScore = -1;
-    for (let i = 0; i < CITY_CENTRE_INDEX; i++) {
-      if ((city.worked >> i) & 1) continue;
-      const p = this.world.radiusSquare(city.position.x, city.position.y, i);
-      if (!p) continue;
-      if (this.world.cities.some((c) => c !== city && c.position.x === p.x && c.position.y === p.y))
-        continue;
-      const food = squareYield(this.world, this.rules, city, i, FOOD, ctx);
-      const score =
-        food * 4 +
-        squareYield(this.world, this.rules, city, i, 1, ctx) * 2 +
-        squareYield(this.world, this.rules, city, i, 2, ctx);
-      if (score > bestScore) {
-        bestScore = score;
-        best = i;
-      }
-    }
-    if (best >= 0) city.worked |= 1 << best;
-    else city.specialists.entertainers += 1;
+    this.ensureWorkers(city, ctx, true);
   }
 
   /**

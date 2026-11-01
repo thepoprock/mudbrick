@@ -128,6 +128,32 @@ The routine's result, `happy − unhappy`, is what the civilization turn inspect
   `disbandForDisorder`). With options byte 8 bit 0 set and a human ahead in advances the
   routine instead vetoes both senate governments (−999) — not modelled.
 
+## Worker placement (VERIFIED, 0x004b49b5 with the status passes 0x004b30b1 and 0x004b33d7)
+
+Every recompute of a city's totals places its workers again (`city.ts` `assignWorkers`). First
+the square status: a radius square is blocked when it is off the map or unseen by the owner,
+when a foreign military unit stands on it (the stack is walked until an own or allied unit, which
+does not block, or one with attack, which does — and a human's unit is remembered besides), when
+a city stands on it, or when another city within six squares works it (or stands on it) and it
+lies within two squares of this city. Workers on blocked squares are freed.
+
+The citizens are `size + 1`, the centre working too. A computer city not in disorder puts one
+specialist back to work during the city turn's own recompute (its "keep specialists" flag, city
+flag bit 14, is INFERRED never set); in disorder it drops every worker. A human city, a computer
+city on three turns in four (`(turn + city index) & 3 ≠ 0`), one in disorder or one blocked by a
+human's unit keeps its current workers — centre first, then the radius in order — unless there
+are more workers than citizens, when everything is placed afresh; if the citizens left over are
+exactly its specialists, nothing more happens. Then the centre is worked; then, while the food
+gathered plus one citizen's food for every citizen still free is short of `size × food per
+citizen + settlers × settlers' food` (or the city is below size 3), the free square with the most
+food is worked (ties: most `2 × shields + trade`; the last citizen of a city with no shields yet
+never takes a shieldless square); a computer city in disorder then gains an entertainer; the
+remaining citizens take, one by one, the square maximising `16 / surplus × food + 3 × size /
+(shields − support) × shields + 2 × size / trade × trade` with each divisor clamped to 1 … 99
+and the weights truncated — when no square scores above zero the rest become specialists
+(existing tax collectors and scientists stay, the others entertain). Finally a city short of food
+with nothing stored marks −1 in its store, and one that is fed clears a negative store.
+
 ## Square yields (VERIFIED, 0x004b4102)
 
 For a worked square of terrain `t` with special `s` (0, 1, 2 from rules-map.md), base yield =
