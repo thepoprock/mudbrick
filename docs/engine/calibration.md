@@ -25,6 +25,19 @@ only the aggregate shape is comparable, not the exact numbers.
 | 225  | trade per city             | 3–10                                   | 3.3–9.0                                   |
 | 225  | governments                | Republic ×1, Monarchy ×1, Despotism ×4 | Despotism ×7 (open)                       |
 
+A second run of the original (2026-10-31, 22:04, same settings, a fresh world) against two
+engine seeds at the same turn:
+
+| turn | measure (computer players)  | original run 2                         | engine seeds 3 / 4                                                |
+| ---- | --------------------------- | -------------------------------------- | ----------------------------------------------------------------- |
+| 103  | cities per civilization     | 2–6 (23 total)                         | 2–5 (25 total)                                                    |
+| 103  | advances                    | 4–8                                    | 5–11                                                              |
+| 103  | roads / irrigation per city | 1.0–3.7 / 0.3–3.7                      | 0.3–6.5 / 0.3–4.5                                                 |
+| 211  | cities, units               | 39, 168                                | 51, 212 / 41, 159                                                 |
+| 211  | advances                    | 13–26                                  | 15–27 / 13–28                                                     |
+| 211  | governments                 | Republic ×3, Monarchy ×1, Despotism ×2 | Republic ×1, Monarchy ×5 / Republic ×1, Monarchy ×4, Despotism ×1 |
+| 211  | roads / irrigation per city | 3.0–4.5 / 1.1–5.3                      | 2.0–4.9 / 0.8–3.3 / 1.2–7.0 / 0.3–3.0                             |
+
 What the comparison found and fixed (all VERIFIED against the executable afterwards):
 
 1. **The build advisor's sixteen-fold factor** (0x00474edb) applies to every unit except
@@ -59,7 +72,8 @@ What the comparison found and fixed (all VERIFIED against the executable afterwa
    now a city at or below half the best finds them twice as costly and the best city a third
    cheaper, as docs/engine/ai-city.md describes.
 
-Open: irrigation runs lower than the original's. The rest of the wonder loop (other builders,
+Open: irrigation runs a little lower than the original's and the Republic is adopted a little
+less often; both are within the spread of single runs so far. The rest of the wonder loop (other builders,
 the in-progress adjustments, the Palace halving, the progress discount, obsolescence) is now
 in the code as ai-city.md describes it; only the "wonder city" flag is left as clear.
 
