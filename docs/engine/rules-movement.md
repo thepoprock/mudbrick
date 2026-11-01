@@ -35,3 +35,21 @@ The go-to step chooser weighs each of the eight directions by the step cost of
 from squares flagged as far from land, and refuses zone-of-control violations. A go-to counter
 grows by one per step and by fifteen when the unit reverses; past 47 the player is asked whether
 to give up (LONGMOVE).
+
+## Sight (VERIFIED 0x0041aad6)
+
+When a unit arrives on a square (or is created) the original "looks around" from it: the
+square and its eight neighbours become seen by the owner. A unit whose type has the
+two-square-visibility flag (RULES `@UNITS` flag bit 0) also sees the sixteen squares at distance
+two — the twelve outer squares of a city radius plus the four points four columns or rows away
+(the offset table at 0x5b2e38, entries 8–19 and 21–24) — but only the squares of its own
+element: an ocean square when the unit is a sea unit, a land square when it is a land unit, any
+square for an air unit. There is no larger radius anywhere; hills and mountains add nothing.
+
+The same routine makes first contact with the owners of the units and cities it finds, wakes a
+sentried unit an enemy steps next to, and records which civilizations can see the unit
+(byte +9 of the unit record, a "seen by" mask). `packages/engine/src/sight.ts` ports the sight;
+the contact and waking live in diplomacy.ts and the unit orders. Cities reveal their 21-square
+radius when founded (INFERRED; the original's founding routine shows it only for a computer
+player's first city, whose radius it reveals square by square, and reveals the city square
+itself to every civilization).

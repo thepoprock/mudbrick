@@ -5,6 +5,7 @@
  * executable's movement allowance routine and its unit move handler. Movement is counted in
  * thirds of a movement point: a unit with `move` 1 has 3 thirds per turn.
  */
+import { lookAround } from './sight.js';
 import type { Rng } from './rng.js';
 import { DOMAIN_AIR, DOMAIN_GROUND, DOMAIN_SEA, type EngineRules } from './rules.js';
 import { OCEAN, SquareFlag, type City, type Point, type Unit, type World } from './world.js';
@@ -394,6 +395,6 @@ export function tryMove(
   applyMove(rules, unit, to, verdict.cost, ctx);
   if (cargo.length > 0) carryCargo(world, unit, cargo, to);
   if (moverType?.domain === DOMAIN_GROUND && world.isLand(to.x, to.y)) delete unit.aboard;
-  world.reveal(to.x, to.y, unit.owner);
+  lookAround(world, rules, unit);
   return { kind: 'moved', cost: verdict.cost };
 }

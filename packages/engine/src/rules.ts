@@ -42,6 +42,8 @@ export type TerrainChangeRule =
   { kind: 'yes' } | { kind: 'no' } | { kind: 'becomes'; terrainIndex: number };
 
 export interface UnitFlagsRule {
+  /** Sees the ring at distance two as well (squares of its own element). */
+  twoSquareVisibility: boolean;
   ignoreZonesOfControl: boolean;
   alpine: boolean;
   mustStayNearLand: boolean;

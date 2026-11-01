@@ -391,7 +391,7 @@ app may answer (unset means refuse), and barbarians take an empty city by moving
 base, terrain and stacking terms, the turning penalty, the treaty avoidance (with the engine's
 war-by-default stand-in for treaties), the undefended-city and village bonuses, the exploration
 terms over a per-civilization "seen" mask (map byte 4, kept by the world and revealed with a
-sight radius of one around units and the city radius around cities — INFERRED radii), the
+a sight radius of one around units, two for units with the two-square-visibility flag on squares of their element — VERIFIED 0x0041aad6, see rules-movement.md — and the city radius around cities (INFERRED)), the
 attack gate and the fatigue rule. Settlers follow the verified site rule over the fertility
 rating and territory (`fertility.ts`, exact against the shipped fresh game), and the defender
 quota is the verified formula. Stand-ins marked INFERRED in the code: continent plan 5 for the quota, the

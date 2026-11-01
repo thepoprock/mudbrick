@@ -282,6 +282,21 @@ export class World {
   }
 
   /** Mark (x, y) and its eight neighbours seen by `slot` (INFERRED sight radius of one). */
+  /** Mark one square seen by `slot`. */
+  revealSquare(x: number, y: number, slot: number): void {
+    const i = this.index(x, y);
+    this.seen[i] = (this.seen[i] ?? 0) | (1 << slot);
+  }
+
+  /** The square `dx`, `dy` away in game coordinates, wrapped; null off the map. */
+  offsetSquare(x: number, y: number, dx: number, dy: number): Point | null {
+    const ny = y + dy;
+    if (ny < 0 || ny >= this.rows) return null;
+    const nx = this.wrapX(x + dx, ny);
+    return nx === null ? null : { x: nx, y: ny };
+  }
+
+  /** Mark a square and its eight neighbours seen by `slot` (a unit's basic sight). */
   reveal(x: number, y: number, slot: number): void {
     const bit = 1 << slot;
     const mark = (p: Point | null) => {

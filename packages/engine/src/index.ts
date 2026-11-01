@@ -16,6 +16,7 @@ export * from './spaceship.js';
 export * from './score.js';
 export * from './aiResearch.js';
 export * from './events.js';
+export * from './sight.js';
 export * from './newGame.js';
 export * from './mapgen.js';
 export * from './defender.js';

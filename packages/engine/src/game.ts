@@ -97,6 +97,7 @@ import { releaseCitySite } from './fertility.js';
 import { civilizationScore, retirementStage, type ScoreBreakdown } from './score.js';
 import { advanceValue } from './aiResearch.js';
 import { restartCivilization, type NewGameLeader } from './newGame.js';
+import { lookAround } from './sight.js';
 import {
   newEventState,
   ScenarioEvents,
@@ -324,10 +325,9 @@ export class Game {
     };
   }
 
-  /** Mark what a civilization's units and cities can see (INFERRED sight radii). */
+  /** Mark what a civilization's units and cities can see (unit sight VERIFIED, city radius INFERRED). */
   revealFor(slot: number): void {
-    for (const u of this.world.units)
-      if (u.owner === slot) this.world.reveal(u.position.x, u.position.y, slot);
+    for (const u of this.world.units) if (u.owner === slot) lookAround(this.world, this.rules, u);
     for (const c of this.world.cities)
       if (c.owner === slot) this.world.revealRadius(c.position.x, c.position.y, slot);
   }

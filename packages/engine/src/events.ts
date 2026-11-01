@@ -3,6 +3,7 @@ import { releaseCitySite } from './fertility.js';
 import { grantAdvance } from './research.js';
 import type { Rng } from './rng.js';
 import { DOMAIN_AIR, DOMAIN_SEA, type EngineRules } from './rules.js';
+import { lookAround } from './sight.js';
 import { ORDER } from './terraform.js';
 import type { Unit, World } from './world.js';
 import { setTreaty, TREATY } from './diplomacy.js';
@@ -336,6 +337,7 @@ export class ScenarioEvents {
       const home = w.cities.find((c) => c.name.toUpperCase() === cu.homeCity.toUpperCase());
       if (home && home.owner === owner) unit.homeCity = home.id;
       w.units.push(unit);
+      lookAround(w, this.rules, unit); // INFERRED: the original's unit creator looks around
       out.push({
         kind: 'scenario-note',
         text: `${type.name} created for ${owner} at ${p.x},${p.y}`,
