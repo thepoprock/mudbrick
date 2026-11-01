@@ -275,7 +275,9 @@ export function establishTradeRoute(
   const commodity =
     unit.commodity === undefined ? 0 : unit.commodity >= 0x80 ? FOOD_ROUTE : unit.commodity;
   const d = distance(world, city.position, home.position);
-  let base = Math.trunc((((home.lastTrade ?? 0) + (city.lastTrade ?? 0)) * (d + 10)) / 24);
+  // VERIFIED 0x0042f7a0: distance counts for less on a large map, more on a small one.
+  const dist = world.largeMap ? Math.trunc((d * 4) / 5) : world.smallMap ? (d * 5) >> 2 : d;
+  let base = Math.trunc((((home.lastTrade ?? 0) + (city.lastTrade ?? 0)) * (dist + 10)) / 24);
   if (landmassOf(world, city.position) !== landmassOf(world, home.position)) base <<= 1;
   if (city.owner === unit.owner) base >>= 1;
   const freight = unit.type === FREIGHT;

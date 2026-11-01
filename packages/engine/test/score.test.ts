@@ -108,11 +108,7 @@ describe('the civilization score (verified)', () => {
     const s = civilizationScore(w, a, ctx({ destroyedCivilizations: 1 }));
     expect(s.conquest).toBe(100 + (570 - 250) * 2 + 400);
     expect(s.total).toBe(Math.max(s.civilization, s.conquest));
-    const dearer = civilizationScore(
-      w,
-      a,
-      ctx({ destroyedCivilizations: 1, researchDearer: true }),
-    );
+    const dearer = civilizationScore(w, a, ctx({ destroyedCivilizations: 1, largeMap: true }));
     expect(dearer.conquest).toBe(Math.trunc((s.conquest * 5) / 4));
     const early = civilizationScore(w, a, ctx({ turn: 100, noRestart: true }));
     expect(early.conquest).toBe((570 - 250) * 2 + 400);

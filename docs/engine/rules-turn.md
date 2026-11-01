@@ -85,7 +85,7 @@ spaceship's credit — population aboard × success — once the ship has won; �
 the yearly routine and are reset by the combat handler whenever two civilizations' units fight.
 The last civilization in play also scores a conquest bonus: civilizations destroyed (header +25,
 INFERRED from this use) × 100 + (570 − turn) × 2 + 400, the turn floored at 250 under "don't
-restart if eliminated" (options byte 1 bit 0), ×5/4 under dearer research and ×4/5 under
+restart if eliminated" (options byte 1 bit 0), ×5/4 on a large map and ×4/5 under
 cheaper (options byte 8 bits 2 and 3); the score is the larger of the two. A scenario with
 objective victory (scenario flag bit 1) scores instead by objectives: a city's objective value
 (0x0042bf49) is one when its record's byte 7 bit 2 is set, plus one per wonder in it when

@@ -22,7 +22,7 @@ export interface ResearchValueContext {
   civilize: number;
   tribe: number;
   /** Options byte 8 bit 2. */
-  researchDearer: boolean;
+  largeMap: boolean;
   ownsWonder: (slot: number, wonder: number) => boolean;
   /** Slot holding the wonder, or null. */
   wonderOwner: (wonder: number) => number | null;
@@ -157,7 +157,7 @@ export function advanceValue(
   const rule = rules.advances[advance];
   let v = (rule?.civilizedModifier ?? 0) * civilize + (rule?.aiValue ?? 0);
   // The naval ladder: toward the Trireme 3, the Caravel or Frigate 2, the Transport 1 (doubled
-  // under dearer research); for a computer player (or anyone under dearer research) it is one
+  // on a large map); for a computer player (or anyone on a large map) it is one
   // point — the "no one to trade with" branch that would add the whole ladder can never run,
   // since the test it makes finds another civilization as soon as the player knows an advance.
   let ladder = 0;
@@ -168,8 +168,8 @@ export function advanceValue(
   )
     ladder = 2;
   else if (leadsTo(rules, unitPreq(rules, 43), advance)) ladder = 1;
-  if (ctx.researchDearer) ladder <<= 1;
-  if (ladder !== 0 && (!human || ctx.researchDearer)) v += 1;
+  if (ctx.largeMap) ladder <<= 1;
+  if (ladder !== 0 && (!human || ctx.largeMap)) v += 1;
   if (improvementPreq(rules, 34) === advance) v += Math.trunc(ctx.seaUnits / 4);
   if (!human) {
     if ((ctx.humanMask & ctx.knownBy(76)) !== 0) {

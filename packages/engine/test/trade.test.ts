@@ -130,7 +130,7 @@ function caravan(
   return u;
 }
 function world(): World {
-  const w = new World({ columns: 30, rows: 30, flatEarth: true });
+  const w = new World({ columns: 60, rows: 60, flatEarth: true });
   w.terrain.fill(2);
   w.landmass.fill(1);
   w.civs.push(civ(1), civ(2));

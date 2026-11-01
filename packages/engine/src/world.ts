@@ -336,6 +336,16 @@ export class World {
     this.visited[this.index(x, y)] = owner & 15;
   }
 
+  /** VERIFIED 0x00413cdb: a world of 6,000 squares or more counts as large. */
+  get largeMap(): boolean {
+    return this.columns * this.rows >= 6000;
+  }
+
+  /** VERIFIED 0x00413cdb: a world of under 3,000 squares counts as small. */
+  get smallMap(): boolean {
+    return this.columns * this.rows < 3000;
+  }
+
   /** Has civilization `slot` seen square (x, y)? Map byte 4 bit n (VERIFIED). */
   isSeen(x: number, y: number, slot: number): boolean {
     return ((this.seen[this.index(x, y)] ?? 0) & (1 << slot)) !== 0;

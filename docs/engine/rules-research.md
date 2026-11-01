@@ -118,8 +118,8 @@ advance is X or one of X's prerequisite ancestors (0x00492025):
    advances: one per advance the two share (floor −1), and to −1 outright when that human's
    reputation is above 6. Then `civilized modifier × civilize + AI value` (RULES @CIVILIZE).
 2. The naval ladder: leads to the Trireme's advance 3, the Caravel's or Frigate's 2, the
-   Transport's 1 (RULES @UNITS slots 32, 33, 35, 43), doubled under dearer research; it adds one
-   point for a computer player (for a human only under dearer research) — the branch adding the
+   Transport's 1 (RULES @UNITS slots 32, 33, 35, 43), doubled on a large map; it adds one
+   point for a computer player (for a human only on a large map) — the branch adding the
    whole ladder to a player with no one to trade with can never run, its test finding another
    civilization as soon as the player knows any advance.
 3. The Port Facility's advance (slot 34): + sea units / 4 (the civilization's +0x6a count,

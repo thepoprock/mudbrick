@@ -173,8 +173,8 @@ export interface GameState {
   firstDiscoveredBy: number[];
   /** Scenario parameters in effect. */
   scenario?: ScenarioState;
-  researchDearer?: boolean;
-  researchCheaper?: boolean;
+  largeMap?: boolean;
+  smallMap?: boolean;
   /** Scenario: governments may not change. */
   forbidGovernmentChange?: boolean;
   /** Scenario: no pollution at all. */
@@ -308,8 +308,8 @@ export const AI_SPACE_ADVANCES = [32, 41] as const;
 export function calendarOptionsOf(state: GameState): CalendarOptions {
   const sc = state.scenario;
   return {
-    researchDearer: state.researchDearer ?? false,
-    researchCheaper: state.researchCheaper ?? false,
+    largeMap: state.largeMap ?? false,
+    smallMap: state.smallMap ?? false,
     ...(sc && sc.yearsPerTurn !== undefined && sc.startingYear !== undefined
       ? { scenario: { yearsPerTurn: sc.yearsPerTurn, startingYear: sc.startingYear } }
       : {}),
@@ -1250,6 +1250,7 @@ export class Game {
     return {
       rowsRelief: this.rowsRelief(),
       ...(this.state.doubleProduction ? { doubleProduction: true } : {}),
+      ...(this.world.largeMap ? { largeMap: true } : {}),
       government: civ.government,
       difficulty: this.state.difficulty,
       isHuman: civ.isHuman,
@@ -1332,8 +1333,8 @@ export class Game {
       reachableAdvances: reachableAdvanceCount(this.rules),
       techParadigm: this.rules.cosmic.techParadigm ?? 10,
       ...(this.state.scenario ? { scenario: this.state.scenario } : {}),
-      ...(this.state.researchDearer ? { researchDearer: true } : {}),
-      ...(this.state.researchCheaper ? { researchCheaper: true } : {}),
+      ...(this.state.largeMap ? { largeMap: true } : {}),
+      ...(this.state.smallMap ? { smallMap: true } : {}),
     });
   }
 
@@ -1793,8 +1794,8 @@ export class Game {
       ...(this.state.destroyedCivilizations !== undefined
         ? { destroyedCivilizations: this.state.destroyedCivilizations }
         : {}),
-      ...(this.state.researchDearer ? { researchDearer: true } : {}),
-      ...(this.state.researchCheaper ? { researchCheaper: true } : {}),
+      ...(this.state.largeMap ? { largeMap: true } : {}),
+      ...(this.state.smallMap ? { smallMap: true } : {}),
       ...(this.state.noRestart ? { noRestart: true } : {}),
       isHuman: (s) => this.civ(s).isHuman,
       massThrust: this.rules.cosmic.massThrustParadigm ?? 75,
@@ -2596,7 +2597,7 @@ export class Game {
       reputationOf: (s: number) => this.world.civs.find((c) => c.slot === s)?.reputation ?? 0,
       civilize: leader?.civilize ?? 0,
       tribe: civ.tribe ?? -1,
-      researchDearer: this.state.researchDearer ?? false,
+      largeMap: this.state.largeMap ?? false,
       ownsWonder: (s: number, w: number) => this.ownsWonder(s, w),
       wonderOwner: (w: number) => {
         const id = this.wonderCity(w);

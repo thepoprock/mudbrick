@@ -40,9 +40,9 @@ export interface ResearchContext {
    */
   scenario?: { techParadigm: number; fixedCost: boolean };
   /** Options byte 8 bit 2: research costs 25 % more. */
-  researchDearer?: boolean;
+  largeMap?: boolean;
   /** Options byte 8 bit 3: research costs 20 % less. */
-  researchCheaper?: boolean;
+  smallMap?: boolean;
 }
 
 /** Advances whose first prerequisite is not `no` in the rules (VERIFIED: the loader's rule). */
@@ -77,8 +77,8 @@ export function researchCost(advancesKnown: number, ctx: ResearchContext): numbe
   if (ctx.reachableAdvances > BASELINE_ADVANCE_COUNT) {
     k = trunc((k * BASELINE_ADVANCE_COUNT) / ctx.reachableAdvances);
   }
-  if (ctx.researchDearer) k = trunc((k * 5) / 4);
-  if (ctx.researchCheaper) k = trunc((k * 4) / 5);
+  if (ctx.largeMap) k = trunc((k * 5) / 4);
+  if (ctx.smallMap) k = trunc((k * 4) / 5);
   if (ctx.isHuman && k < 11 - n) k = 11 - n;
   const cost = n * k;
   return cost < 1 || cost > 32000 ? 32000 : cost;

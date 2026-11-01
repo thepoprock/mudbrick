@@ -65,8 +65,8 @@ describe('research cost (verified)', () => {
   it('applies the tech paradigm, the ruleset size and the option flags', () => {
     expect(researchCost(5, ctx({ leaderAdvances: 5, techParadigm: 20 }))).toBe(85);
     expect(researchCost(5, ctx({ leaderAdvances: 5, reachableAdvances: 60 }))).toBe(55);
-    expect(researchCost(5, ctx({ leaderAdvances: 5, researchDearer: true }))).toBe(50);
-    expect(researchCost(5, ctx({ leaderAdvances: 5, researchCheaper: true }))).toBe(30);
+    expect(researchCost(5, ctx({ leaderAdvances: 5, largeMap: true }))).toBe(50);
+    expect(researchCost(5, ctx({ leaderAdvances: 5, smallMap: true }))).toBe(30);
     expect(
       researchCost(5, ctx({ leaderAdvances: 5, scenario: { techParadigm: 20, fixedCost: true } })),
     ).toBe(85);

@@ -50,8 +50,8 @@ export const CALENDAR: readonly (readonly CalendarSegment[])[] = [
 
 export interface CalendarOptions {
   /** Options byte 8 bit 2 / bit 3: shift the timeline one difficulty row down / up. */
-  researchDearer?: boolean;
-  researchCheaper?: boolean;
+  largeMap?: boolean;
+  smallMap?: boolean;
   /** Scenario calendar: `startingYear + |yearsPerTurn| × turn − 1` when yearsPerTurn ≠ 0. */
   scenario?: { yearsPerTurn: number; startingYear: number };
   /** Header offset 32: from this turn on the calendar advances one year per turn (−1 / undefined = never). */
@@ -70,8 +70,8 @@ export function gameYear(turn: number, difficulty: number, opts: CalendarOptions
     return opts.scenario.startingYear + Math.abs(opts.scenario.yearsPerTurn) * t - 1 + extra;
   }
   let d = difficulty;
-  if (opts.researchDearer) d -= 1;
-  if (opts.researchCheaper) d += 1;
+  if (opts.largeMap) d -= 1;
+  if (opts.smallMap) d += 1;
   const row = CALENDAR[Math.max(0, Math.min(3, d - 1))] ?? CALENDAR[1];
   if (!row) return -4000;
   if (t !== 0) t -= 1;

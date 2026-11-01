@@ -53,10 +53,10 @@ export function gameFromSave(save: SaveFile, rules: Rules, world: World): Game {
         }
       : {}),
     ...(save.options.raw[8] !== undefined && (save.options.raw[8] & 4) !== 0
-      ? { researchDearer: true }
+      ? { largeMap: true }
       : {}),
     ...(save.options.raw[8] !== undefined && (save.options.raw[8] & 8) !== 0
-      ? { researchCheaper: true }
+      ? { smallMap: true }
       : {}),
   };
   // The original seeds the C runtime's rand(); the save does not carry its state, so any seed is

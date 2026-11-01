@@ -10,7 +10,7 @@ import type { Civ, World } from './world.js';
  * five a future technology, and the barbarian level × 25 − 50; never below zero. The last
  * civilization standing also scores a conquest bonus: civilizations destroyed × 100 +
  * (570 − turn) × 2 + 400 (the turn floored at 250 when "don't restart if eliminated" is on),
- * ×5/4 under dearer research, ×4/5 under cheaper; the score is the larger of the two. The
+ * ×5/4 on a large map, ×4/5 on a small map; the score is the larger of the two. The
  * objective-based scoring of a scenario (scenario flag bit 1) is not modelled. The year limit
  * (0x0046b0fa): the year 2000 warns of retirement, 2020 ends the game. docs/engine/rules-turn.md.
  */
@@ -26,8 +26,8 @@ export interface ScoreContext {
   destroyedCivilizations?: number;
   /** Options byte 1 bit 0: "don't restart if eliminated". */
   noRestart?: boolean;
-  researchDearer?: boolean;
-  researchCheaper?: boolean;
+  largeMap?: boolean;
+  smallMap?: boolean;
   /** For the landed ship's credit. */
   isHuman: (slot: number) => boolean;
   massThrust: number;
@@ -107,8 +107,8 @@ export function civilizationScore(world: World, civ: Civ, ctx: ScoreContext): Sc
     let turn = ctx.turn;
     if (ctx.noRestart && turn < 251) turn = 250;
     conquest = (ctx.destroyedCivilizations ?? 0) * 100 + (570 - turn) * 2 + 400;
-    if (ctx.researchDearer) conquest = Math.trunc((conquest * 5) / 4);
-    if (ctx.researchCheaper) conquest = Math.trunc((conquest * 4) / 5);
+    if (ctx.largeMap) conquest = Math.trunc((conquest * 5) / 4);
+    if (ctx.smallMap) conquest = Math.trunc((conquest * 4) / 5);
   }
   const base = {
     citizens,

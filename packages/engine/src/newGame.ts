@@ -368,6 +368,8 @@ export function newGame(rules: EngineRules, rng: Rng, opts: NewGameOptions): New
     ...(opts.bloodlust ? { bloodlust: true } : {}),
     ...(opts.noRestart ? { noRestart: true } : {}),
     difficulty: opts.difficulty,
+    ...(world.largeMap ? { largeMap: true } : {}),
+    ...(world.smallMap ? { smallMap: true } : {}),
     realisticCombat: opts.realisticCombat ?? true,
     firstDiscoveredBy: Array<number>(advances).fill(0),
     barbarianActivity: opts.barbarianActivity,

@@ -39,6 +39,8 @@ export interface CityContext {
   connectedToCapital: number;
   /** Scenario "double production" flag. */
   doubleProduction?: boolean;
+  /** A world of 6,000 squares or more (option flag 4). */
+  largeMap?: boolean;
   /** Options word bit 4 (simplified combat off) — unused here, kept for parity. */
   damageMatters?: boolean;
   /**
@@ -450,7 +452,8 @@ export function mood(rules: EngineRules, city: City, ctx: CityContext, inputs: M
   if (!ctx.isHuman) {
     unhappy = size - 1 - (rules.cosmic.unhappinessCitySizeChieftain - 5);
   } else {
-    const riot = rules.cosmic.riotFactor - 2 * ctx.difficulty;
+    // VERIFIED 0x004b6359: a large map leaves room for two more cities per step.
+    const riot = rules.cosmic.riotFactor - 2 * ctx.difficulty + (ctx.largeMap ? 2 : 0);
     const step = Math.max(1, Math.floor((((ctx.government >> 1) + 2) * riot) / 2));
     let contentBase = rules.cosmic.unhappinessCitySizeChieftain - ctx.difficulty;
     if (contentBase < 3 && city.improvements[IMPROVEMENT.palace] && inputs.noMilitaryUnhappiness)

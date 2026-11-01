@@ -1254,6 +1254,7 @@ function rankProduction(env: AiBuildEnv): ProductionRanking {
         n = Math.trunc(n / Math.max(1, Math.trunc(((u.move + 1) * strength) / 2)));
       }
       if (role === 2) {
+        if (world.largeMap) n -= Math.trunc(n / 4); // VERIFIED: ships are worth more
         if (f.plan === 4 && n > 0) n -= Math.trunc(n / 4);
         n = f.expanding ? n << 2 : n << 1;
         if (city.improvements[IMPROVEMENT.portFacility]) n -= Math.trunc(n / 4);

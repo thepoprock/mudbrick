@@ -41,7 +41,7 @@ function ctx(over: Partial<ResearchValueContext> = {}): ResearchValueContext {
     reputationOf: () => 0,
     civilize: 1,
     tribe: 13, // Mongols: no tastes
-    researchDearer: false,
+    largeMap: false,
     ownsWonder: () => false,
     wonderOwner: () => null,
     seaUnits: 0,

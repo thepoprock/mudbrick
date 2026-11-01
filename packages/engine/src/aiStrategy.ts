@@ -454,6 +454,7 @@ export function runStrategy(
       ctx.turn > 150
     )
       k = 7;
+    if (world.largeMap) k += 1; // VERIFIED 0x004ed2dd
     let full = (stats.land[lm] ?? 0) < (myUnits + unitsAll) * 2;
     const d = (s.landFlags[lm] ?? 0) === 0 ? ctx.expand(slot) + k + 1 : k;
     if ((stats.rated[lm] ?? 0) < (myCities + citiesAll) * d + 2) full = true;
