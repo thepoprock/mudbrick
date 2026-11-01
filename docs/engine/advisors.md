@@ -87,3 +87,10 @@ ported; F10 opens it at any time.
 
 Describe.txt supplies the text and RULES.TXT the facts: cost, upkeep, prerequisites, what an
 advance leads to and allows. `?` opens it. Terrain and concepts are not offered yet.
+
+## Sound
+
+`packages/engine/src/sounds.ts`. The name table at 0x005b5228 holds 133 entries of 9 bytes;
+0x00452e10 plays `SOUND/NAME.WAV`, and CHEERS picks one of three. The attack routine 0x0052d472
+chooses by unit slot and domain, and production 0x004b7e74 by improvement. `M` mutes. Music
+(the Pick Music menu and CD tracks) is not ported.

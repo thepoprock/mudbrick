@@ -46,7 +46,9 @@ import {
   setRates,
   squareYield,
   toggleWorker,
+  attackSound,
   HISTORY_KINDS,
+  improvementSound,
   parseCouncil,
   scienceReport,
   spaceshipRows,
@@ -163,6 +165,7 @@ export class PlaySession {
   openCity: City | null = null;
   gotoMode = false;
   paradropMode = false;
+  muted = false;
   private readonly logLines: string[] = [];
   private cityNames = 0;
 
@@ -258,6 +261,10 @@ export class PlaySession {
       case 'F11':
       case 'F12':
         this.showReport(e.key);
+        return true;
+      case 'M':
+        this.muted = !this.muted;
+        this.log(this.muted ? 'Sound off.' : 'Sound on.');
         return true;
       case 'F10':
         this.showCouncil();
@@ -535,6 +542,9 @@ export class PlaySession {
         (ev.result.promoted ? `; ${this.unitName(winner)} becomes veteran` : '') +
         '.',
     );
+    const attackerType = this.rules.units[unit.type];
+    if (attackerType)
+      this.sound(attackSound(attackerType, unit.type, this.rules.units[ev.defender.type]));
     if (ev.stackLost.length > 0)
       this.log(`${ev.stackLost.length} more enemy unit(s) destroyed with the defender.`);
     if (ev.cityDestroyed) this.log(`${ev.cityShrunk?.name ?? 'The city'} is destroyed.`);
@@ -747,7 +757,9 @@ export class PlaySession {
       if (e.slot !== this.humanSlot) continue;
       const text = this.eventText(e);
       if (text) this.log(text);
+      this.eventSound(e.event);
     }
+    this.sound('ENDOTURN');
     this.log(`— Turn ${this.game.state.turn}, ${this.yearText()} —`);
     this.nextTalk();
     if (this.game.state.gameOver) {
@@ -757,6 +769,35 @@ export class PlaySession {
     this.selected = null;
     this.selectNext();
     this.refresh();
+  }
+
+  /** Play SOUND/NAME.WAV from the game folder, if it is there. */
+  private sound(name: string | null): void {
+    if (!name || this.muted) return;
+    const file = name === 'CHEERS' ? `CHEERS${this.game.rng.nextInt(3) + 1}` : name;
+    void this.folder.file(`SOUND/${file}.WAV`).then((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = new Audio(url);
+      a.addEventListener('ended', () => URL.revokeObjectURL(url));
+      void a.play().catch(() => undefined);
+    });
+  }
+
+  private eventSound(ev: TurnEvent['event']): void {
+    switch (ev.kind) {
+      case 'built-improvement':
+      case 'built-wonder':
+        this.sound(improvementSound(ev.improvement));
+        break;
+      case 'disorder':
+        this.sound('CIVDISOR');
+        break;
+      case 'discovered':
+        this.sound('POS1');
+        break;
+      default:
+    }
   }
 
   private eventText(e: TurnEvent): string | null {
@@ -1587,6 +1628,7 @@ export class PlaySession {
       box.appendChild(
         button(`Buy for ${price} gold`, () => {
           const r = buyProduction(this.rules, civ, city);
+          if (r === null) this.sound('POS1');
           if (r === 'gold') this.log(`You need ${price} gold.`);
           if (r === 'disorder') this.log(`${city.name} is in disorder: no units can be bought.`);
         }),
@@ -1609,6 +1651,7 @@ export class PlaySession {
     sell.addEventListener('change', () => {
       if (sell.value === '') return;
       sellImprovement(this.rules, civ, city, Number(sell.value));
+      this.sound('SELL');
       this.log(`${city.name} sells ${this.rules.improvements[Number(sell.value)]?.name ?? ''}.`);
       this.refresh();
     });
