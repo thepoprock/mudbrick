@@ -51,6 +51,7 @@ import {
 } from './rules.js';
 import { beginUnitsTurn, type UnitTurnEvent } from './turnStart.js';
 import { fallout } from './nuclear.js';
+import { enterHut } from './huts.js';
 import { cityPollution, meltdownRoll, pollutionRoll, type PollutionEvent } from './pollution.js';
 import { aiChooseProduction } from './aiBuild.js';
 import { runStrategy, type StrategyEvent } from './aiStrategy.js';
@@ -360,6 +361,14 @@ export class Game {
       attackOn: (s, m) => strategy(s)?.attackOn[m] ?? 0,
       planOn: (s, m) => strategy(s)?.plans[m] ?? 0,
       power: (s) => strategy(s)?.strengthSum ?? 0,
+      dropSenate: (s) => {
+        aiPickGovernment(this.world, this.civ(s), {
+          knows: (x) => this.knows(s, x),
+          ownsStatue: this.ownsWonder(s, IMPROVEMENT.statueOfLiberty),
+          sneakAttack: true,
+          nextInt: (n) => this.rng.nextInt(n),
+        });
+      },
       leaderAttack: (s) => leader(s)?.attack ?? 0,
       leaderCivilize: (s) => leader(s)?.civilize ?? 0,
       leaderExpand: (s) => leader(s)?.expand ?? 0,
@@ -1272,6 +1281,17 @@ export class Game {
         wondersOf: (s) => this.wondersOf(s),
         cityCount: (s) => this.citiesOf(s).length,
         nextCityName: () => `${civ.adjective} City ${++names}`,
+        enterVillage: (u) => {
+          enterHut(this.world, this.rules, this.rng, civ, u, {
+            turn: this.state.turn,
+            year: yearOf(this.state),
+            difficulty: this.state.difficulty,
+            barbarianActivity: this.state.barbarianActivity ?? 0,
+            knownByAnyone: (x) => this.world.civs.some((c) => c.knownAdvances[x]),
+            advanceGained: (c, x) => this.advanceGained(c, x),
+            nextCityName: () => `${civ.adjective} City ${++names}`,
+          });
+        },
         onUnitKilled: (t, a, d) => this.unitKilled(t, a, d),
         onCityTaken: (c, a, d) => this.cityTaken(c, a, d),
         advanceGained: (c, a) => this.advanceGained(c, a),
@@ -1352,6 +1372,7 @@ export class Game {
   /** One slot's turn in the round's order: slot 0 is the barbarians (0x0046b55e). */
   private playSlot(slot: number): TurnEvent[] {
     const out: TurnEvent[] = [];
+    for (const u of this.world.units) this.world.markVisited(u.position.x, u.position.y, u.owner);
     if (slot === 0) {
       out.push(...this.processBarbarians());
       return out;

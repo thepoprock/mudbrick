@@ -37,6 +37,8 @@ const ANNOYED = 1 << 22;
 const TALKED = 1 << 23;
 
 export interface NegotiationEnv {
+  /** A hostile leader overrides its senate with a new government (0x0051278c with 1). */
+  dropSenate?: (slot: number) => void;
   world: World;
   rules: EngineRules;
   rng: Rng;
@@ -546,12 +548,11 @@ export class Talk {
       this.talks < this.limit() &&
       c.government > 4 &&
       hostile &&
-      (this.cw & (TREATY.alliance | ANNOYED)) === 0 &&
-      env.power(cs) * 2 < env.power(hs) * 3 &&
-      !a.leader &&
-      !this.vendetta
+      (this.cw & (TREATY.alliance | ANNOYED)) === 0
     ) {
-      hostile = false;
+      // Unless it is the weaker side, the leader gets its way by changing the government.
+      if (env.power(cs) * 2 < env.power(hs) * 3 && !a.leader && !this.vendetta) hostile = false;
+      else env.dropSenate?.(cs);
     }
     if (fear === 0 && mood < 2) mood = 1;
     if (!((this.hw & TREATY.war) !== 0) && mood > 98) mood = 99;

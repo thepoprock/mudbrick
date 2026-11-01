@@ -65,8 +65,9 @@ Run at the start and again after each treaty or payment. Results: `tribute`, a m
 11. `betrayal` needs (first pass or `gap` > 6), no war or over 4 ceded, no alliance, hostility or
     a space race above Prince, and C weaker, or a vendetta, or `gap` > 6. It clears `hostile` and
     `stance` and caps `mood` at 30.
-12. On the first pass a C senate backs off from a much stronger H. The other arm, where C's
-    government is sneak-tested (0x0051278c), is not ported.
+12. On the first pass a C Republic or Democracy with a hostile leader backs off from a much stronger
+    H. Otherwise the leader overrides the senate: C picks a new government, none above Fundamentalism
+    two times in three and none above Republic the rest (0x0051278c with 1).
 13. Clamps: at least 1 with no `fear`; at most 99 unless H is at war; at most 74 if H is allied or
     `stance` is 0; at least 26 when H is at war.
 

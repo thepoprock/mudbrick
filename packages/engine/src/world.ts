@@ -293,6 +293,8 @@ export class World {
   readonly seen: Uint8Array;
   /** Per square: civilization slot whose city radius claims it, 0 none (map byte 2). */
   readonly territory: Uint8Array;
+  /** Who last stood here first, 15 for nobody ever (map byte 5 high nibble, 0x00554b8f). */
+  readonly visited: Uint8Array;
   /** Per square: fertility rating 0 or 8–15 (map byte 5, low nibble; fertility.ts). */
   readonly fertility: Uint8Array;
   /** Land and rated squares per land mass, computed on first use (aiStrategy.ts). */
@@ -315,7 +317,13 @@ export class World {
     this.landmass = new Uint8Array(area);
     this.seen = new Uint8Array(area);
     this.territory = new Uint8Array(area);
+    this.visited = new Uint8Array(area).fill(15);
     this.fertility = new Uint8Array(area);
+  }
+
+  /** A unit stands here: a village on the square is gone (0x00554b8f, 0x0055951a). */
+  markVisited(x: number, y: number, owner: number): void {
+    this.visited[this.index(x, y)] = owner & 15;
   }
 
   /** Has civilization `slot` seen square (x, y)? Map byte 4 bit n (VERIFIED). */

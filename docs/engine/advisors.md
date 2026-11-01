@@ -44,9 +44,6 @@ play by how many beat it.
 | Annual income      | `advances × GNP / P`                                                                                                                                           |
 | Productivity       | `Σ(shields + route trade + food) × 10 / P`                                                                                                                     |
 
-Stand-in: land area uses the map's territory byte, because the engine does not carry the high
-nibble of byte 5.
-
 ## Historians (0x0042526d, from the turn driver 0x00467591)
 
 When the turn passes the date at file offset 0x142, the next date becomes `turn + 20 + rand % 40`.

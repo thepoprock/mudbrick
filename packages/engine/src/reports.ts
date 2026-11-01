@@ -206,7 +206,7 @@ export function demographics(game: Game, slot: number): DemographicRow[] {
   const reading = zero();
   const pop = Array<number>(8).fill(1);
   for (let i = 0; i < world.terrain.length; i++) {
-    const owner = world.territory[i] ?? 0xff;
+    const owner = world.visited[i] ?? 0xff;
     if (owner < 8) land[owner] = (land[owner] ?? 0) + 1;
   }
   const add = (a: number[], s: number, n: number) => {

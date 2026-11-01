@@ -726,7 +726,7 @@ export class PlaySession {
       turn: this.game.state.turn,
       year: yearOf(this.game.state),
       difficulty: this.game.state.difficulty,
-      barbarianActivity: 1,
+      barbarianActivity: this.game.state.barbarianActivity ?? 0,
       knownByAnyone: (a) => this.world.civs.some((c) => c.knownAdvances[a]),
       advanceGained: (c, a) => this.game.advanceGained(c, a),
       nextCityName: () => this.nextCityName(),

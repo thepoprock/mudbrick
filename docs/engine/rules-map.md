@@ -39,8 +39,9 @@ if a city stands here → none
 hut = ((a & 3) + (b & 3) × 4) == ((b >> 2) × 13 + ((x + y) >> 3) × 11 + seed + 8) & 0x1F
 ```
 
-How the game records that a hut has been entered is still to be read (INFERRED: the same byte-0
-bit 6 that suppresses specials).
+There is no record of a hut being entered. A hut exists only on a square whose byte 5 high nibble
+is still 15 (0x0055951a), and that nibble takes the owner of a unit placed on an empty square
+(0x00554b8f). So any unit standing there ends it, barbarians included.
 
 ## Grassland shield (VERIFIED, 0x004051e0)
 

@@ -351,7 +351,7 @@ describe('huts (verified decision tree)', () => {
       expect(out.city.size).toBe(1);
       expect(out.city.improvements[IMPROVEMENT.palace]).toBe(false);
     }
-    expect(w.hasFlag(2, 2, SquareFlag.NoSpecial)).toBe(true);
+    expect(w.visited[w.index(2, 2)]).toBe(ai.slot);
   });
 
   it('follows the roll for a human and applies the gold and nomad rules', () => {

@@ -5,6 +5,7 @@
  * executable's movement allowance routine and its unit move handler. Movement is counted in
  * thirds of a movement point: a unit with `move` 1 has 3 thirds per turn.
  */
+import { hutAt } from './terrainSpecials.js';
 import { lookAround } from './sight.js';
 import type { Rng } from './rng.js';
 import { DOMAIN_AIR, DOMAIN_GROUND, DOMAIN_SEA, type EngineRules } from './rules.js';
@@ -14,6 +15,8 @@ export const THIRDS = 3;
 
 /** Facts about the unit's civilization and the game options that change its allowance. */
 export interface MovementContext {
+  /** A computer's ground unit reached a village; the screen handles a human's. */
+  enterVillage?: (unit: Unit) => void;
   /** The civilization knows Nuclear Power (+1 MP for sea units). */
   nuclearPower?: boolean;
   /** Owns Magellan's Expedition (+2 MP for sea units). */
@@ -413,9 +416,12 @@ export function tryMove(
   }
   const moverType = rules.units[unit.type];
   const cargo = moverType?.domain === DOMAIN_SEA ? gatherCargo(world, rules, unit, ctx) : [];
+  const village = moverType?.domain === DOMAIN_GROUND && hutAt(world, to.x, to.y);
   applyMove(rules, unit, to, verdict.cost, ctx);
+  world.markVisited(to.x, to.y, unit.owner);
   if (cargo.length > 0) carryCargo(world, unit, cargo, to);
   if (moverType?.domain === DOMAIN_GROUND && world.isLand(to.x, to.y)) delete unit.aboard;
   lookAround(world, rules, unit);
+  if (village) ctx.enterVillage?.(unit); // VERIFIED 0x00539099: every ground unit, any owner
   return { kind: 'moved', cost: verdict.cost };
 }

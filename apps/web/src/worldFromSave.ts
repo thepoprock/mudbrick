@@ -31,6 +31,7 @@ export function worldFromSave(save: SaveFile, rules: Rules): World {
     world.seen[i] = s.visibilityMask;
     world.territory[i] = s.cityRadiusOwnerRaw >> 5;
     world.fertility[i] = s.fertility;
+    world.visited[i] = s.visitedBy;
     let f = 0;
     if (s.river) f |= SquareFlag.River;
     if (s.road) f |= SquareFlag.Road;

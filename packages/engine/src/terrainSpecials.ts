@@ -63,10 +63,9 @@ export function specialAt(world: World, x: number, y: number): Special {
   return specialPattern(x, y, world.resourceSeed, terrain, suppressed);
 }
 
-/** Hut on a world square: land, pattern matches, and nothing occupies the square. */
+/** Hut on a world square (0x0055951a): land, the pattern, no city, and no unit ever stood here. */
 export function hutAt(world: World, x: number, y: number): boolean {
-  if (world.hasFlag(x, y, SquareFlag.NoSpecial)) return false; // taken, or suppressed by the map
-  if (!world.isLand(x, y)) return false;
-  if (world.cityAt(x, y) || world.unitsAt(x, y).length > 0) return false;
+  if ((world.visited[world.index(x, y)] ?? 15) !== 15) return false;
+  if (!world.isLand(x, y) || world.cityAt(x, y)) return false;
   return hutPattern(x, y, world.resourceSeed);
 }

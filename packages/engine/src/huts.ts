@@ -15,7 +15,6 @@ import { hutAt } from './terrainSpecials.js';
 import {
   CITY_CENTRE_INDEX,
   OCEAN,
-  SquareFlag,
   type City,
   type Civ,
   type Point,
@@ -138,8 +137,7 @@ export function enterHut(
   const type = rules.units[unit.type];
   if (civ.slot === 0 || !type || type.domain !== DOMAIN_GROUND) return { kind: 'nothing' };
   const p = unit.position;
-  // A taken hut is marked with the square's suppression bit (the same bit that hides a special).
-  world.setFlag(p.x, p.y, SquareFlag.NoSpecial, true);
+  world.markVisited(p.x, p.y, civ.slot);
   const mass = world.landmass[world.index(p.x, p.y)] ?? 0;
   const cities = world.cities.filter((c) => c.owner === civ.slot).length;
   const nearest = nearestOwnCityDistance(world, civ.slot, p);

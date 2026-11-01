@@ -51,6 +51,8 @@ export interface Square {
   landmassId: number;
   /** Byte 4: one visibility bit per civilization slot 0–7. */
   visibilityMask: number;
+  /** Byte 5 high nibble: the owner of the first unit to stand here, 15 for nobody. */
+  visitedBy: number;
   /** Byte 5 low nibble: AI fertility rating. */
   fertility: number;
   /** Byte 5 high nibble: ownership (raw). */
@@ -166,6 +168,7 @@ export function decodeSquareBytes(v: DataView, o: number): Square {
     cityRadiusOwnerRaw: b2,
     landmassId: b3,
     visibilityMask: b4,
+    visitedBy: b5 >> 4,
     fertility: b5 & 0x0f,
     ownershipRaw: b5 >> 4,
   };

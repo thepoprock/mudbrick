@@ -94,6 +94,7 @@ export function snapshotGame(game: Game, humanSlot: number): string {
       landmass: w.landmass,
       seen: w.seen,
       territory: w.territory,
+      visited: w.visited,
       fertility: w.fertility,
       civs: w.civs,
       cities: w.cities,
@@ -123,6 +124,7 @@ export function restoreGame(text: string, rules: EngineRules): { game: Game; hum
     landmass: Uint8Array;
     seen: Uint8Array;
     territory: Uint8Array;
+    visited?: Uint8Array;
     fertility: Uint8Array;
     civs: World['civs'];
     cities: World['cities'];
@@ -139,6 +141,7 @@ export function restoreGame(text: string, rules: EngineRules): { game: Game; hum
   world.landmass.set(sw.landmass);
   world.seen.set(sw.seen);
   world.territory.set(sw.territory);
+  if (sw.visited) world.visited.set(sw.visited);
   world.fertility.set(sw.fertility);
   world.civs.push(...sw.civs);
   world.cities.push(...sw.cities);
