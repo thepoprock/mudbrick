@@ -173,6 +173,8 @@ export interface City {
   demanded?: Int8Array;
   /** Trade after corruption and before routes, from the last city turn (city record +30). */
   lastTrade?: number;
+  /** Shields made at the last city turn (the record's byte 81), for the advisor's comparisons. */
+  lastShields?: number;
   /** The commodity lists must be recomputed at the next city turn (city flag bit 17). */
   recomputeTrade?: boolean;
   /** AI: the city has a terrain-work objective out (city flag bit 19). */

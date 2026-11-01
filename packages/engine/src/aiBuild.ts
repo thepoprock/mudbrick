@@ -6,7 +6,7 @@
  * INFERRED defaults; every case is named by its improvement or unit role so it can be refined.
  */
 import { hasLaunched, hasStarted, kindComplete, shipOf } from './spaceship.js';
-import { distance, type CityContext } from './city.js';
+import { boxRows, distance, type CityContext } from './city.js';
 import { canBuildUnit } from './founding.js';
 import type { Production } from './world.js';
 import {
@@ -302,6 +302,8 @@ export interface AiBuildEnv {
   wonderCity: (improvement: number) => number | null;
   ownsWonder: (improvement: number) => boolean;
   canBuildImprovement: (improvement: number) => boolean;
+  /** Has anyone discovered the advance that expires this wonder? (default: never) */
+  wonderExpired?: (improvement: number) => boolean;
   /** Debug hook: every candidate and its score (lower wins). */
   trace?: (score: number, p: Production) => void;
 }
@@ -479,10 +481,52 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
     0,
   );
   const wondersHere = city.improvements.slice(39, 67).filter(Boolean).length;
-  const othersBuildingWonders = myCities.filter(
-    (c) => c !== city && c.production.kind === 'improvement' && c.production.index >= 39,
-  ).length;
-  const wonderAllowed = city.size > 2 && !city.inDisorder && continentCities >= 4 - f.civilize;
+  // VERIFIED (the advisor's city sweep): other own cities on this land mass building a wonder;
+  // which civilizations build each wonder elsewhere (an own city only when it makes more
+  // shields than this one; bit 0 when an own city has the wonder's cost in hand); own cities on
+  // the same work with more shields; foreign cities on the same work.
+  const lmOf = (c: City) => world.landmass[world.index(c.position.x, c.position.y)];
+  const hereLm = lmOf(city);
+  const sameWork = (c: City) =>
+    c.production.kind === city.production.kind && c.production.index === city.production.index;
+  const shieldRows = boxRows(rules, { isHuman: civ.isHuman, difficulty: f.difficulty }, true);
+  let othersBuildingWonders = 0;
+  const buildersOf = new Array<number>(28).fill(0);
+  let betterOnSameWork = 0;
+  let foreignOnSameWork = 0;
+  for (const c of world.cities) {
+    if (c === city) continue;
+    const cw =
+      c.production.kind === 'improvement' && c.production.index >= 39
+        ? c.production.index - 39
+        : -1;
+    if (c.owner === civ.slot) {
+      if (sameWork(c) && (c.lastShields ?? 0) > f.shields) betterOnSameWork++;
+      if (lmOf(c) !== hereLm) continue;
+      if (cw >= 0) {
+        othersBuildingWonders++;
+        if ((c.lastShields ?? 0) > f.shields)
+          buildersOf[cw] = (buildersOf[cw] ?? 0) | (1 << civ.slot);
+        if ((rules.improvements[cw + 39]?.costRows ?? 0) * shieldRows <= c.shieldsStored)
+          buildersOf[cw] = (buildersOf[cw] ?? 0) | 1;
+      }
+    } else {
+      if (sameWork(c)) foreignOnSameWork++;
+      if (cw >= 0) buildersOf[cw] = (buildersOf[cw] ?? 0) | (1 << c.owner);
+    }
+  }
+  const eraOwned = [0, 0, 0, 0];
+  for (let w = 39; w < 67; w++) {
+    const e = Math.trunc((w - 39) / 7);
+    if (myCities.some((c) => c.improvements[w])) eraOwned[e] = (eraOwned[e] ?? 0) + 1;
+  }
+  const currentWonder =
+    city.production.kind === 'improvement' && city.production.index >= 39
+      ? city.production.index
+      : null;
+  const wonderInProgress = currentWonder !== null && city.shieldsStored > 39;
+  const wonderAllowed =
+    wonderInProgress || (city.size > 2 && !city.inDisorder && continentCities >= 4 - f.civilize);
   if (wonderAllowed) {
     for (let w = 39; w < 67; w++) {
       if (!env.canBuildImprovement(w) || env.wonderCity(w) !== null) continue;
@@ -562,27 +606,64 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
         default:
           break;
       }
+      // VERIFIED order (the wonder loop): obsolete ×3 + 50 × difficulty; +5 per other own city
+      // on the land mass building a wonder, −2 with none (or a wonder under way here) and no
+      // wonder of this era owned; the threat (+1 under plan 1, else half); the same-work terms;
+      // the in-progress adjustments of the favoured flag; the production rank; the common
+      // scaling; the Palace; the progress discount. The "wonder city" flag (city flag bit 8)
+      // is INFERRED clear: the engine never sets it.
+      const obsolete = env.wonderExpired?.(w) ?? false;
+      if (obsolete) n = n * 3 + f.difficulty * 50;
       n += othersBuildingWonders * 5;
-      if (othersBuildingWonders === 0) n -= 2;
+      const era = Math.trunc((w - 39) / 7);
+      if ((othersBuildingWonders === 0 || wonderInProgress) && (eraOwned[era] ?? 0) === 0) n -= 2;
       n += f.plan === 1 ? f.threat + 1 : f.threat >> 1;
-      // VERIFIED (the wonder loop against the civilization's +0x3d2): unless a wonder here
-      // already has forty shields, a city making no more than half the civilization's best
-      // `2 × shields − support` finds every wonder twice as costly (a human's strong city that
-      // is not the best and makes less than 6 too); the best city finds them a third cheaper.
+      const buildingThis = currentWonder === w;
+      if (buildingThis) {
+        if (foreignOnSameWork > 0) n = Math.trunc(n / 2);
+        n = (betterOnSameWork + 1) * n + betterOnSameWork;
+      } else if (
+        currentWonder !== null &&
+        ((buildersOf[currentWonder - 39] ?? 0) & (1 << civ.slot)) !== 0
+      ) {
+        n = n * 2 + 1;
+      }
+      const cost = (rules.improvements[w]?.costRows ?? 0) * shieldRows + 1;
+      // The favoured (×10) scaling: the original compares its running flag with the land-mass
+      // flag that `expanding` models; for wonders they differ exactly when the plan is 0 or 1.
+      let favoured = !f.expanding;
+      if (wonderInProgress && urgent === 0 && !obsolete) {
+        if (othersBuildingWonders === 0) {
+          if (favoured) n = Math.trunc(n / 2);
+          else favoured = true;
+        }
+        if (Math.trunc((cost * 3) / 4) <= city.shieldsStored) favoured = true;
+        if (!favoured && Math.trunc(cost / 2) <= city.shieldsStored && othersBuildingWonders < 3)
+          favoured = true;
+      }
+      // VERIFIED (against the civilization's +0x3d2): unless a wonder here already has forty
+      // shields, a city making no more than half the civilization's best `2 × shields −
+      // support` finds every wonder twice as costly (a human's strong city that is not the
+      // best and makes less than 6 too); the best city finds them a third cheaper.
       const p2 = f.shields * 2 - f.support;
       const best = f.bestProduction ?? p2;
-      const wonderInProgress =
-        city.production.kind === 'improvement' &&
-        city.production.index >= 39 &&
-        city.shieldsStored > 39;
       if (!wonderInProgress) {
         if (best >> 1 < p2) {
           if (civ.isHuman && best !== p2 && p2 < 6) n <<= 1;
         } else n <<= 1;
       }
       if (best === p2) n -= Math.trunc(n / 3);
-      let v = scaleCommon(n, f.expanding, f.civilize, city, barracksOnContinent, shakespeares);
-      if (city.improvements[IMPROVEMENT.palace]) v -= Math.trunc(v / 3);
+      let v = scaleCommon(n, favoured, f.civilize, city, barracksOnContinent, shakespeares);
+      if (city.improvements[IMPROVEMENT.palace]) {
+        v -= Math.trunc(v / 3);
+        if (wondersHere === 0 || (eraOwned[era] ?? 0) === 0) v = Math.trunc(v / 2);
+      }
+      if (wonderInProgress && !obsolete)
+        v = Math.trunc(
+          (Math.trunc(((cost - city.shieldsStored) * Math.trunc((v * 3) / 4)) / cost) +
+            Math.trunc(v / 4)) /
+            3,
+        );
       consider(v, { kind: 'improvement', index: w });
     }
   }

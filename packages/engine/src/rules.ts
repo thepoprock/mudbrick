@@ -98,6 +98,8 @@ export interface ImprovementRule {
   upkeep: number;
   /** Advance required to build it. */
   preq?: AdvanceRef;
+  /** Advance whose discovery by anyone expires a wonder (RULES @IMPROVE's last column). */
+  expiresWith?: AdvanceRef;
 }
 
 export interface AdvanceRule {

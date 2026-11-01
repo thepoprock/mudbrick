@@ -561,6 +561,7 @@ export class Game {
       // `2 × shields − support` over the cities processed this turn.
       const p2 = shields.produced * 2 - support.shields;
       if ((civ.bestProduction ?? 0) <= p2) civ.bestProduction = p2;
+      city.lastShields = shields.produced;
     }
     return out;
   }
@@ -1061,6 +1062,10 @@ export class Game {
       ownsWonder: (i) => this.ownsWonder(city.owner, i),
       ...(this.buildTrace ? { trace: (n, p) => this.buildTrace?.(city, n, p) } : {}),
       canBuildImprovement: (i) => this.canBuildImprovement(city, i),
+      wonderExpired: (w) => {
+        const e = this.rules.improvements[w]?.expiresWith;
+        return e?.kind === 'advance' && (this.state.firstDiscoveredBy[e.index] ?? 0) !== 0;
+      },
     });
   }
 

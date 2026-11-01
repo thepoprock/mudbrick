@@ -59,9 +59,9 @@ What the comparison found and fixed (all VERIFIED against the executable afterwa
    now a city at or below half the best finds them twice as costly and the best city a third
    cheaper, as docs/engine/ai-city.md describes.
 
-Open: irrigation runs lower than the original's; the rest of the wonder loop's terms (cities
-with better production building the same wonder, the "wonder city" flag, the progress
-discount) are described in ai-city.md but not yet in the code.
+Open: irrigation runs lower than the original's. The rest of the wonder loop (other builders,
+the in-progress adjustments, the Palace halving, the progress discount, obsolescence) is now
+in the code as ai-city.md describes it; only the "wonder city" flag is left as clear.
 
 The rig: `/mnt/t7/civ2-wine` on bm3 — a 32-bit Wine prefix, the operator's disc image mounted
 as D:, Xvfb :98, `civ2-autoplay.sh` pressing Enter (Escape and `f` in turn) and clicking the

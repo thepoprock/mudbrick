@@ -104,14 +104,22 @@ Republic, −1 Democracy; Hoover Dam `−fertility / 20`; Manhattan only when th
 in it; United Nations `−(civilize − 2 attack)` (−1 when ranked last); Apollo `−(3 civilize − 2
 attack)`; Internet `−(2 civilize + 2)`; Cure for Cancer `−(attack + 2)`.
 
-Then: ×3 + 50 × difficulty when the wonder is obsolete; +5 per other own city building a wonder
-(−2 when none and no wonder of the era yet); + enemy units in the radius (+1 under plan 1); when
-this city is already building it: ×(1 + cities with better production building it) (halved if
-another civilization builds it too); when another civilization builds it: ×2 + 1; ×2 when the
-city's shields are below half the civilization's best; −1/3 when they equal the best; the same
-20-or-10 scaling as improvements; +n / 3 … Barracks; −n / 3 with a Palace (halved again with no
-wonder of the era); ×3 when the city is flagged "wonder city"; when a wonder is already under way
-and defenders suffice, progress discounts it: `n = ((cost − stored) × 3n / 4 / cost + n / 4) / 3`.
+Then: ×3 + 50 × difficulty when the wonder is obsolete (anyone knows its expiring advance); +5
+per other own city on the land mass building a wonder (−2 when none, or a wonder is under way
+here with 40 shields, and no wonder of the era is owned yet); + enemy units in the radius + 1
+under plan 1, else half of them; when this city is already building it: ×(1 + own cities with
+more shields building it) + that count (halved first if a foreign city builds it too); when an
+own city with more shields is building this city's current wonder: every other wonder ×2 + 1;
+when a wonder is under way with 40 shields, no defence need and not obsolete: with no other
+wonder builder the favoured flag is set (or, already set, the score halves), and three quarters
+of the cost in hand (half, with fewer than three other builders) sets it; ×2 when the city's
+`2 × shields − support` is at most half the civilization's best (a human's city below 6 that
+is not the best too); −1/3 when it is the best; the 10-or-20 scaling (10 when favoured; the
+flag starts as "the land mass plan is not 0 or 1"); +n / 3 … Barracks; −n / 3 with a Palace
+(halved again with no wonder here or none of the era); ×3 when the city is flagged "wonder city"
+(city flag bit 8 — the engine never sets it, INFERRED clear), else when a wonder is under way
+and not obsolete, progress discounts it: `n = ((cost − stored) × 3n / 4 / cost + n / 4) / 3`.
+All in `aiBuild.ts`; `cost` is the wonder's rows × the city's shield box rows + 1.
 
 ## Units
 
