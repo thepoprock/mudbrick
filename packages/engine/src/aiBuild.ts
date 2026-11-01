@@ -5,6 +5,7 @@
  * Lower numbers win; 999 = never. Inputs the engine does not model yet take the documented
  * INFERRED defaults; every case is named by its improvement or unit role so it can be refined.
  */
+import { hasTreaty, treaty, TREATY } from './diplomacy.js';
 import { hasLaunched, hasStarted } from './spaceship.js';
 import { boxRows, distance, type CityContext } from './city.js';
 import { canBuildUnit } from './founding.js';
@@ -46,8 +47,10 @@ export interface AiBuildFacts {
   turn: number;
   /** Simplified combat ON lowers the unit strength factor to 2. */
   simplifiedCombat: boolean;
-  /** Spaceship race on for this civilization (0/1) plus one when anyone launched. */
+  /** The space race on (0/1) plus the race's pressure on this civilization (0/1): 0x0053feba + 0x0053ff14. */
   spaceRace: number;
+  /** The race presses on this civilization (0x0053ff14); the diplomat valuation reads it. */
+  spaceRacePressure?: boolean;
   /** The civilization has its first city (a capital exists somewhere). */
   hasCapital: boolean;
   /** Units of the city causing military unhappiness (the support pass's count, 0x004b6359). */
@@ -514,6 +517,7 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
 
   let best = NEVER * 100;
   let pick: Production | null = null;
+  const currentPick = (): Production | null => pick;
   const consider = (n: number, p: Production) => {
     env.trace?.(n, p);
     if (n < best) {
@@ -812,18 +816,103 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
       // VERIFIED: with an urgent defence need nothing but a defender is considered.
       if (need === 2 && u.role !== 1) continue;
       if (u.role === 6) {
-        // VERIFIED shape (ai-city.md): 11, or `clamp(10 − (their advances − ours), 2, 10)` against
-        // a civilization ahead of us that we have met; never with one already on the land mass
-        // (INFERRED: the space-race halving is left out). Then the non-combat scaling.
-        if (onContinent > 0) continue;
-        let v = 11;
-        for (const other of world.civs) {
-          if (other.slot === 0 || other.slot === civ.slot || !other.inPlay) continue;
-          if (!(f.metSlots?.includes(other.slot) ?? false)) continue;
-          const ahead = other.advancesCount - civ.advancesCount;
-          if (ahead > 0) v = Math.min(v, clamp(10 - ahead, 2, 10));
+        // VERIFIED 0x00474edb, the diplomat/spy valuation (ai-city.md "Diplomats/Spies"). The
+        // original counts cities building the type (`building`) and units of it on the land
+        // mass (`onContinent`).
+        const civOf = (s: number) => world.civs.find((c) => c.slot === s);
+        const isHumanSlot = (s: number) => civOf(s)?.isHuman ?? false;
+        const control = (s: number) => (isHumanSlot(s) ? 7 : f.difficulty);
+        let pressure = f.spaceRacePressure === true;
+        if (pressure) {
+          const p36 = advanceIndex(rules.improvements[36]?.preq);
+          const p37 = advanceIndex(rules.improvements[37]?.preq);
+          if (
+            knows(76) &&
+            (p36 === null || knows(p36)) &&
+            (p37 === null || knows(p37)) &&
+            knows(32)
+          )
+            pressure = false;
+          if (need !== 0 || city.inDisorder) pressure = false;
+          if (f.difficulty < 2) pressure = false;
         }
-        v = Math.trunc(((f.expanding ? 20 : 10) * v * 3) / (f.civilize + 3));
+        // (A human owner with the "auto-build military" city rule is skipped in the original; the
+        // engine's cities do not carry that rule.)
+        const myCitiesHere = f.citiesOnContinent ?? civ.strategy?.citiesOn[mass] ?? 0;
+        if (!(building <= (pressure ? 1 : 0) && onContinent < myCitiesHere)) continue;
+        let n = 11;
+        let military = false;
+        let target = -1;
+        for (let s = 1; s < 8; s++) {
+          if (s === civ.slot) continue;
+          const o = civOf(s);
+          if (!o || !o.inPlay || (o.strategy?.citiesOn[mass] ?? 0) === 0) continue;
+          const notAtPeace = (treaty(world, civ.slot, s) & (TREATY.ceaseFire | TREATY.peace)) === 0;
+          const humanCase =
+            isHumanSlot(s) &&
+            (control(civ.slot) <= control(s) || pressure) &&
+            (t === 47 || o.advancesCount - civ.advancesCount > 7 || pressure || control(s) === 7) &&
+            (hasTreaty(world, civ.slot, s, TREATY.alliance) ||
+              pressure ||
+              o.government < 5 ||
+              // their attack strength here against our unit count (+0x212 vs +0x192, mapped by
+              // the strength ratio of 0x00440b9e)
+              (o.strategy?.attackOn[mass] ?? 0) <= (civ.strategy?.unitsOn[mass] ?? 0) ||
+              myCitiesHere === 0);
+          if (notAtPeace || humanCase) target = s;
+        }
+        if (target < 0) {
+          target =
+            env.foreign?.mainHuman ?? world.civs.find((c) => c.isHuman && c.slot !== 0)?.slot ?? 0;
+          if (f.plan === 4 && f.difficulty !== 0) {
+            military = f.expanding;
+            n = 8;
+            if (activeOf(t) + producing(t) < (env.cityCount + 3) >> 2) {
+              const h = civOf(target);
+              if (h) {
+                if (h.treasury < civ.treasury) n = 7;
+                if (h.treasury * 2 < civ.treasury) n -= 1;
+                if (civ.advancesCount < h.advancesCount) {
+                  if (onContinent + building === 0) n -= 3;
+                  n -= h.advancesCount - civ.advancesCount;
+                }
+              }
+              n = clamp(n, activeOf(t) + 1, 10);
+            }
+          }
+          if (pressure) n = Math.trunc(n / 2);
+          if (onContinent !== 0) n = 999;
+        } else {
+          const o = civOf(target);
+          n = clamp(10 - ((o?.advancesCount ?? 0) - civ.advancesCount), 2, 10);
+          // VERIFIED quirk: the original reads its loop index (8) into the treaty table here, which
+          // lands on the attitude byte toward slot 0.
+          if (((civ.attitudes?.[0] ?? 0) & 6) !== 0) {
+            n += 1;
+            if (onContinent !== 0 && !pressure) n = 999;
+          }
+          // (A comparison of the civilization record's +0x6e against the target's only moves
+          // the military flag; the field is unknown and left out — INFERRED.)
+        }
+        if (civ.government === GOVERNMENT.communism) n -= 1;
+        if (pressure && n < 20) {
+          const o = civOf(target);
+          for (let imp = 35; imp < 38; imp++) {
+            const p = advanceIndex(rules.improvements[imp]?.preq);
+            if (p === null || knows(p) || !o?.knownAdvances[p]) continue;
+            military = f.expanding;
+            n = Math.min(n, building * 2 + 1);
+            if (building === 0 && activeOf(t) === 0) {
+              n -= 1;
+              // VERIFIED: a spaceship part chosen so far gives way to this unit outright.
+              const cur = currentPick();
+              if (cur?.kind === 'improvement' && cur.index >= 35 && cur.index <= 37)
+                pick = { kind: 'unit', index: t };
+            }
+          }
+        }
+        if (n >= 400) continue;
+        let v = Math.trunc(((military === f.expanding ? 10 : 20) * n * 3) / (f.civilize + 3));
         if (city.improvements[IMPROVEMENT.barracks]) v += v >> 2;
         consider(v, { kind: 'unit', index: t });
         continue;

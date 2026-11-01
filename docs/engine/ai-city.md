@@ -125,9 +125,26 @@ All in `aiBuild.ts`; `cost` is the wonder's rows × the city's shield box rows +
 
 A city whose civilization has fewer than 512 units considers every buildable unit:
 
-- **Diplomats/Spies (role 6):** 11, or `clamp(10 − (target's advances − own), 2, 10)` against a
-  civilization that is ahead and present on the continent; a target in the space race halves it;
-  never when one of the type already sits on the continent (unless racing).
+- **Diplomats/Spies (role 6)** — VERIFIED 0x00474edb: considered only while the cities building
+  the type number at most the race's pressure (0 or 1) and the units of it on the land mass are
+  fewer than our cities there. "Pressure" is 0x0053ff14 (spaceship.md) switched off when we know
+  Space Flight, Fusion Power and both component and module prerequisites, when the city is short
+  of defenders or in disorder, or below Warlord. A target is the last civilization with cities on
+  the land mass that is not at cease-fire or peace with us, or a human we do not out-control (or
+  under pressure) that is a Spy's mark, more than 7 advances ahead, under pressure, or fully
+  human-controlled — and allied, under pressure, below Republic, no stronger here than our units,
+  or with no city of ours here. With a target: `clamp(10 − (its advances − ours), 2, 10)`, +1 when
+  the attitude byte toward slot 0 has bits 1–2 set (the original reads its loop index into the
+  treaty table there), then never while one of the type is on the land mass without pressure.
+  Without one the main human stands in: under continent plan 4 above Chieftain the value is 8,
+  or 7 when the human has less gold (−1 at under half), −3 with none of the type anywhere and
+  minus the advance gap when behind, within `[active + 1, 10]`, all only while active + in
+  production stay under a quarter of our cities plus 3; halved under pressure; never with one on
+  the land mass. −1 under Communism. Under pressure (value under 20) each spaceship-part
+  prerequisite the target knows and we lack caps the value at `2 × building + 1`, and with none of
+  the type anywhere takes one more off and replaces a spaceship part chosen so far outright. Then
+  the non-combat scaling (×10, or ×20 when the military flag differs from the land mass's) and
+  +¼ with Barracks.
 - **Caravans/Freight (role 7):** `10 − (5 − expand) × trade / 10` while fewer than 3 routes, at
   least 2, `+2 × routes + continent caravan count`.
 - **Combat and settlers (roles 0–5):** start from `2 × cities building it + units of it on the

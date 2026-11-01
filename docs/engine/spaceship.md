@@ -86,3 +86,13 @@ kind's count is below its structural limit (or zero), the kind is not complete a
 (RULES @IMPROVE 35–37) is known; −1 once launched, −2 when nothing can be built, and the city
 then re-chooses. So a computer player lays all 39 structurals, then modules (one of each — its
 module limit), then components. `spaceship.ts` `aiNextPartKind`.
+
+## The race as the advisors see it (VERIFIED 0x0053feba, 0x0053ff14)
+
+The race is **on** once the Apollo Program stands or a human knows Space Flight, never under
+bloodlust. It **presses** on a computer player while the race is on, the game has not ended, the
+level is above Chieftain and it has not launched: when a human has launched, or when a human
+knowing Space Flight has a ship worth at least as much — parts counted at the RULES cost of their
+kind (structural; propulsion and fuel as components; habitation, life support and solar as
+modules). The city advisor's `spaceRace` fact is the sum of the two (0, 1 or 2) and its diplomat
+valuation reads the pressure on its own.

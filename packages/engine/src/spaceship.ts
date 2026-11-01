@@ -412,3 +412,51 @@ export function shipScore(
   if (!ship || ship.population === 0) return 0;
   return ship.population * evaluateShip(ship, isHuman, massThrust, knowsFusion, year, true).success;
 }
+
+/**
+ * Is the space race on (VERIFIED 0x0053feba)? Never under bloodlust; otherwise once the Apollo
+ * Program is built or a human knows Space Flight (advance 76).
+ */
+export function spaceRaceOn(ctx: {
+  bloodlust: boolean;
+  apolloBuilt: boolean;
+  humanKnowsSpaceFlight: boolean;
+}): boolean {
+  if (ctx.bloodlust) return false;
+  return ctx.apolloBuilt || ctx.humanKnowsSpaceFlight;
+}
+
+/**
+ * Does the space race press on a computer player (VERIFIED 0x0053ff14)? Only while the race is
+ * on, the game not ended, above Chieftain, for a computer player that has not launched: yes when
+ * a human has launched, or when a human knowing Space Flight has a ship worth at least as much —
+ * parts weighted by the RULES cost of their kind (structural; components; modules).
+ */
+export function spaceRacePressure(
+  world: World,
+  civ: Civ,
+  ctx: {
+    raceOn: boolean;
+    gameEnded: boolean;
+    difficulty: number;
+    isHuman: (slot: number) => boolean;
+    knows: (slot: number, advance: number) => boolean;
+    /** RULES cost rows of the spaceship improvement for a part kind 0 structural, 1 component, 2 module. */
+    partCostRows: (kind: number) => number;
+  },
+): boolean {
+  if (!ctx.raceOn || hasLaunched(civ) || ctx.gameEnded || ctx.difficulty === 0) return false;
+  if (ctx.isHuman(civ.slot)) return false;
+  const humans = world.civs.filter((c) => c.slot !== 0 && ctx.isHuman(c.slot));
+  if (humans.some((h) => hasLaunched(h))) return true;
+  const value = (c: Civ) => {
+    const ship = c.spaceship;
+    if (!ship) return 0;
+    let v = 0;
+    for (let i = 0; i < 6; i++)
+      v += (ship.parts[i] ?? 0) * ctx.partCostRows(Math.min(2, (i + 1) >> 1));
+    return v;
+  };
+  const mine = value(civ);
+  return humans.some((h) => h.slot !== civ.slot && ctx.knows(h.slot, 76) && mine <= value(h));
+}

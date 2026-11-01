@@ -17,6 +17,9 @@ export function gameFromSave(save: SaveFile, rules: Rules, world: World): Game {
     ...(save.options.raw[1] !== undefined && (save.options.raw[1] & 1) !== 0
       ? { noRestart: true }
       : {}),
+    ...(save.options.raw[0] !== undefined && (save.options.raw[0] & 0x80) !== 0
+      ? { bloodlust: true }
+      : {}),
     tribesPlayed: save.civs.reduce<number[]>((t, c, slot) => {
       if (slot !== 0 && typeof c.tribeId === 'number') t[c.tribeId] = (t[c.tribeId] ?? 0) + 1;
       return t;

@@ -7,6 +7,7 @@ import {
   type AiBuildFacts,
 } from '../src/aiBuild.js';
 import { GOVERNMENT, IMPROVEMENT, type EngineRules } from '../src/rules.js';
+import { emptyStrategy } from '../src/aiStrategy.js';
 import { CITY_CENTRE_INDEX, World, type City, type Civ } from '../src/world.js';
 
 const flags = () => ({
@@ -377,5 +378,58 @@ describe('unit candidates the chooser skips (0x00474edb)', () => {
     expect(fighterAllowed(peace, 1, 27, none, none)).toBe(true);
     expect(fighterAllowed(peace, 1, 27, (ty) => (ty === 27 ? 1 : 0), none)).toBe(false);
     expect(fighterAllowed(undefined, 1, 27, none, none)).toBe(false);
+  });
+});
+
+describe('diplomat valuation (0x00474edb)', () => {
+  const withDiplomat = {
+    ...rules,
+    units: [...rules.units, unitType('Diplomat', { role: 6, attack: 0 })],
+  };
+  const diplomat = rules.units.length;
+  function scoresFor(w: World, c: City, f: AiBuildFacts, owner: Civ) {
+    const scores = new Map<string, number>();
+    aiChooseProduction({
+      ...env(w, c, f, owner),
+      rules: withDiplomat,
+      trace: (n, p) => scores.set(`${p.kind}:${p.index}`, n),
+    });
+    return scores;
+  }
+  it('values a diplomat at 11 with no target, by the advance gap against one, never with one here', () => {
+    const w = new World({ columns: 20, rows: 30, flatEarth: true });
+    w.terrain.fill(2);
+    const me = civ({ slot: 1, advancesCount: 0 });
+    w.civs.push(me);
+    const c = city(w, 5);
+    c.owner = 1;
+    // No civilization with cities on the land mass: 11 × 10 × 3 / 3.
+    expect(scoresFor(w, c, facts({ citiesOnContinent: 1 }), me).get(`unit:${diplomat}`)).toBe(110);
+    // A rival with cities here and no peace: clamp(10 − (5 − 0), 2, 10) = 5 → 50.
+    const rival = civ({ slot: 2, advancesCount: 5 });
+    rival.strategy = emptyStrategy();
+    rival.strategy.citiesOn[0] = 1;
+    w.civs.push(rival);
+    expect(scoresFor(w, c, facts({ citiesOnContinent: 1 }), me).get(`unit:${diplomat}`)).toBe(50);
+    // A diplomat already on the land mass: not a candidate.
+    w.units.push({
+      id: 0,
+      position: { x: c.position.x, y: c.position.y },
+      owner: 1,
+      type: diplomat,
+      veteran: false,
+      hitPointsLost: 0,
+      movesSpent: 0,
+      fortified: false,
+      homeCity: null,
+      order: null,
+      workCounter: 0,
+      gotoTarget: null,
+      lastDirection: null,
+      gotoSteps: 0,
+    });
+    expect(scoresFor(w, c, facts({ citiesOnContinent: 1 }), me).has(`unit:${diplomat}`)).toBe(
+      false,
+    );
   });
 });

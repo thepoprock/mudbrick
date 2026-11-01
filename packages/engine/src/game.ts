@@ -55,12 +55,14 @@ import { gameYear } from './calendar.js';
 import { routeIncomeTotal, type TradeContext, routeModifier } from './trade.js';
 import type { EspionageContext } from './espionage.js';
 import {
+  aiNextPartKind,
   buildPart,
   checkArrivals,
   hasLaunched,
+  spaceRaceOn,
+  spaceRacePressure,
   type SpaceshipContext,
   type SpaceshipEvent,
-  aiNextPartKind,
 } from './spaceship.js';
 import { computeSupplyDemand, supplyDemandDue } from './supplyDemand.js';
 import { terraformTasks } from './aiTerraform.js';
@@ -136,6 +138,8 @@ export interface GameState {
   destroyedCivilizations?: number;
   /** Options byte 1 bit 0: "don't restart if eliminated". */
   noRestart?: boolean;
+  /** Options byte 0 bit 7: bloodlust (no space race; the game ends by conquest). */
+  bloodlust?: boolean;
   /** Times each tribe (leader index) has played, for restarts. */
   tribesPlayed?: number[];
   /** The scenario's events (events.txt, parsed) and their mutable state. */
@@ -844,10 +848,10 @@ export class Game {
               control: 7,
             }
           : null,
-        spaceshipLaunched: false,
-        anyHumanSpaceshipLaunched: false,
+        spaceshipLaunched: hasLaunched(civ),
+        anyHumanSpaceshipLaunched: this.world.civs.some((c) => c.isHuman && hasLaunched(c)),
         difficulty: this.state.difficulty,
-        bloodlust: false,
+        bloodlust: this.state.bloodlust ?? false,
         scienceRate: civ.scienceRate,
       });
       const govEvents: GovernmentEvent[] = [];
@@ -1291,6 +1295,25 @@ export class Game {
     civ.researching = pick;
   }
 
+  /** The space race as the production chooser sees it (0x0053feba, 0x0053ff14). */
+  spaceRace(civ: Civ): { on: boolean; pressure: boolean } {
+    const isHuman = (s: number) => this.world.civs.find((c) => c.slot === s)?.isHuman ?? false;
+    const on = spaceRaceOn({
+      bloodlust: this.state.bloodlust ?? false,
+      apolloBuilt: this.wonderCity(IMPROVEMENT.apolloProgram) !== null,
+      humanKnowsSpaceFlight: this.world.civs.some((c) => c.isHuman && this.knows(c.slot, 76)),
+    });
+    const pressure = spaceRacePressure(this.world, civ, {
+      raceOn: on,
+      gameEnded: this.state.gameOver !== undefined,
+      difficulty: this.state.difficulty,
+      isHuman,
+      knows: (s, a) => this.knows(s, a),
+      partCostRows: (kind) => this.rules.improvements[35 + kind]?.costRows ?? 0,
+    });
+    return { on, pressure };
+  }
+
   /** The AI's production choice (docs/engine/ai-city.md), from the city's current totals. */
   aiChooseProduction(
     city: City,
@@ -1337,6 +1360,7 @@ export class Game {
       city.size * this.rules.cosmic.foodPerCitizen +
       t.support.settlers * settlersFood(this.rules, civ.government);
     const cityCount = this.citiesOf(city.owner).length;
+    const race = this.spaceRace(civ);
     city.production = aiChooseProduction({
       world: this.world,
       rules: this.rules,
@@ -1363,7 +1387,8 @@ export class Game {
         difficulty: this.state.difficulty,
         turn: this.state.turn,
         simplifiedCombat: !this.state.realisticCombat,
-        spaceRace: 0,
+        spaceRace: (race.on ? 1 : 0) + (race.pressure ? 1 : 0),
+        spaceRacePressure: race.pressure,
         hasCapital: this.world.cities.some(
           (c) => c.owner === city.owner && c.improvements[IMPROVEMENT.palace],
         ),
