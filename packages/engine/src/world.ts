@@ -175,6 +175,9 @@ export interface City {
   lastTrade?: number;
   /** Shields made at the last city turn (the record's byte 81), for the advisor's comparisons. */
   lastShields?: number;
+  /** Happy and unhappy citizens at the last city turn (bytes 82 and 83), for the score. */
+  lastHappy?: number;
+  lastUnhappy?: number;
   /** The commodity lists must be recomputed at the next city turn (city flag bit 17). */
   recomputeTrade?: boolean;
   /** AI: the city has a terrain-work objective out (city flag bit 19). */
@@ -249,6 +252,8 @@ export class World {
   /** Land and rated squares per land mass, computed on first use (aiStrategy.ts). */
   landmassStats?: { land: number[]; rated: number[] };
   readonly civs: Civ[] = [];
+  /** A battle between two civilizations happened this turn (resets the turns of peace). */
+  peaceBroken = false;
   readonly cities: City[] = [];
   readonly units: Unit[] = [];
 

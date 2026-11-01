@@ -69,7 +69,9 @@ where `T` = 93 for version 39 and 100 from version 40; `W` = 66 + 2T (252 / 266)
 
 Bits the executable is seen to read (VERIFIED): byte 0 bit 4 (simplified combat, in the veteran and
 movement rules) and bit 7 (bloodlust zeroes the AI's attitude counters); byte 3 bit 0 (tutorial
-popups); byte 4 bit 0 (wonder movies) and bit 3 (encyclopedia on a new advance); byte 8 bit 7
+popups); byte 1 bit 0 ("don't restart if eliminated" floors the conquest score's turn at 250);
+byte 4 bit 0 (wonder movies) and bit 3 (encyclopedia on a new advance); byte 8 bit 1 (set when
+the game has ended by retirement in 2020 or a scenario's end turn, 0x0046b0fa); byte 8 bit 7
 (scenario parameters in effect — the scenario's tech paradigm replaces the cosmic one); byte 8
 bits 2 and 3 (research 25 % dearer / 20 % cheaper; not named by the community reader). In memory
 the header starts at 0x005da6fc, so file offset = address − 0x005da6fc for the whole fixed part.
@@ -92,6 +94,8 @@ the header starts at 0x005da6fc, so file offset = address − 0x005da6fc for the
 | 21  | 1    | barbarian activity                                                                                                            | INFERRED                                                                                    |
 | 22  | 1    | bit n = civilization slot n is in play                                                                                        | VERIFIED (production checks)                                                                |
 | 23  | 1    | bit n = slot n is human (multiplayer)                                                                                         | VERIFIED (count drives the block arithmetic that matches all files)                         |
+| 25  | 1    | civilizations destroyed (INFERRED from its only read: × 100 in the conquest score bonus, 0x0047c9e0)                          | INFERRED                                                                                    |
+| 28  | u16  | pollution baseline subtracted from the pollution squares in the score (0 in an ordinary game)                                 | INFERRED                                                                                    |
 | 27  | 1    | global temperature rise count                                                                                                 | INFERRED                                                                                    |
 | 30  | u16  | pollution squares                                                                                                             | INFERRED                                                                                    |
 | 32  | 1    | turns of peace                                                                                                                | INFERRED                                                                                    |

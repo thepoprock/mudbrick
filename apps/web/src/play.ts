@@ -652,6 +652,8 @@ export class PlaySession {
         return `Discovery: ${this.rules.advances[ev.advance]?.name ?? ev.advance}.`;
       case 'choose-research':
         return 'Choose what to research next.';
+      case 'retirement':
+        return ev.text;
       case 'disorder':
         return `Civil disorder in ${cityName}!`;
       case 'restored':
@@ -769,6 +771,7 @@ export class PlaySession {
     this.el.status.textContent =
       `${civ.name} · ${gov} · Turn ${this.game.state.turn} (${this.yearText()}) · ` +
       `${civ.treasury} gold · tax ${civ.taxRate * 10} % lux ${(10 - civ.taxRate - civ.scienceRate) * 10} % sci ${civ.scienceRate * 10} % · ` +
+      `score ${this.game.scoreOf(civ.slot).total} · ` +
       (this.game.state.gameOver
         ? ` · GAME OVER: ${this.world.civs[this.game.state.gameOver.winner]?.name ?? '?'} win by ${this.game.state.gameOver.reason}`
         : waiting > 0

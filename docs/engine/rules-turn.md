@@ -52,3 +52,26 @@ A scenario with its own years-per-turn uses `starting year + |years per turn| ×
 header word at offset 32 (−1 normally) names a turn from which the calendar advances one year per
 turn. The engine's `gameYear` implements this; the year is recomputed from the turn, as the
 original does at the start of each turn (0x00467591).
+
+## The end of the game and the score (VERIFIED, 0x0046b0fa and 0x0047c9e0)
+
+The year limit runs with the calendar: in the year 2000 the players are told to plan their
+retirement (PLANRETIRE), and in 2020 the game ends (DORETIRE): options byte 8 bit 1 is set, a
+"game ending" state is entered and the turn driver stops. A scenario with an end turn warns five
+turns before it (SCENARIOENDS) and ends on it (SCENARIOEND) instead. The engine ends the game in
+2020 with the best civilization score as the winner (`reason: 'retirement'`); the scenario end
+turn is not modelled yet.
+
+The civilization score (`score.ts`): per city `size + happy − unhappy` (content citizens count
+1, happy 2; the record's bytes 82 and 83, cached each city turn); 20 a wonder owned; the landed
+spaceship's credit — population aboard × success — once the ship has won; −10 a polluted square
+(less the header's +28 word, 0 in an ordinary game — INFERRED a scenario baseline); after turn
+200, three a turn of peace capped at 100; five a future technology; and the barbarian level
+× 25 − 50. The sum is floored at zero. The turns of peace (header +32) count from turn 200 in
+the yearly routine and are reset by the combat handler whenever two civilizations' units fight.
+The last civilization in play also scores a conquest bonus: civilizations destroyed (header +25,
+INFERRED from this use) × 100 + (570 − turn) × 2 + 400, the turn floored at 250 under "don't
+restart if eliminated" (options byte 1 bit 0), ×5/4 under dearer research and ×4/5 under
+cheaper (options byte 8 bits 2 and 3); the score is the larger of the two. A scenario with
+objective victory (scenario flag bit 1) scores decisive/marginal victory and defeat as 1000,
+750, 500, 250 or 0 plus 10 an objective held, doubled with a conquest bonus — not modelled.

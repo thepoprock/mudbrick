@@ -156,6 +156,8 @@ export function resolveAttack(
   if (survivor.hitPointsLost >= maxHitPoints(rules, survivor.type)) {
     survivor.hitPointsLost = maxHitPoints(rules, survivor.type) - 1;
   }
+  // VERIFIED (the combat handler): a battle between two civilizations resets the turns of peace.
+  if (attacker.owner !== 0 && defender.owner !== 0) world.peaceBroken = true;
   return {
     kind: 'fought',
     result,

@@ -86,6 +86,7 @@ import {
 } from './government.js';
 import { aiMoveUnits, type AiUnitEvent } from './aiUnits.js';
 import { releaseCitySite } from './fertility.js';
+import { civilizationScore, retirementStage, type ScoreBreakdown } from './score.js';
 import { inEnemyZoc } from './movement.js';
 import { payUpkeep, type UpkeepEvent } from './upkeep.js';
 import { CITY_CENTRE_INDEX, type City, type Civ, type World, type Production } from './world.js';
@@ -110,8 +111,20 @@ export interface GameState {
   pollutionSquares?: number;
   /** Header barbarian activity: 0 villages only, 1 roving, 2 restless, 3 raging. */
   barbarianActivity?: number;
-  /** The game has ended: who won and how. */
-  gameOver?: { winner: number; reason: 'spaceship' | 'conquest' };
+  /** Turns since the last battle between civilizations, counted from turn 200 (header +32). */
+  turnsOfPeace?: number;
+  /** Civilizations destroyed so far (header +25, INFERRED), for the conquest score bonus. */
+  destroyedCivilizations?: number;
+  /** The game has ended: who won and how; 'retirement' is the year 2020 (the best score wins). */
+  gameOver?: { winner: number; reason: 'spaceship' | 'conquest' | 'retirement' };
+}
+
+/** The year limit's messages (0x0046b0fa). */
+export interface RetirementEvent {
+  kind: 'retirement';
+  text: string;
+  /** True when the game has ended. */
+  final: boolean;
 }
 
 export type GrowthNote =
@@ -127,6 +140,7 @@ export type TurnEvent =
   | { slot: number; event: BarbarianEvent }
   | { slot: number; event: SpaceshipEvent }
   | { slot: number; event: DiplomacyEvent }
+  | { slot: number; event: RetirementEvent }
   | { slot: number; event: GovernmentEvent }
   | { slot: number; event: { kind: 'rates'; science: number; tax: number; luxuries: number } };
 
@@ -451,6 +465,8 @@ export class Game {
     }
     for (const e of disbandForShortage(this.world, this.rules, city, ctx, t.raw.shields)) push(e);
     t = totals();
+    city.lastHappy = t.mood.happy;
+    city.lastUnhappy = t.mood.unhappy;
 
     // 5. Disorder, celebration, gold.
     for (const e of applyCityMood(
@@ -564,6 +580,26 @@ export class Game {
       city.lastShields = shields.produced;
     }
     return out;
+  }
+
+  /** The civilization score and its parts (0x0047c9e0). */
+  scoreOf(slot: number): ScoreBreakdown {
+    const civ = this.civ(slot);
+    return civilizationScore(this.world, civ, {
+      turn: this.state.turn,
+      turnsOfPeace: this.state.turnsOfPeace ?? 0,
+      pollutionSquares: this.state.pollutionSquares ?? 0,
+      barbarianActivity: this.state.barbarianActivity ?? 0,
+      ...(this.state.destroyedCivilizations !== undefined
+        ? { destroyedCivilizations: this.state.destroyedCivilizations }
+        : {}),
+      ...(this.state.researchDearer ? { researchDearer: true } : {}),
+      ...(this.state.researchCheaper ? { researchCheaper: true } : {}),
+      isHuman: (s) => this.civ(s).isHuman,
+      massThrust: this.rules.cosmic.massThrustParadigm ?? 75,
+      knowsFusion: (s) => this.knows(s, 32),
+      year: gameYear(this.state.turn, this.state.difficulty),
+    });
   }
 
   /** The civilization's turn: cities last-to-first, then the AI's rates. */
@@ -757,6 +793,13 @@ export class Game {
     }
     out.push(...this.processBarbarians());
     this.state.turn += 1;
+    // VERIFIED (0x00467591): from turn 200 every turn adds a turn of peace; a battle between
+    // two civilizations has reset the count during the turn.
+    if (this.world.peaceBroken) {
+      this.state.turnsOfPeace = 0;
+      this.world.peaceBroken = false;
+    }
+    if (this.state.turn > 199) this.state.turnsOfPeace = (this.state.turnsOfPeace ?? 0) + 1;
     out.push(...this.endOfYear());
     return out;
   }
@@ -781,6 +824,7 @@ export class Game {
       const units = this.world.units.filter((u) => u.owner === civ.slot).length;
       if (cities === 0 && (units === 0 || this.state.turn > 20)) {
         civ.inPlay = false;
+        this.state.destroyedCivilizations = (this.state.destroyedCivilizations ?? 0) + 1;
         for (const u of [...this.world.units])
           if (u.owner === civ.slot) this.world.units.splice(this.world.units.indexOf(u), 1);
         out.push({
@@ -804,6 +848,47 @@ export class Game {
           slot: alive[0].slot,
         },
       });
+    }
+    // VERIFIED (0x0046b0fa): in the year 2000 the players are told to plan their retirement;
+    // in 2020 the game ends for everyone — here the best civilization score wins. A scenario's
+    // end turn (warned five turns before) is not modelled yet.
+    if (!this.state.gameOver) {
+      const stage = retirementStage(gameYear(this.state.turn, this.state.difficulty));
+      if (stage === 'warn') {
+        for (const civ of this.world.civs) {
+          if (civ.slot === 0 || !civ.inPlay || !civ.isHuman) continue;
+          out.push({
+            slot: civ.slot,
+            event: {
+              kind: 'retirement',
+              text: 'The year 2000: plan your retirement — the game ends in 2020.',
+              final: false,
+            },
+          });
+        }
+      } else if (stage === 'end') {
+        let best: Civ | null = null;
+        let bestScore = -1;
+        for (const civ of this.world.civs) {
+          if (civ.slot === 0 || !civ.inPlay) continue;
+          const score = this.scoreOf(civ.slot).total;
+          if (score > bestScore) {
+            bestScore = score;
+            best = civ;
+          }
+        }
+        if (best) {
+          this.state.gameOver = { winner: best.slot, reason: 'retirement' };
+          out.push({
+            slot: best.slot,
+            event: {
+              kind: 'retirement',
+              text: `The year 2020: the game ends. The ${best.name} lead with a score of ${bestScore}.`,
+              final: true,
+            },
+          });
+        }
+      }
     }
     return out;
   }
