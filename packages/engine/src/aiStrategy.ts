@@ -532,16 +532,35 @@ function assignObjectives(
       if (target && target.owner !== slot) continue;
     }
     if (role === 0 && type.attack === 0) continue;
-    if (type.domain === DOMAIN_AIR) continue; // INFERRED: aircraft are not moved yet
     const fortifiedNow = u.order === ORDER.fortify || u.order === ORDER.fortified;
     let best = -1;
     let bestScore = 9999;
     s.objectives.forEach((o, oi) => {
       if (o.type === -1 || o.priority <= 0) return;
-      if (!(o.type === role && landmassOf(world, o) === lm)) return;
+      // VERIFIED 0x004ed2dd: a sub-spotting warship also answers type 18; a heavy aircraft answers
+      // its own type and naval (type 2) objectives wherever they lie.
+      const air = type.domain === DOMAIN_AIR;
+      const wanted = o.type === 18 && role === 2 && type.flags.spotsSubmarines ? 18 : role;
+      const heavy = air && type.attack >= (rules.units[28]?.attack ?? 99);
+      if (
+        !(o.type === wanted && landmassOf(world, o) === lm) &&
+        !(heavy && (o.type === wanted || o.type === 2))
+      )
+        return;
       const dist = distance(world, u.position, o);
       const share = Math.trunc((budget[oi] ?? base) / (o.type === 0 ? 2 : 1));
-      const score = Math.trunc((share * dist) / (o.priority + 1));
+      let score: number;
+      if (!air) {
+        score = Math.trunc((share * dist) / (o.priority + 1));
+      } else if (type.range === 1) {
+        // A fighter goes only within half its range and back.
+        if (dist > (type.move - 2) >> 1) return;
+        score = dist;
+      } else {
+        // A bomber answers odd priorities on alternate turns, nearer ones counting double.
+        if ((o.priority & 1) === 0 || (((ctx.turn >> 1) + oi) & 1) === 0) return;
+        score = Math.trunc(((dist <= type.move ? 4 : 2) * dist) / (o.priority + 1));
+      }
       if (
         fortifiedNow &&
         !(o.priority > 1 && (score <= o.priority * base || share === base) && !cityHere)

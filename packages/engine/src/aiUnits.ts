@@ -7,7 +7,7 @@
  * cases — where a settler founds, how many defenders a city keeps, what caravans do — are
  * interim approximations until the objective and plan machinery is ported.
  */
-import { addGoal, removeGoals, type CivStrategy } from './aiStrategy.js';
+import { addGoal, addObjective, removeGoals, type CivStrategy } from './aiStrategy.js';
 import { resolveAttack } from './attack.js';
 import { captureCity } from './conquest.js';
 import { distance, gridDistance } from './city.js';
@@ -568,21 +568,16 @@ export function chooseDirection(
   return best;
 }
 
-function defendersIn(world: World, rules: EngineRules, c: City): number {
-  return world
-    .unitsAt(c.position.x, c.position.y)
-    .filter((u) => u.owner === c.owner && rules.units[u.type]?.role === ROLE_DEFEND).length;
-}
-
 /**
  * Defenders a city wants (VERIFIED): `size / d + 1` where d is 3 in a foreign zone of control
- * else 4, +1 under plan 5 without a Palace (plan 5 INFERRED until plans exist), −1 with one;
- * a capital wants at least 1, 2 above size 3, 3 with eight cities, 4 with twelve.
+ * else 4, +1 under plan 5 without a Palace, −1 with one; a capital wants at least 1, 2 above size
+ * 3, 3 with eight cities, 4 with twelve.
  */
-export function wantedDefenders(world: World, c: City, ownCities: number): number {
+export function wantedDefenders(world: World, c: City, ownCities: number, plan: number): number {
   let divisor = foreignUnitAdjacent(world, c.position, c.owner, c.position) ? 3 : 4;
   const palace = c.improvements[IMPROVEMENT.palace] === true;
-  divisor += palace ? -1 : 1;
+  if (palace) divisor -= 1;
+  else if (plan === 5) divisor += 1;
   let wanted = Math.trunc(c.size / divisor) + 1;
   if (palace) {
     let min = 1;
@@ -592,6 +587,55 @@ export function wantedDefenders(world: World, c: City, ownCities: number): numbe
     wanted = Math.max(wanted, min);
   }
   return wanted;
+}
+
+/**
+ * Does a defender leave its post (0x004f44cc)? In a city the best defender stays, as does anyone
+ * while the garrison is at or under what the city wants, and a short garrison asks for more with
+ * a type 1 objective. A surplus unit that would be the best when fortified and is needed by the
+ * homed count stays too; other surplus units are released one turn in eight. Alone on open ground
+ * at home it holds the square.
+ */
+function defenderMoves(
+  world: World,
+  rules: EngineRules,
+  unit: Unit,
+  cityHere: City | null | undefined,
+  ctx: AiUnitContext,
+): boolean {
+  const me = unit.owner;
+  const here = unit.position;
+  const s = ctx.strategy;
+  if (cityHere && cityHere.owner === me) {
+    const defenders = world
+      .unitsAt(here.x, here.y)
+      .filter((u) => u.owner === me && rules.units[u.type]?.role === ROLE_DEFEND);
+    if (defenders.length < 2) return false;
+    const plan = ctx.planOf?.(me, landOf(world, here)) ?? 5;
+    const wanted = wantedDefenders(world, cityHere, ctx.cityCount(me), plan);
+    const best = (fortifiedUnit: Unit | null) =>
+      chooseDefender(world, rules, defenders, null, {
+        defenderFortified: fortifiedUnit !== null,
+        defenderCity: cityHere.improvements,
+      });
+    if (best(null) === unit) return false;
+    if (defenders.length < wanted && s)
+      addObjective(s, { x: here.x, y: here.y, type: 1, priority: 3 });
+    if (wanted >= defenders.length) return false;
+    const homed = defenders.filter((u) => u.homeCity === cityHere.id).length;
+    if (best(unit) === unit && homed <= wanted) return false;
+    if (((ctx.turn + world.units.indexOf(unit)) & 7) === 0) {
+      unit.order = null;
+      unit.fortified = false;
+      return true;
+    }
+    return !unit.fortified;
+  }
+  if (world.unitsAt(here.x, here.y).length >= 2) return true;
+  const owner = world.territory[world.index(here.x, here.y)] ?? 0;
+  if (owner >= 1 && owner !== me) return true;
+  if (s) addObjective(s, { x: here.x, y: here.y, type: 1, priority: 5 });
+  return false;
 }
 
 /** One greedy step toward `target`; returns false when no step is possible. */
@@ -924,43 +968,9 @@ export function aiMoveUnits(
         if (!diplomatAct(world, rules, unit, ctx, events)) break;
         continue;
       }
-      if (type.role === ROLE_DEFEND) {
-        const ownCities = ctx.cityCount(slot);
-        if (cityHere && cityHere.owner === slot) {
-          // VERIFIED quota; the best defender stays (chooseDefender), the rest may leave.
-          const defenders = world
-            .unitsAt(cityHere.position.x, cityHere.position.y)
-            .filter((u) => u.owner === slot && rules.units[u.type]?.role === ROLE_DEFEND);
-          const wanted = wantedDefenders(world, cityHere, ownCities);
-          const keep = chooseDefender(world, rules, defenders, null, {
-            defenderFortified: false,
-            defenderCity: cityHere.improvements,
-          });
-          if (defenders.length <= wanted || keep === unit) {
-            fortify(unit);
-            break;
-          }
-        }
-        // INFERRED stand-in for "defend" objectives: walk to the nearest own city short of defenders.
-        const needy = nearestCity(
-          world,
-          unit.position,
-          (c) =>
-            c.owner === slot &&
-            c !== cityHere &&
-            defendersIn(world, rules, c) < wantedDefenders(world, c, ownCities),
-        );
-        if (needy) {
-          if (!stepToward(world, rules, unit, needy.position, ctx)) {
-            fortify(unit);
-            break;
-          }
-          continue;
-        }
-        if (cityHere && cityHere.owner === slot) {
-          fortify(unit);
-          break;
-        }
+      if (type.role === ROLE_DEFEND && !defenderMoves(world, rules, unit, cityHere, ctx)) {
+        fortify(unit);
+        break;
       }
       if (type.role < 2) postSettleGoal(world, unit, ctx);
       const c = chooseDirection(world, rules, unit, ctx);

@@ -58,8 +58,10 @@ unless marked INFERRED; the last section says what the engine implements.
    it still wants). Walking the units from the last record down, a computer unit with an
    assignable order (none, hold, go-to or a work order) is scored against every objective whose
    type matches its AI role (0x004ecd17; bombers against walled cities when they can attack them):
-   `distance × (budget / (1 + (type is 0))) / (priority + 1)`, with air units kept inside their
-   range; defenders already fortified only move for high-priority objectives; the closest wins
+   `distance × (budget / (1 + (type is 0))) / (priority + 1)`. Air units differ: a fighter takes
+   an objective within `(moves − 2) / 2` at plain distance; a bomber takes odd priorities on
+   alternate turns at `distance × (4 in reach, else 2) / (priority + 1)`; aircraft with a Fighter's
+   attack or more also answer naval objectives, on any land mass; defenders already fortified only move for high-priority objectives; the closest wins
    and receives a go-to there (or the hold order when already on the square), and the objective's
    budget rises. The budget per objective is `clamp(units / 8, 3, 99)`, doubled for type-0
    objectives.

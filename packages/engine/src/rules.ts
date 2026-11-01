@@ -56,6 +56,7 @@ export interface UnitFlagsRule {
   /** Paratroopers (RULES flag bit 8). */
   canParadrop?: boolean;
   canAttackAir: boolean;
+  spotsSubmarines?: boolean;
   destroyedAfterAttack: boolean;
   freeSupportUnderFundamentalism: boolean;
   /** Carrier: air units may land on it. */

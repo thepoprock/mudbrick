@@ -98,8 +98,8 @@ function check(): void {
     const placed = workers + sp.entertainers + sp.taxCollectors + sp.scientists;
     const last = recomputed.get(c);
     if (last && placed > last.size) problem('too many citizens placed');
-    // A city taken before its own turn in the round waits for its new owner's next turn.
-    if (last && last.owner === c.owner && game.state.turn - last.turn > 1)
+    // A city taken before its turn and retaken after it misses that round, so two turns is allowed.
+    if (last && last.owner === c.owner && game.state.turn - last.turn > 2)
       problem('a city missed its recompute');
     if (c.production.kind === 'unit' && !rules.units[c.production.index])
       problem('bad unit production');
