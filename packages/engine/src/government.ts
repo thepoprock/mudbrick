@@ -137,6 +137,10 @@ export interface CivGovernmentContext {
   } | null;
   spaceshipLaunched: boolean;
   anyHumanSpaceshipLaunched: boolean;
+  /** The space race is on (0x0053feba). */
+  spaceRaceOn?: boolean;
+  /** The strongest civilization is human (0x005da851). */
+  topIsHuman?: boolean;
   difficulty: number;
   bloodlust: boolean;
   scienceRate: number;
@@ -159,7 +163,7 @@ export function civGovernmentScores(civ: Civ, ctx: CivGovernmentContext): void {
   if (
     c === 0 &&
     (ctx.knows(15) || ctx.knows(31) || ctx.ownsWonder(WONDER.statueOfLiberty)) &&
-    ctx.control <= ctx.personality.attack + (4 - (ctx.anyHumanSpaceshipLaunched ? 1 : 0)) &&
+    ctx.control <= ctx.personality.attack + (ctx.spaceRaceOn === true ? 4 : 3) &&
     h !== null &&
     ctx.advances < h.advances
   ) {
@@ -168,9 +172,9 @@ export function civGovernmentScores(civ: Civ, ctx: CivGovernmentContext): void {
   }
   if (ctx.personality.attack >= 0) {
     if (
-      h === null ||
-      ctx.personality.attack === 1 ||
-      (ctx.personality.attack === 0 && ctx.personality.civilize < 0)
+      ctx.topIsHuman !== true &&
+      (ctx.personality.attack === 1 ||
+        (ctx.personality.attack === 0 && ctx.personality.civilize < 0))
     ) {
       s[6] = Math.trunc(((s[6] ?? 0) * 3) / 4);
       s[5] = Math.trunc(((s[5] ?? 0) * 3) / 4);

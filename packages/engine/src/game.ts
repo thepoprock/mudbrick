@@ -1674,6 +1674,8 @@ export class Game {
           : null,
         spaceshipLaunched: hasLaunched(civ),
         anyHumanSpaceshipLaunched: this.world.civs.some((c) => c.isHuman && hasLaunched(c)),
+        spaceRaceOn: this.spaceRace(civ).on,
+        topIsHuman: this.world.civs.some((c) => c.isHuman && this.powerRank(c.slot) === 7),
         difficulty: this.state.difficulty,
         bloodlust: this.state.bloodlust ?? false,
         scienceRate: civ.scienceRate,
