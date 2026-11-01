@@ -469,7 +469,7 @@ export class Game {
     const out = Array<boolean>(67).fill(false);
     for (const c of this.world.cities) {
       if (c.owner !== slot) continue;
-      for (let i = 39; i < 67; i++) if (c.improvements[i]) out[i] = true;
+      for (let i = 39; i < 67; i++) if (c.improvements[i] && !this.wonderExpired(i)) out[i] = true;
     }
     return out;
   }

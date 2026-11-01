@@ -88,6 +88,14 @@ any of civilizations 1 to 7 knows the advance in @ENDWONDER. This covers the bon
 Colossus and King Richard's as well as the owner tests. One extra case in 0x0043e361 is not
 explained: wonder 20 also reads as absent when an options bit and a rules byte are both set.
 
+Audit of all 64 routines that test a wonder (0x0043e361, 0x0043e328, 0x0043e3ef), against the
+engine. The Great Library and the four completion effects were missing and are ported. Marco
+Polo's and the United Nations act as an embassy with everyone, and most of their 40-odd tests only
+decide what a human is told (reports, the foreign advisor, the news). The tests that change play
+are in the negotiation routines 0x00440b9e, 0x00445022 and 0x00449c70, and in the senate test
+0x0050f0ea. Those wait for the negotiation screen, as do the Great Wall tests in them. The Great
+Wall's other tests, the Statue of Liberty and the Eiffel Tower are ported.
+
 ## Disorder, celebration and gold (VERIFIED, 0x004bafef)
 
 After the totals, with `happy` and `unhappy` counted and the city not barbarian:
