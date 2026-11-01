@@ -214,8 +214,16 @@ nearest city`, or the best is here and the land mass has no own city yet, or the
     go-to runs. `6`: 22 random rays from here for such land, the last hit winning. Both sail for an
     ocean square beside that land (0x004ed0e3).
   - Otherwise the direction chooser.
-    In port with room, the ferry scores above are still simplified. The unload test (0x004f44cc,
-    tags `b` and `U`) is INFERRED in the engine.
+  - **Landing** (0x004f44cc, tags `b`, `U`, `u`), for a ship with no room at sea, except one bound
+    for a coastal own city of tag `A` on this ocean on 15 turns in 16. For each land neighbour free
+    of foreign units, skipping one near a peace partner's city unless carrying caravans, the ship
+    lands when: units there are short of wanted and the plan is not full; there are no own cities and
+    under 8 units; the plan matches attackers or defenders aboard; attackers are near a human enemy's
+    city, far from our own; the go-to was bound for that land; or the ship is hurt past a quarter.
+    Non-settler cargo on unflagged land lands only if nobody is there and it has over 49 squares,
+    flagging it and sending one unit first. Beside a city at war it lands; caravan-only cargo lands
+    only for a caravan's reasons. With a move left it first steps to the best square to land from
+    (0x004ecd74). Landing ends the ship's move and wakes the cargo.
 - **Pollution and fortresses.** An Engineers unit (role 21) or settler finds the nearest
   pollution within the radius of its city and goes to clean it (tag `p`); on rough terrain
   between two own cities, or at a choke point between oceans, a settler builds a fortress (tag

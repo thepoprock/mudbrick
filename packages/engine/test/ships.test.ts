@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { emptyStrategy } from '../src/aiStrategy.js';
-import { coastal, transportDecision, wantedUnits } from '../src/aiShips.js';
+import { applyShipDecision, coastal, transportDecision, wantedUnits } from '../src/aiShips.js';
 import { gatherCargo, tryMove } from '../src/movement.js';
 import { Rng } from '../src/rng.js';
 import type { EngineRules } from '../src/rules.js';
@@ -162,6 +162,36 @@ describe('transports', () => {
     expect(wantedUnits(5)).toBe(15);
     expect(wantedUnits(7)).toBe(19);
     expect(wantedUnits(16)).toBe(30);
+  });
+
+  it('a ship beside land short of units ends its move and wakes its cargo', () => {
+    const w = islands();
+    const target = city(w, 1, 28, 12);
+    const s = emptyStrategy();
+    s.citiesOn[2] = 1;
+    s.landFlags[2] = 1;
+    s.plans[2] = 5;
+    const ship = unit(w, 2, 26, 12);
+    const cargo = unit(w, 0, 26, 12);
+    cargo.aboard = ship.id;
+    cargo.order = ORDER.sleep;
+    const d = transportDecision(w, rules, ship, {
+      turn: 10,
+      rng: new Rng(3),
+      strategy: s,
+      canAttack: () => false,
+      atWar: () => false,
+      isAlly: () => false,
+      isHuman: () => false,
+      cityTrade: (c: City) => c.lastTrade ?? 0,
+    });
+    expect(target.owner).toBe(1);
+    expect(d.kind === 'unload' || d.kind === 'goto').toBe(true);
+    ship.movesSpent = 9;
+    applyShipDecision(w, rules, ship, { kind: 'unload', roles: 3, first: false });
+    expect(cargo.aboard).toBeUndefined();
+    expect(cargo.order).toBeNull();
+    expect(ship.order).toBeNull();
   });
 
   it('an empty transport sails to a port with units to spare, not one short of them', () => {

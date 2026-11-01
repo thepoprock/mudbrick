@@ -7,9 +7,8 @@
  * the port and sail; loaded, they head for an enemy city they may attack, an own coastal city
  * short of units, or any enemy city by trade and distance, and unload where the cargo's land is
  * wanted; without a destination they ferry to a foreign city, a random other land mass, or
- * wander. Where a loaded ship goes is the original's chain, `loadedDestination`; the test for
- * unloading and the ferry scores in port are INFERRED simplifications where noted. Warships use
- * the direction chooser like ground units.
+ * wander. All of it follows the decode. Warships use the direction chooser like ground
+ * units.
  */
 import { addObjective, objectiveAt, type CivStrategy } from './aiStrategy.js';
 import { distance } from './city.js';
@@ -66,7 +65,11 @@ export interface ShipContext {
 }
 
 export type ShipDecision =
-  { kind: 'hold' } | { kind: 'goto'; target: Point; tag: string } | { kind: 'chooser' };
+  | { kind: 'hold' }
+  | { kind: 'goto'; target: Point; tag: string }
+  | { kind: 'chooser' }
+  /** The ship ends its move and wakes cargo of these roles (a mask), or just the first. */
+  | { kind: 'unload'; roles: number; first: boolean };
 
 /** Decide what a transport does (one decision per turn; the dispatcher follows the go-to). */
 export function transportDecision(
@@ -90,30 +93,9 @@ export function transportDecision(
   // A loaded transport.
   const loaded = atSea ? stack.length > 0 : aboard.length > 0 || stack.length >= holds;
   if (loaded && (atSea || stack.length > 0)) {
-    // Unload where the cargo's land mass is wanted (tag 5): next to land of a land mass with own
-    // cities short of units, or with no own city at all and settlers aboard.
     if (atSea) {
-      for (const off of NEIGHBOUR_OFFSETS) {
-        const y = here.y + off.y;
-        if (y < 0 || y >= world.rows) continue;
-        const x = world.wrapX(here.x + off.x, y);
-        if (x === null || world.terrainAt(x, y) === OCEAN) continue;
-        const lm = landmassAt(world, { x, y });
-        const s = ctx.strategy;
-        const citiesOn = s?.citiesOn[lm] ?? 0;
-        const unitsOn = s?.unitsOn[lm] ?? 0;
-        const settlersAboard = stack.some((u) => rules.units[u.type]?.role === 5);
-        const foreignCities = world.cities.some(
-          (c) => c.owner !== ship.owner && landmassAt(world, c.position) === lm,
-        );
-        if (
-          (citiesOn > 0 && unitsOn < wantedUnits(citiesOn)) ||
-          (citiesOn === 0 && settlersAboard && !foreignCities)
-        )
-          return { kind: 'hold' };
-        if (ship.gotoTarget && distance(world, ship.gotoTarget, { x, y }) <= 1)
-          return { kind: 'hold' };
-      }
+      const landing = unloadDecision(world, rules, ship, stack, ctx);
+      if (landing) return landing;
     }
     if (ship.order !== null && ship.gotoTarget)
       return { kind: 'goto', target: ship.gotoTarget, tag: 'keep' };
@@ -256,6 +238,182 @@ function emptyDestination(
     if (home) return { kind: 'goto', target: home.position, tag: 'home' };
   }
   return loadedDestination(world, rules, ship, stack, ctx);
+}
+
+/**
+ * The square to land from (0x004ecd74): this one or a free ocean neighbour, the one touching the
+ * most free land a human's treaty does not close. Beside a hostile empty city, staying scores 12
+ * more. Null means no ocean to stand on; here means stay.
+ */
+function bestLanding(world: World, ship: Unit, ctx: ShipContext): Point | null {
+  const me = ship.owner;
+  let best = -1;
+  let found: Point | null = null;
+  const options = [
+    ...world.neighbours(ship.position.x, ship.position.y),
+    ship.position as Point | null,
+  ];
+  for (const [i, p] of options.entries()) {
+    const stay = i === options.length - 1;
+    if (!p || world.terrainAt(p.x, p.y) !== OCEAN) continue;
+    if (!stay && world.unitsAt(p.x, p.y).length > 0) continue;
+    let score = 0;
+    for (const n of world.neighbours(p.x, p.y)) {
+      if (!n || world.terrainAt(n.x, n.y) === OCEAN) continue;
+      if (world.unitsAt(n.x, n.y).length > 0) continue;
+      const owner = world.territory[world.index(n.x, n.y)] ?? 0;
+      if (
+        owner > 0 &&
+        owner <= 7 &&
+        ctx.isHuman(owner) &&
+        hasTreaty(world, me, owner, TREATY.ceaseFire | TREATY.peace)
+      )
+        continue;
+      const city = world.cityAt(n.x, n.y);
+      if (city && city.owner !== me && hasTreaty(world, me, city.owner, TREATY.war) && stay)
+        score += 12;
+      score += 1;
+    }
+    if (best <= score) {
+      best = score;
+      found = stay ? ship.position : p;
+    }
+  }
+  return found;
+}
+
+/**
+ * Does a ship at sea land its cargo here (0x004f44cc, tags b, U and u)? For each land neighbour
+ * free of foreign units: where units are short, where nobody has settled and the cargo suits,
+ * where the go-to was bound, when the ship is badly hurt, or beside a hostile city. Caravans land
+ * near a city that wants them. Otherwise null, and the ship sails on.
+ */
+function unloadDecision(
+  world: World,
+  rules: EngineRules,
+  ship: Unit,
+  stack: Unit[],
+  ctx: ShipContext,
+): ShipDecision | null {
+  const s = ctx.strategy;
+  const type = rules.units[ship.type];
+  if (!s || !type) return null;
+  const me = ship.owner;
+  const here = ship.position;
+  const ocean = landmassAt(world, here);
+  const goal = ship.gotoTarget;
+  if (ship.order !== null && goal && ship.goalTag === 'A' && (ctx.turn & 15) !== 0) {
+    const c = world.cityAt(goal.x, goal.y);
+    if (c && coastal(world, c) && oceansBeside(world, c).includes(ocean)) return null;
+  }
+  let mask = 0;
+  for (const u of stack) mask |= 1 << (rules.units[u.type]?.role ?? 0);
+  const anyCity = nearestCityOf(world, here, null);
+  const ownCity = nearestCityOf(world, here, me);
+  const anyDist = anyCity ? distance(world, here, anyCity.position) : 99;
+  const ownDist = ownCity ? distance(world, here, ownCity.position) : 99;
+  const anyLand = anyCity ? landmassAt(world, anyCity.position) : -1;
+  const settlersWithRoom = (mask & 0xff7f) === 0x20 && stack.length < (type.holds ?? 0);
+  const onlyCaravans = mask === 0x80;
+  const max = type.hitPointsTens * 10;
+  const hurt = ship.hitPointsLost > max >> 2;
+  const worst = ship.hitPointsLost > max >> 1;
+  const planHere = s.plans[ocean] ?? 5;
+  for (const n of world.neighbours(here.x, here.y)) {
+    if (!n || world.terrainAt(n.x, n.y) === OCEAN) continue;
+    const there = world.unitsAt(n.x, n.y);
+    const owner = there[0]?.owner;
+    if (owner !== undefined && owner !== me) continue;
+    if (owner === me && there.length > 1) continue;
+    const nearPeace =
+      anyCity !== null &&
+      anyCity.owner !== me &&
+      hasTreaty(world, me, anyCity.owner, TREATY.peace) &&
+      anyDist < 4;
+    const lm = landmassAt(world, n);
+    let carry = false;
+    if ((mask & 0x80) === 0) {
+      if (nearPeace) continue;
+    } else if (anyCity && anyLand === lm) {
+      const caravan = stack.find((u) => rules.units[u.type]?.role === 7);
+      const home =
+        world.cities.find((c) => c.id === caravan?.homeCity) ??
+        nearestCityOf(world, n, me) ??
+        world.cities[0];
+      if (home) {
+        const apart = distance(world, anyCity.position, home.position);
+        carry = ship.goalTag !== '3';
+        if (landmassAt(world, home.position) === anyLand && apart < 16) carry = false;
+        if (anyCity.owner === me && (anyCity.size < 8 || apart < 16)) carry = false;
+        if (home.tradeRoutes.some((r) => r.partner === anyCity.id)) carry = false;
+      }
+    }
+    const plan = s.plans[lm] ?? 5;
+    const units = s.unitsOn[lm] ?? 0;
+    const cities = s.citiesOn[lm] ?? 0;
+    let land = false;
+    let one = false;
+    if (units < wantedUnits(cities) && plan !== PLAN_FULL) land = true;
+    if (cities === 0 && units < 8) land = true;
+    if (((1 << plan) & mask & 3) !== 0) land = true;
+    if (
+      (mask & 1) !== 0 &&
+      anyCity !== null &&
+      ownCity !== anyCity &&
+      ownDist > 10 &&
+      anyDist < 4 &&
+      anyLand === lm &&
+      ctx.isHuman(anyCity.owner) &&
+      hasTreaty(world, me, anyCity.owner, TREATY.war)
+    )
+      land = true;
+    if (ship.order !== null && goal && ship.goalTag !== '3' && landmassAt(world, goal) === lm)
+      land = true;
+    if ((mask & 0x20) === 0 && (s.landFlags[lm] ?? 0) === 0) {
+      if (units === 0 && (world.landmassStats?.land[lm] ?? 0) > 49) {
+        s.landFlags[lm] = (s.landFlags[lm] ?? 0) | 0x80;
+        one = true;
+      } else land = false;
+    }
+    if (settlersWithRoom && ((s.landFlags[lm] ?? 0) & 5) !== 0) land = false;
+    if (hurt || worst) land = true;
+    const city = world.cityAt(n.x, n.y);
+    if (!settlersWithRoom && city && city.owner !== me) {
+      if (hasTreaty(world, me, city.owner, TREATY.war)) land = true;
+    }
+    if (onlyCaravans) land = false;
+    const rows = n.y > 1 && n.y < world.rows - 2;
+    if (land && (world.landmassStats?.rated[lm] ?? 17) > 4 && rows) {
+      const left = type.move * 3 - ship.movesSpent >= rules.cosmic.roadMoveMultiplier;
+      if (left && (anyDist !== 0 || planHere !== 1)) {
+        const from = bestLanding(world, ship, ctx);
+        if (from && (from.x !== here.x || from.y !== here.y))
+          return { kind: 'goto', target: from, tag: 'b' };
+      }
+      if (plan === 0) addObjective(s, { x: here.x, y: here.y, type: 2, priority: 5 });
+      return { kind: 'unload', roles: carry ? mask : mask & ~0x80, first: one };
+    }
+    if (carry && rows) {
+      if (plan === 0) addObjective(s, { x: here.x, y: here.y, type: 2, priority: 5 });
+      return { kind: 'unload', roles: nearPeace ? 0x80 : 0x82, first: false };
+    }
+    if ((ctx.turn & 3) === 0) ship.order = null;
+  }
+  return null;
+}
+
+function nearestCityOf(world: World, from: Point, owner: number | null): City | null {
+  let best: City | null = null;
+  let bestD = 9999;
+  for (const c of world.cities) {
+    if (owner !== null && c.owner !== owner) continue;
+    const d = distance(world, from, c.position);
+    if (d < bestD) {
+      bestD = d;
+      best = c;
+    }
+  }
+  return best;
 }
 
 /** Which land masses touch which oceans (the original's table 0x005ead57, read by 0x00559951). */
@@ -515,8 +673,29 @@ function shoreNear(world: World, target: Point, from: Point): Point | null {
 }
 
 /** Apply a decision to the ship's orders. Returns true when the ship should keep moving this turn. */
-export function applyShipDecision(ship: Unit, d: ShipDecision): boolean {
+export function applyShipDecision(
+  world: World,
+  rules: EngineRules,
+  ship: Unit,
+  d: ShipDecision,
+): boolean {
+  if (d.kind === 'unload') {
+    ship.order = null;
+    ship.gotoTarget = null;
+    delete ship.goalTag;
+    ship.movesSpent = (rules.units[ship.type]?.move ?? 0) * 3;
+    for (const u of world.unitsAt(ship.position.x, ship.position.y)) {
+      if (u === ship || u.owner !== ship.owner) continue;
+      if (u.aboard === undefined || ((1 << (rules.units[u.type]?.role ?? 0)) & d.roles) === 0)
+        continue;
+      delete u.aboard;
+      u.order = null;
+      if (d.first) break;
+    }
+    return false;
+  }
   if (d.kind === 'goto') {
+    if (d.tag !== 'keep') ship.goalTag = d.tag;
     if (!ship.gotoTarget || ship.gotoTarget.x !== d.target.x || ship.gotoTarget.y !== d.target.y)
       orderGoTo(ship, d.target);
     else ship.order = ship.order ?? 10;

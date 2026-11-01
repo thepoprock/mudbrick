@@ -880,7 +880,7 @@ export function aiMoveUnits(
         ...(ctx.leader !== undefined ? { leader: ctx.leader } : {}),
         cityTrade: (c) => c.lastTrade ?? 0,
       });
-      if (!applyShipDecision(unit, d)) continue;
+      if (!applyShipDecision(world, rules, unit, d)) continue;
     }
     let guard = 0;
     while (movesLeft(rules, unit, ctx) > 0 && world.units.includes(unit) && guard++ < 12) {
