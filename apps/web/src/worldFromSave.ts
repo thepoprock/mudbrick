@@ -82,6 +82,20 @@ export function worldFromSave(save: SaveFile, rules: Rules): World {
             patience: rec.patience,
             lastWarTurns: Int16Array.from(rec.lastContact),
             governmentScores: Int16Array.from(rec.governmentScores),
+            spaceship: {
+              flags: rec.spaceship.flags,
+              arrival: rec.spaceship.estimatedArrival,
+              launchYear: rec.spaceship.launchYear,
+              population: rec.spaceship.population,
+              parts: Int16Array.from([
+                rec.spaceship.structural,
+                rec.spaceship.propulsion,
+                rec.spaceship.fuel,
+                rec.spaceship.habitation,
+                rec.spaceship.lifeSupport,
+                rec.spaceship.solar,
+              ]),
+            },
           }
         : {}),
       inPlay: slot === 0 || (save.parameters.slotsInPlay[slot] ?? false),

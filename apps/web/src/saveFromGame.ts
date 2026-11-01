@@ -112,6 +112,17 @@ export function saveFromGame(original: Uint8Array, parsed: SaveFile, game: Game)
     ...(civ.patience !== undefined ? { patience: civ.patience } : {}),
     ...(civ.lastWarTurns ? { lastContact: Array.from(civ.lastWarTurns) } : {}),
     ...(civ.governmentScores ? { governmentScores: Array.from(civ.governmentScores) } : {}),
+    ...(civ.spaceship
+      ? {
+          spaceship: {
+            flags: civ.spaceship.flags,
+            arrival: civ.spaceship.arrival,
+            launchYear: civ.spaceship.launchYear,
+            population: civ.spaceship.population,
+            parts: Array.from(civ.spaceship.parts),
+          },
+        }
+      : {}),
     cities: world.cities.filter((c) => c.owner === civ.slot).length,
     sumCitySizes: world.cities.filter((c) => c.owner === civ.slot).reduce((s, c) => s + c.size, 0),
   }));

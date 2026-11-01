@@ -127,6 +127,8 @@ export interface Civ {
   civFlags?: number;
   /** Diplomatic incidents suffered or caused (civilization record +28; bribes +1, incitements +2). */
   incidents?: number;
+  /** The spaceship (civilization record +0x400; spaceship.ts). */
+  spaceship?: import('./spaceship.js').Spaceship;
 }
 
 export type Production = { kind: 'unit'; index: number } | { kind: 'improvement'; index: number };

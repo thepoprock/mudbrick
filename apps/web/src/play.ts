@@ -60,6 +60,12 @@ import {
   SPY_TYPE,
   type EspionageAction,
   type EspionageEvent,
+  evaluateShip,
+  hasLaunched,
+  hasStarted,
+  launchShip,
+  PART_NAMES,
+  type SpaceshipEvent,
 } from '@mudbrick/engine';
 import { ADVANCE, IMPROVEMENT } from '@mudbrick/engine';
 import { sprites } from '@mudbrick/formats';
@@ -623,6 +629,10 @@ export class PlaySession {
       if (text) this.log(text);
     }
     this.log(`— Turn ${this.game.state.turn}, ${this.yearText()} —`);
+    if (this.game.state.gameOver) {
+      const w = this.world.civs[this.game.state.gameOver.winner];
+      this.log(`GAME OVER: the ${w?.name ?? '?'} win by ${this.game.state.gameOver.reason}.`);
+    }
     this.selected = null;
     this.selectNext();
     this.refresh();
@@ -759,7 +769,11 @@ export class PlaySession {
     this.el.status.textContent =
       `${civ.name} · ${gov} · Turn ${this.game.state.turn} (${this.yearText()}) · ` +
       `${civ.treasury} gold · tax ${civ.taxRate * 10} % lux ${(10 - civ.taxRate - civ.scienceRate) * 10} % sci ${civ.scienceRate * 10} % · ` +
-      (waiting > 0 ? `${waiting} unit(s) awaiting orders` : 'press Enter to end the turn');
+      (this.game.state.gameOver
+        ? ` · GAME OVER: ${this.world.civs[this.game.state.gameOver.winner]?.name ?? '?'} win by ${this.game.state.gameOver.reason}`
+        : waiting > 0
+          ? `${waiting} unit(s) awaiting orders`
+          : 'press Enter to end the turn');
   }
 
   private renderUnitPanel(): void {
@@ -982,6 +996,29 @@ export class PlaySession {
     const cost = this.game.researchCostFor(civ);
     const text = document.createElement('div');
     text.textContent = `Researching ${current}: ${civ.scienceStored}/${cost} beakers · ${civ.advancesCount} advances known`;
+    if (civ.spaceship && hasStarted(civ)) {
+      const ship = civ.spaceship;
+      const ev = evaluateShip(
+        ship,
+        true,
+        this.rules.cosmic.massThrustParadigm ?? 75,
+        this.game.knows(this.humanSlot, 32),
+        gameYear(this.game.state.turn, this.game.state.difficulty),
+        true,
+      );
+      text.textContent += `\nSpaceship: ${PART_NAMES.map((n, i) => `${ship.parts[i] ?? 0} ${n}`).join(', ')} · success ${ev.success} % · flight ${(ev.flightTenths / 10).toFixed(1)} years · ${hasLaunched(civ) ? `launched ${ship.launchYear}, arrives ${ship.arrival}` : `would arrive ${ev.arrivalYear}`}`;
+      if (!hasLaunched(civ) && (ship.parts[0] ?? 0) > 0) {
+        const launch = document.createElement('button');
+        launch.textContent = 'Launch';
+        launch.addEventListener('click', () => {
+          const events: SpaceshipEvent[] = [];
+          launchShip(this.world, civ, this.game.shipContext(), events);
+          for (const e of events) this.log(`${e.text}.`);
+          this.refresh();
+        });
+        text.append(' ', launch);
+      }
+    }
     const label = document.createElement('label');
     label.textContent = 'Research: ';
     const select = document.createElement('select');

@@ -47,6 +47,13 @@ import { runStrategy, type StrategyEvent } from './aiStrategy.js';
 import { gameYear } from './calendar.js';
 import { routeIncomeTotal, type TradeContext } from './trade.js';
 import type { EspionageContext } from './espionage.js';
+import {
+  buildPart,
+  checkArrivals,
+  hasLaunched,
+  type SpaceshipContext,
+  type SpaceshipEvent,
+} from './spaceship.js';
 import { computeSupplyDemand, supplyDemandDue } from './supplyDemand.js';
 import { terraformTasks } from './aiTerraform.js';
 import {
@@ -102,6 +109,8 @@ export interface GameState {
   pollutionSquares?: number;
   /** Header barbarian activity: 0 villages only, 1 roving, 2 restless, 3 raging. */
   barbarianActivity?: number;
+  /** The game has ended: who won and how. */
+  gameOver?: { winner: number; reason: 'spaceship' | 'conquest' };
 }
 
 export type GrowthNote =
@@ -115,6 +124,7 @@ export type TurnEvent =
   | { slot: number; event: AiUnitEvent }
   | { slot: number; event: StrategyEvent }
   | { slot: number; event: BarbarianEvent }
+  | { slot: number; event: SpaceshipEvent }
   | { slot: number; event: DiplomacyEvent }
   | { slot: number; event: GovernmentEvent }
   | { slot: number; event: { kind: 'rates'; science: number; tax: number; luxuries: number } };
@@ -124,6 +134,9 @@ export const AI_SPACE_ADVANCES = [32, 41] as const;
 
 export class Game {
   private nextUnitId: number;
+
+  /** Events raised outside a turn step (spaceship parts), drained after each civilization. */
+  private pendingEvents: TurnEvent[] = [];
 
   /** Debug hook: the build advisor's candidates for a city (score, production). */
   buildTrace?: (city: City, score: number, p: Production) => void;
@@ -306,7 +319,13 @@ export class Game {
       knows: (a) => this.knows(slot, a),
       ownsWonder: (i) => this.ownsWonder(slot, i),
       wonderCity: (i) => this.wonderCity(i),
-      canBuildSpaceship: this.wonderCity(IMPROVEMENT.apolloProgram) !== null,
+      canBuildSpaceship: this.wonderCity(IMPROVEMENT.apolloProgram) !== null && !hasLaunched(civ),
+      buildShipPart: (s, kind) => {
+        const events: SpaceshipEvent[] = [];
+        const part = buildPart(this.world, this.civ(s), kind, this.shipContext(), events);
+        for (const e of events) this.pendingEvents.push({ slot: s, event: e });
+        return part;
+      },
       shieldRows: boxRows(
         this.rules,
         { isHuman: civ.isHuman, difficulty: this.state.difficulty },
@@ -716,10 +735,74 @@ export class Game {
       if (civ.slot === 0 || !civ.inPlay) continue;
       civ.treasury = civ.treasury > 30000 ? 30000 : civ.treasury < 0 ? 0 : civ.treasury;
       out.push(...this.processCivilization(civ.slot));
+      out.push(...this.pendingEvents.splice(0));
     }
     out.push(...this.processBarbarians());
     this.state.turn += 1;
+    out.push(...this.endOfYear());
     return out;
+  }
+
+  /** Spaceship arrivals, dead civilizations and the end of the game (the yearly routine's tail). */
+  private endOfYear(): TurnEvent[] {
+    const out: TurnEvent[] = [];
+    if (this.state.gameOver) return out;
+    const year = gameYear(this.state.turn, this.state.difficulty);
+    const shipEvents: SpaceshipEvent[] = [];
+    const winner = checkArrivals(this.world, year, shipEvents);
+    for (const e of shipEvents) out.push({ slot: e.slot, event: e });
+    if (winner) {
+      this.state.gameOver = { winner: winner.slot, reason: 'spaceship' };
+      return out;
+    }
+    // INFERRED: a civilization with no city and no unit is gone; after turn 20 so is one with
+    // no city at all (the original kills a civilization when its last city falls).
+    for (const civ of this.world.civs) {
+      if (civ.slot === 0 || !civ.inPlay) continue;
+      const cities = this.citiesOf(civ.slot).length;
+      const units = this.world.units.filter((u) => u.owner === civ.slot).length;
+      if (cities === 0 && (units === 0 || this.state.turn > 20)) {
+        civ.inPlay = false;
+        for (const u of [...this.world.units])
+          if (u.owner === civ.slot) this.world.units.splice(this.world.units.indexOf(u), 1);
+        out.push({
+          slot: civ.slot,
+          event: {
+            kind: 'spaceship',
+            text: `the ${civ.name} civilization is destroyed`,
+            slot: civ.slot,
+          },
+        });
+      }
+    }
+    const alive = this.world.civs.filter((c) => c.slot !== 0 && c.inPlay);
+    if (alive.length === 1 && this.state.turn > 1 && alive[0]) {
+      this.state.gameOver = { winner: alive[0].slot, reason: 'conquest' };
+      out.push({
+        slot: alive[0].slot,
+        event: {
+          kind: 'spaceship',
+          text: `the ${alive[0].name} rule the world`,
+          slot: alive[0].slot,
+        },
+      });
+    }
+    return out;
+  }
+
+  shipContext(): SpaceshipContext {
+    return {
+      turn: this.state.turn,
+      year: gameYear(this.state.turn, this.state.difficulty),
+      difficulty: this.state.difficulty,
+      massThrust: this.rules.cosmic.massThrustParadigm ?? 75,
+      isHuman: (s) => this.world.civs.find((c) => c.slot === s)?.isHuman ?? false,
+      knowsFusion: (s) => this.knows(s, 32),
+      rank: (s) => this.world.civs.find((c) => c.slot === s)?.advancesCount ?? 0,
+      rechooseProduction: (s) => {
+        for (const c of this.citiesOf(s)) this.aiChooseProduction(c);
+      },
+    };
   }
 
   private barbarianContext(): BarbarianContext {

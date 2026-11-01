@@ -101,6 +101,14 @@ export interface CivWrite {
   lastContact?: number[];
   /** Government scores (7 × i16 at +980). */
   governmentScores?: number[];
+  /** Spaceship: flags byte, arrival year, launch year, population, six part counts. */
+  spaceship?: {
+    flags: number;
+    arrival: number;
+    launchYear: number;
+    population: number;
+    parts: number[];
+  };
 }
 
 export interface SavePatch {
@@ -283,6 +291,14 @@ export function writeSave(original: Uint8Array, save: SaveFile, patch: SavePatch
     if (c.governmentScores)
       for (let n = 0; n < 7; n++) w.i16(b + 980 + 2 * n, c.governmentScores[n] ?? 0);
     if (c.lastContact) for (let n = 0; n < 8; n++) w.i16(b + 994 + 2 * n, c.lastContact[n] ?? -1);
+    if (c.spaceship) {
+      const X = b + 994;
+      w.u8(X + 30, c.spaceship.flags);
+      w.u16(X + 32, c.spaceship.arrival);
+      w.u16(X + 34, c.spaceship.launchYear);
+      w.u16(X + 36, c.spaceship.population);
+      for (let n = 0; n < 6; n++) w.u16(X + 38 + 2 * n, c.spaceship.parts[n] ?? 0);
+    }
     w.i16(b + 8, c.researchProgress);
     w.i16(b + 10, c.researching ?? -1);
     w.u8(b + 16, c.advancesCount);

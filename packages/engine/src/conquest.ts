@@ -1,3 +1,4 @@
+import { loseShip } from './spaceship.js';
 /**
  * Capturing a city.
  *
@@ -97,6 +98,7 @@ export function captureCity(
       IMPROVEMENT.courthouse,
     ]) {
       if (city.improvements[i]) {
+        if (i === IMPROVEMENT.palace) loseShip(loser);
         city.improvements[i] = false;
         destroyed.push(i);
       }

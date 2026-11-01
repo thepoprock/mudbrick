@@ -109,9 +109,13 @@ export interface Treaty {
 }
 
 export interface Spaceship {
+  /** Bits: 1 started, 2 launched, 4 arrived, 8 Fusion Power known, 16 won (VERIFIED). */
+  flags: number;
   launched: boolean;
   estimatedArrival: number;
   launchYear: number;
+  /** Habitation modules at launch × 10,000 people. */
+  population: number;
   structural: number;
   propulsion: number;
   fuel: number;
@@ -507,9 +511,11 @@ export function parseSave(bytes: Uint8Array): SaveFile {
       lastContact: Array.from({ length: 8 }, (_, n) => r.i16(X + 2 * n)),
       throneRoom: Array.from({ length: 9 }, (_, n) => r.u8(X + 17 + n)),
       spaceship: {
-        launched: r.bit(X + 30, 0),
+        flags: r.u8(X + 30),
+        launched: r.bit(X + 30, 1),
         estimatedArrival: r.u16(X + 32),
         launchYear: r.u16(X + 34),
+        population: r.u16(X + 36),
         structural: r.u16(X + 38),
         propulsion: r.u16(X + 40),
         fuel: r.u16(X + 42),

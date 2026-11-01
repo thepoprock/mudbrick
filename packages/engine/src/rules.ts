@@ -115,6 +115,8 @@ export interface AdvanceRule {
 
 export interface CosmicRule {
   roadMoveMultiplier: number;
+  /** Mass/Thrust paradigm (@COSMIC 20; higher slows the spaceship). */
+  massThrustParadigm?: number;
   foodPerCitizen: number;
   foodBoxRows: number;
   shieldBoxRows: number;

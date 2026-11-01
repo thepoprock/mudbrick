@@ -39,6 +39,8 @@ export interface ProductionContext {
   wonderCity: (improvement: number) => number | null;
   /** The civilization can build spaceship parts (Apollo Program exists, ship not launched). */
   canBuildSpaceship: boolean;
+  /** Add a part of kind 0 structural, 1 component, 2 module; returns the part index or −1 when full. */
+  buildShipPart?: (slot: number, kind: number) => number;
   /** Shield-box rows for this owner; `boxRows(rules, ctx, true)` normally. */
   shieldRows: number;
 }
@@ -157,6 +159,18 @@ export function processProduction(
     }
     const c = cost(rules, p, ctx.shieldRows);
     if (city.shieldsStored < c) return events;
+    if (SPACESHIP_PARTS.includes(idx as 35 | 36 | 37)) {
+      // A part joins the civilization's ship rather than the city (spaceship.ts).
+      const added = ctx.buildShipPart ? ctx.buildShipPart(city.owner, idx - 35) : -1;
+      if (added < 0) {
+        events.push({ kind: 'bad-space', production: p });
+        return events;
+      }
+      city.shieldsStored -= c;
+      if (ctx.isHuman) city.shieldsStored = 0;
+      events.push({ kind: 'built-improvement', improvement: idx });
+      return events;
+    }
     city.improvements[idx] = true;
     city.shieldsStored -= c;
     if (ctx.isHuman) city.shieldsStored = 0;

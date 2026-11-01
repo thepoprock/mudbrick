@@ -12,6 +12,7 @@ export * from './snapshot.js';
 export * from './aiShips.js';
 export * from './espionage.js';
 export * from './aiAir.js';
+export * from './spaceship.js';
 export * from './newGame.js';
 export * from './mapgen.js';
 export * from './defender.js';

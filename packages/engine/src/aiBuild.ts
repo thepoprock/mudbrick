@@ -5,6 +5,7 @@
  * Lower numbers win; 999 = never. Inputs the engine does not model yet take the documented
  * INFERRED defaults; every case is named by its improvement or unit role so it can be refined.
  */
+import { hasLaunched, hasStarted, kindComplete, shipOf } from './spaceship.js';
 import { distance, type CityContext } from './city.js';
 import { canBuildUnit } from './founding.js';
 import type { Production } from './world.js';
@@ -263,7 +264,7 @@ export function improvementPriority(
     case im.solarPlant:
       break;
     default:
-      if (imp >= 35) break; // spaceship parts: INFERRED never until the race is modelled
+      if (imp >= 35) break; // spaceship parts are scored in aiChooseProduction
       n = clamp(12 - (f.shields >> 2), 2, 12);
       break;
   }
@@ -406,6 +407,38 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
   // Improvements.
   for (let imp = 1; imp < 39; imp++) {
     if (!env.canBuildImprovement(imp)) continue;
+    if (imp >= 35) {
+      // VERIFIED value (ai-city.md): 4, or 2 once a human has a spaceship, with the Apollo
+      // Program standing and the ship not launched; INFERRED order of kinds: structure for the
+      // engines and modules first, then components, then one of each module, then the rest.
+      if (env.wonderCity(IMPROVEMENT.apolloProgram) === null || hasLaunched(civ)) continue;
+      const ship = shipOf(civ);
+      const kind = imp - 35;
+      if (kindComplete(ship, kind)) continue;
+      const s0 = ship.parts[0] ?? 0;
+      const wantKind =
+        s0 < 33
+          ? 0
+          : (ship.parts[1] ?? 0) < 8 || (ship.parts[2] ?? 0) < 8
+            ? 1
+            : (ship.parts[3] ?? 0) < 1 || (ship.parts[4] ?? 0) < 1 || (ship.parts[5] ?? 0) < 1
+              ? 2
+              : 0;
+      if (kind !== wantKind) continue;
+      const humanShip = world.civs.some((c) => c.isHuman && hasStarted(c));
+      consider(
+        scaleCommon(
+          humanShip ? 2 : 4,
+          f.expanding,
+          f.civilize,
+          city,
+          barracksOnContinent,
+          shakespeares,
+        ),
+        { kind: 'improvement', index: imp },
+      );
+      continue;
+    }
     const r = improvementPriority(imp, city, f, {
       rules,
       cityCount: env.cityCount,
