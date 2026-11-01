@@ -64,6 +64,8 @@ export interface GameParameters {
   pollutionSquares: number;
   /** File offset 8 (i16): from this turn on the calendar advances one year per turn; −1 none (VERIFIED 0x0046520c). */
   calendarLockTurn: number;
+  /** File offset 0x142: past this turn the historian reports (VERIFIED 0x00467591). */
+  nextHistory: number;
   /** File offset 32 (i16): turns of peace, ×3 (at most 100) in the score after turn 200 (VERIFIED 0x0047c9e0). */
   turnsOfPeace: number;
   unitCount: number;
@@ -551,6 +553,7 @@ export function parseSave(bytes: Uint8Array): SaveFile {
     globalWarmingCount: r.u8(P + 27),
     pollutionSquares: r.u16(P + 30),
     calendarLockTurn: r.i16(P + 8),
+    nextHistory: r.i16(0x142),
     turnsOfPeace: r.i16(P + 32),
     unitCount: r.u16(P + 34),
     cityCount: r.u16(P + 36),

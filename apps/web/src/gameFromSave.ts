@@ -15,6 +15,7 @@ export function gameFromSave(save: SaveFile, rules: Rules, world: World): Game {
     firstDiscoveredBy: [...save.techs.firstDiscoveredBy],
     pollutionSquares: save.parameters.pollutionSquares,
     calendarLockTurn: save.parameters.calendarLockTurn,
+    nextHistory: save.parameters.nextHistory,
     turnsOfPeace: save.parameters.turnsOfPeace,
     ...(save.options.raw[1] !== undefined && (save.options.raw[1] & 1) !== 0
       ? { noRestart: true }

@@ -1,3 +1,4 @@
+import { descriptionFor } from '@mudbrick/formats';
 /**
  * The interactive layer: a human plays one civilization from a loaded save.
  *
@@ -26,7 +27,19 @@ import {
   movesLeft,
   ORDER,
   orderGoTo,
-  treatiesOf,
+  cityRows,
+  councilRatings,
+  councilSpeech,
+  defenseRows,
+  demographics,
+  foreignRows,
+  HISTORY_KINDS,
+  parseCouncil,
+  scienceReport,
+  spaceshipRows,
+  topCities,
+  tradeReport,
+  wonderRows,
   type Conversation,
   type Dialog,
   pillage,
@@ -93,6 +106,8 @@ const DIRECTIONS: Record<string, Point> = {
   W: { x: -2, y: 0 },
   NW: { x: -1, y: -1 },
 };
+
+type PediaCategory = 'ADVANCE' | 'IMPROVEMENT' | 'WONDER' | 'UNIT' | 'GOVERNMENT';
 
 const KEY_DIRECTIONS: Record<string, string> = {
   ArrowUp: 'N',
@@ -212,9 +227,29 @@ export class PlaySession {
       return true;
     }
     if (this.talk) return true;
+    if (e.key === 'Escape' && document.getElementById('talkBox')?.style.display === 'block') {
+      this.closeTalk();
+      return true;
+    }
     switch (e.key) {
+      case 'F1':
+      case 'F2':
       case 'F3':
-        this.foreignMenu();
+      case 'F4':
+      case 'F5':
+      case 'F6':
+      case 'F7':
+      case 'F8':
+      case 'F9':
+      case 'F11':
+      case 'F12':
+        this.showReport(e.key);
+        return true;
+      case 'F10':
+        this.showCouncil();
+        return true;
+      case '?':
+        this.showPedia();
         return true;
       case 'Enter':
         this.endTurn();
@@ -695,6 +730,10 @@ export class PlaySession {
         return `${cityName} holds ${this.rules.improvements[ev.improvement]?.name ?? 'a wonder'} back.`;
       case 'discovered':
         return `Discovery: ${this.rules.advances[ev.advance]?.name ?? ev.advance}.`;
+      case 'history': {
+        const best = this.game.civ(ev.order[0] ?? 1).name;
+        return `Historians name the ${best} the ${HISTORY_KINDS[ev.category] ?? ''} civilization: ${ev.order.map((s) => this.game.civ(s).name).join(', ')}.`;
+      }
       case 'great-library':
         return `The Great Library yields ${this.rules.advances[ev.advance]?.name ?? ev.advance}.`;
       case 'barracks-sold':
@@ -873,19 +912,288 @@ export class PlaySession {
       `P pillage · D disband · t trade route · h help wonder · Tab next unit · c centre · Enter end turn`;
   }
 
-  /** The foreign minister: pick a civilization we know to ask for an audience. */
-  private foreignMenu(): void {
+  /** The High Council: each advisor rates us and speaks, others answering (council.ts). */
+  private showCouncil(): void {
     const box = this.talkBox();
     box.replaceChildren();
     const title = document.createElement('div');
-    title.textContent = 'Send an emissary to';
-    box.appendChild(title);
-    for (const c of this.world.civs) {
-      if (c.slot === 0 || c.slot === this.humanSlot || !c.inPlay) continue;
-      if (((treatiesOf(this.civ)[c.slot] ?? 0) & TREATY.contact) === 0) continue;
-      this.talkButton(box, c.name, () => this.startTalk(c.slot, true));
+    title.style.fontWeight = 'bold';
+    title.textContent = 'High Council';
+    const body = document.createElement('pre');
+    body.style.cssText =
+      'margin:8px 0;max-height:60vh;overflow:auto;font:12px monospace;white-space:pre-wrap';
+    const { era, ratings } = councilRatings(this.game, this.humanSlot);
+    const sections = parseCouncil(this.folder.council[era] ?? '');
+    const lines: string[] = [];
+    if (this.civ.government === 0) lines.push('Anarchy: the council cannot meet.');
+    else
+      for (let a = 0; a < 5; a++) {
+        lines.push(...councilSpeech(sections, a, ratings, this.game.rng), '');
+      }
+    body.textContent = lines.join('\n');
+    box.append(title, body);
+    this.talkButton(box, 'Close', () => this.closeTalk());
+  }
+
+  /** The Civilopedia: Describe.txt with each entry's rules facts above it. */
+  private showPedia(category?: PediaCategory, row?: number): void {
+    const box = this.talkBox();
+    box.replaceChildren();
+    const rules = this.rules;
+    const lists: Record<PediaCategory, { label: string; items: { name: string; row: number }[] }> =
+      {
+        ADVANCE: {
+          label: 'Civilization Advances',
+          items: rules.advances.map((a, i) => ({ name: a.name, row: i })),
+        },
+        IMPROVEMENT: {
+          label: 'City Improvements',
+          items: rules.improvements
+            .map((a, i) => ({ name: a.name, row: i }))
+            .filter((x) => x.row >= 1 && x.row < 39),
+        },
+        WONDER: {
+          label: 'Wonders of the World',
+          items: rules.improvements
+            .map((a, i) => ({ name: a.name, row: i - 39 }))
+            .filter((x) => x.row >= 0),
+        },
+        UNIT: { label: 'Unit Types', items: rules.units.map((a, i) => ({ name: a.name, row: i })) },
+        GOVERNMENT: {
+          label: 'Governments',
+          items: this.folder.rules.governments.map((g, i) => ({ name: g.name, row: i })),
+        },
+      };
+    const heading = document.createElement('div');
+    heading.style.fontWeight = 'bold';
+    if (!category) {
+      heading.textContent = 'Civilopedia';
+      box.appendChild(heading);
+      for (const k of Object.keys(lists) as PediaCategory[])
+        this.talkButton(box, lists[k].label, () => this.showPedia(k));
+      this.talkButton(box, 'Close', () => this.closeTalk());
+      return;
+    }
+    if (row === undefined) {
+      heading.textContent = lists[category].label;
+      box.appendChild(heading);
+      const list = document.createElement('div');
+      list.style.cssText = 'max-height:60vh;overflow:auto';
+      for (const it of lists[category].items)
+        this.talkButton(list, it.name, () => this.showPedia(category, it.row));
+      box.appendChild(list);
+      this.talkButton(box, 'Back', () => this.showPedia());
+      return;
+    }
+    const item = lists[category].items.find((x) => x.row === row);
+    heading.textContent = item?.name ?? '';
+    const body = document.createElement('div');
+    body.style.cssText = 'max-height:60vh;overflow:auto;margin:8px 0';
+    const entry = this.folder.descriptions
+      ? descriptionFor(this.folder.descriptions, category, row)
+      : undefined;
+    body.textContent = [...this.pediaFacts(category, row), '', ...(entry?.text ?? [])].join('\n');
+    box.append(heading, body);
+    this.talkButton(box, 'Back', () => this.showPedia(category));
+  }
+
+  private pediaFacts(category: PediaCategory, row: number): string[] {
+    const rules = this.rules;
+    const adv = (r: { kind: string; index?: number } | undefined) =>
+      r?.kind === 'advance'
+        ? (rules.advances[r.index ?? 0]?.name ?? '?')
+        : r?.kind === 'never'
+          ? 'never'
+          : 'none';
+    if (category === 'ADVANCE') {
+      const a = rules.advances[row];
+      if (!a) return [];
+      const leads = rules.advances.filter(
+        (x) =>
+          (x.preq1.kind === 'advance' && x.preq1.index === row) ||
+          (x.preq2.kind === 'advance' && x.preq2.index === row),
+      );
+      return [
+        `Requires ${adv(a.preq1)}, ${adv(a.preq2)}.`,
+        `Leads to ${leads.map((x) => x.name).join(', ') || 'nothing further'}.`,
+        `Allows ${
+          [
+            ...rules.units.filter((u) => u.preq?.kind === 'advance' && u.preq.index === row),
+            ...rules.improvements.filter((u) => u.preq?.kind === 'advance' && u.preq.index === row),
+          ]
+            .map((x) => x.name)
+            .join(', ') || 'nothing to build'
+        }.`,
+      ];
+    }
+    if (category === 'UNIT') {
+      const u = rules.units[row];
+      if (!u) return [];
+      return [
+        `Attack ${u.attack}, defence ${u.defence}, moves ${u.move}, hit points ${u.hitPointsTens * 10}, firepower ${u.firepower}.`,
+        `Cost ${u.costRows * rules.cosmic.shieldBoxRows} shields. Requires ${adv(u.preq)}. Obsolete with ${adv(u.obsoleteWith)}.`,
+      ];
+    }
+    if (category === 'IMPROVEMENT' || category === 'WONDER') {
+      const i = category === 'WONDER' ? row + 39 : row;
+      const r = rules.improvements[i];
+      if (!r) return [];
+      return [
+        `Cost ${r.costRows * rules.cosmic.shieldBoxRows} shields, upkeep ${r.upkeep} gold. Requires ${adv(r.preq)}.`,
+        ...(category === 'WONDER' ? [`Ends with ${adv(r.expiresWith)}.`] : []),
+      ];
+    }
+    return [];
+  }
+
+  /** The advisors: one text page each, closed with its button or Escape. */
+  private showReport(key: string): void {
+    const box = this.talkBox();
+    box.replaceChildren();
+    const page = this.reportPage(key);
+    const title = document.createElement('div');
+    title.style.fontWeight = 'bold';
+    title.textContent = page.title;
+    const body = document.createElement('pre');
+    body.style.cssText = 'margin:8px 0;max-height:60vh;overflow:auto;font:12px monospace';
+    body.textContent = page.lines.join('\n');
+    box.append(title, body);
+    if (key === 'F3') {
+      for (const r of foreignRows(this.game, this.humanSlot))
+        this.talkButton(box, `Send an emissary to the ${r.civ.name}`, () =>
+          this.startTalk(r.civ.slot, true),
+        );
     }
     this.talkButton(box, 'Close', () => this.closeTalk());
+  }
+
+  private reportPage(key: string): { title: string; lines: string[] } {
+    const game = this.game;
+    const slot = this.humanSlot;
+    const unit = (i: number) => this.rules.units[i]?.name ?? '?';
+    const pad = (s: string | number, n: number) => String(s).padEnd(n);
+    const num = (s: string | number, n: number) => String(s).padStart(n);
+    switch (key) {
+      case 'F1':
+        return {
+          title: `City Status: the ${this.civ.name}, ${this.yearText()}`,
+          lines: [
+            `${pad('City', 18)}${num('Size', 5)}${num('Food', 6)}${num('Shld', 6)}${num('Trade', 6)}  Building`,
+            ...cityRows(game, slot).map(
+              (r) =>
+                `${pad(r.city.name, 18)}${num(r.city.size, 5)}${num(r.food, 6)}${num(r.shields, 6)}${num(r.trade, 6)}  ${
+                  r.city.production.kind === 'unit'
+                    ? unit(r.city.production.index)
+                    : (this.rules.improvements[r.city.production.index]?.name ?? '?')
+                }`,
+            ),
+          ],
+        };
+      case 'F2':
+        return {
+          title: 'Defense Minister',
+          lines: [
+            `${pad('Unit', 22)}${num('A/D/M', 9)}${num('Active', 8)}${num('Building', 10)}`,
+            ...defenseRows(game, slot).map(
+              (r) =>
+                `${pad(r.type.name, 22)}${num(`${r.type.attack}/${r.type.defence}/${r.type.move}`, 9)}${num(r.active, 8)}${num(r.building, 10)}`,
+            ),
+          ],
+        };
+      case 'F3':
+        return {
+          title: 'Foreign Minister',
+          lines: foreignRows(game, slot).map(
+            (r) =>
+              `${pad(r.civ.name, 16)}${pad(r.status, 12)}${r.embassy ? `embassy, ${r.cities} cities` : 'no embassy'}, ${this.folder.rules.attitudes[r.attitudeBand] ?? ''}`,
+          ),
+        };
+      case 'F4':
+        return {
+          title: 'Attitude Advisor',
+          lines: [
+            `${pad('City', 18)}${num('Happy', 6)}${num('Content', 8)}${num('Unhappy', 8)}${num('Spec', 5)}`,
+            ...cityRows(game, slot).map(
+              (r) =>
+                `${pad(r.city.name, 18)}${num(r.happy, 6)}${num(r.content, 8)}${num(r.unhappy, 8)}${num(r.specialists, 5)}`,
+            ),
+          ],
+        };
+      case 'F5': {
+        const t = tradeReport(game, slot);
+        return {
+          title: 'Trade Advisor',
+          lines: [
+            `Income ${t.income}, upkeep ${t.costs}, net ${t.income - t.costs}, science ${t.science}`,
+            '',
+            ...t.rows.map(
+              (r) => `${pad(r.city.name, 18)}${num(r.tax, 5)} gold ${num(r.science, 4)} science`,
+            ),
+            '',
+            ...t.upkeep.map(
+              (u) =>
+                `${pad(this.rules.improvements[u.index]?.name ?? '?', 22)}${num(u.count, 4)} × ${num(u.cost, 4)} gold`,
+            ),
+          ],
+        };
+      }
+      case 'F6': {
+        const s = scienceReport(game, slot);
+        return {
+          title: 'Science Advisor',
+          lines: [
+            `Researching ${s.researching === null ? 'nothing' : (this.rules.advances[s.researching]?.name ?? '?')}: ${s.stored} of ${s.cost}, +${s.perTurn} a turn`,
+            s.every === null
+              ? 'No discoveries at this rate.'
+              : `Discoveries every ${s.every} turns.`,
+            '',
+            ...s.known.map((a) => this.rules.advances[a]?.name ?? '?'),
+          ],
+        };
+      }
+      case 'F7':
+        return {
+          title: 'Wonders of the World',
+          lines: wonderRows(game).map(
+            (w) =>
+              `${pad(this.rules.improvements[w.index]?.name ?? '?', 28)}${pad(w.city.name, 16)}${this.world.civs.find((c) => c.slot === w.city.owner)?.name ?? ''}${w.expired ? ' (expired)' : ''}`,
+          ),
+        };
+      case 'F8':
+        return {
+          title: 'Top Five Cities',
+          lines: topCities(game).map(
+            (c, i) =>
+              `${i + 1}. ${pad(c.name, 18)}${pad(this.world.civs.find((x) => x.slot === c.owner)?.name ?? '', 16)}size ${c.size}`,
+          ),
+        };
+      case 'F9': {
+        const s = game.scoreOf(slot);
+        return {
+          title: 'Civilization Score',
+          lines: Object.entries(s).map(([k, v]) => `${pad(k, 22)}${num(String(v), 8)}`),
+        };
+      }
+      case 'F11':
+        return {
+          title: 'Demographics',
+          lines: demographics(game, slot).map(
+            (d) => `${pad(d.label, 22)}${num(d.value, 8)}   rank ${d.rank}`,
+          ),
+        };
+      default: {
+        const ships = spaceshipRows(game);
+        return {
+          title: 'Spaceships',
+          lines: ships.length
+            ? ships.map(
+                (s) =>
+                  `${pad(s.civ.name, 16)}parts ${s.parts.join(' ')}${s.launched ? `, arrives ${s.arrival}` : ''}`,
+              )
+            : ['No spaceship has been started.'],
+        };
+      }
+    }
   }
 
   private talkBox(): HTMLElement {

@@ -134,6 +134,7 @@ export interface CivWrite {
 export interface SavePatch {
   /** Header offset 32: turns of peace. */
   turnsOfPeace?: number;
+  nextHistory?: number;
   /** Scenario events: omit to keep the file's `EVNT` block, null to drop it, records to replace it. */
   events?: SaveEventRecord[] | null;
   turn?: number;
@@ -298,6 +299,7 @@ export function writeSave(original: Uint8Array, save: SaveFile, patch: SavePatch
   if (patch.turn !== undefined) w.u16(P + 4, patch.turn);
   if (patch.year !== undefined) w.i16(P + 6, patch.year);
   if (patch.pollutionSquares !== undefined) w.u16(P + 30, patch.pollutionSquares);
+  if (patch.nextHistory !== undefined) w.i16(0x142, patch.nextHistory);
   if (patch.turnsOfPeace !== undefined) w.i16(P + 32, patch.turnsOfPeace);
 
   // Techs.
@@ -322,7 +324,7 @@ export function writeSave(original: Uint8Array, save: SaveFile, patch: SavePatch
     if (c.attitudes) for (let n = 0; n < 8; n++) w.u8(b + 64 + n, c.attitudes[n] ?? 0);
     if (c.reputation !== undefined) w.u8(b + 30, c.reputation);
     if (c.eiffelApplied !== undefined) {
-      const old = out[b] ?? 0;
+      const old = w.bytes[b] ?? 0;
       w.u8(b, c.eiffelApplied ? old | 0x10 : old & ~0x10);
     }
     if (c.patience !== undefined) w.u8(b + 22, c.patience);

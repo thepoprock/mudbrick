@@ -26,6 +26,8 @@ export * from './research.js';
 export * from './upkeep.js';
 export * from './advances.js';
 export * from './negotiation.js';
+export * from './reports.js';
+export * from './council.js';
 export * from './outcome.js';
 export * from './game.js';
 export * from './terraform.js';

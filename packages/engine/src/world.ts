@@ -117,6 +117,9 @@ export interface Civ {
   attitudes?: Uint8Array;
   /** Reputation 0–100 (record +30). */
   reputation?: number;
+  /** Civilization flags 0x100 and 0x80: it has signed an alliance, it has traded knowledge. */
+  everAllied?: boolean;
+  everExchanged?: boolean;
   /** The Eiffel Tower's one-time amnesty has been used (civilization byte 0 bit 4, 0x004b7d88). */
   eiffelApplied?: boolean;
   /** Conversations with humans this round (record +31); the patience counter in negotiation. */

@@ -154,6 +154,7 @@ export function saveFromGame(original: Uint8Array, parsed: SaveFile, game: Game)
     events,
     turn: state.turn,
     year: yearOf(state),
+    ...(state.nextHistory !== undefined ? { nextHistory: state.nextHistory } : {}),
     ...(state.turnsOfPeace !== undefined ? { turnsOfPeace: state.turnsOfPeace } : {}),
     ...(state.pollutionSquares !== undefined ? { pollutionSquares: state.pollutionSquares } : {}),
     firstDiscoveredBy: state.firstDiscoveredBy,

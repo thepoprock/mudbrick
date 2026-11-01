@@ -12,9 +12,11 @@
  */
 import {
   decodeText,
+  parseDescriptions,
   parsePopups,
   parseRules,
   sprites,
+  type Descriptions,
   type Popup,
   type Rules,
 } from '@mudbrick/formats';
@@ -47,6 +49,10 @@ export interface GameFolder {
   citySize: CellAnchors[][];
   /** GAME.TXT's dialogs, when the folder has the file. */
   popups: Map<string, Popup>;
+  /** COUNCIL0–2.TXT as raw text, by era; empty strings when absent. */
+  council: string[];
+  /** Describe.txt, for the Civilopedia. */
+  descriptions: Descriptions | null;
   /** Fetch any other file from the folder by name (case-insensitive), e.g. a save. */
   file: (name: string) => Promise<Blob | undefined>;
   /** Every file the folder holds, as upper-case paths relative to it (empty for the dev path). */
@@ -138,6 +144,16 @@ async function loadFrom(
     ? parsePopups(decodeText(new Uint8Array(await gameText.arrayBuffer())))
     : new Map<string, Popup>();
 
+  const council: string[] = [];
+  for (let i = 0; i < 3; i++) {
+    const f = await lookup(`COUNCIL${i}.TXT`);
+    council.push(f ? decodeText(new Uint8Array(await f.arrayBuffer())) : '');
+  }
+  const describe = await lookup('DESCRIBE.TXT');
+  const descriptions = describe
+    ? parseDescriptions(decodeText(new Uint8Array(await describe.arrayBuffer())))
+    : null;
+
   const sheets: Partial<Record<SheetName, Sheet>> = {};
   for (const name of SHEETS) {
     const f = await lookup(`${name}.GIF`);
@@ -174,7 +190,19 @@ async function loadFrom(
       citySize.push(sizeRow);
     }
   }
-  return { rules, popups, sheets, unitFlag, cityFlag, citySize, file: source, paths, prefix };
+  return {
+    rules,
+    popups,
+    council,
+    descriptions,
+    sheets,
+    unitFlag,
+    cityFlag,
+    citySize,
+    file: source,
+    paths,
+    prefix,
+  };
 }
 
 /**

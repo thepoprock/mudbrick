@@ -113,6 +113,7 @@ import {
 } from './events.js';
 import { inEnemyZoc } from './movement.js';
 import { payUpkeep, type UpkeepEvent } from './upkeep.js';
+import { history, type HistoryEvent } from './reports.js';
 import { advanceEffects, leonardoUpgrades, type AdvanceEvent } from './advances.js';
 import { conversation, powerRanks, type Conversation, type NegotiationEnv } from './negotiation.js';
 import { CITY_CENTRE_INDEX, type City, type Civ, type World, type Production } from './world.js';
@@ -147,6 +148,8 @@ export interface GameState {
   bloodlust?: boolean;
   /** Save file offset 8: from this turn on the calendar advances one year per turn (−1 / unset: never). */
   calendarLockTurn?: number;
+  /** Past this turn the historian reports (header +0x142). */
+  nextHistory?: number;
   /** Times each tribe (leader index) has played, for restarts. */
   tribesPlayed?: number[];
   /** The scenario's events (events.txt, parsed) and their mutable state. */
@@ -197,6 +200,7 @@ export type TurnEvent =
   | { slot: number; city: number; event: CityTurnEvent }
   | { slot: number; event: ResearchEvent }
   | { slot: number; event: AdvanceEvent }
+  | { slot: number; event: HistoryEvent }
   | { slot: number; event: UnitTurnEvent }
   | { slot: number; event: AiUnitEvent }
   | { slot: number; event: StrategyEvent }
@@ -954,6 +958,51 @@ export class Game {
     return ok;
   }
 
+  /** A city's figures as its record would store them (0x004b6f63 without placement). */
+  cityFigures(city: City) {
+    const ctx = this.cityContext(city);
+    const raw = rawYields(this.world, this.rules, city, ctx);
+    const homed = this.world.units.filter((u) => u.homeCity === city.id);
+    const support = unitSupport(this.world, this.rules, city, ctx, homed);
+    const shields = shieldTotals(this.rules, city, ctx, raw.shields, support.shields);
+    const own = raw.trade - corruption(this.rules, city, ctx, raw.trade, false);
+    const routes = routeIncomeTotal(this.world, this.rules, city, own);
+    const split = tradeSplit(this.rules, city, ctx, raw.trade + routes);
+    const m = mood(this.rules, city, ctx, {
+      luxuries: split.luxuries,
+      militaryInCity: support.inCity,
+      militaryAbroad: support.abroad,
+      noMilitaryUnhappiness: support.abroad === 0,
+    });
+    return {
+      food: raw.food,
+      shields: shields.produced,
+      trade: raw.trade + routes - split.corruption,
+      tax: split.tax,
+      science: split.science,
+      luxuries: split.luxuries,
+      routes,
+      happy: m.happy,
+      unhappy: m.unhappy,
+    };
+  }
+
+  /** The pollution figure the city screen and the demographics read (0x004b6d9c). */
+  cityPollutionFigures(city: City): number {
+    const slot = city.owner;
+    const civ = this.civ(slot);
+    return cityPollution(
+      city,
+      this.cityFigures(city).shields,
+      {
+        knows: (a: number) => this.knows(slot, a),
+        advancesCount: civ.advancesCount,
+        difficulty: this.state.difficulty,
+      },
+      this.ownsWonder(slot, IMPROVEMENT.hooverDam),
+    );
+  }
+
   /** The civilization score and its parts (0x0047c9e0). */
   scoreOf(slot: number): ScoreBreakdown {
     const civ = this.civ(slot);
@@ -1164,6 +1213,12 @@ export class Game {
     // Scenario events at the turn's commencement (TURN, TURNINTERVAL, RANDOMTURN, RECEIVEDTECHNOLOGY).
     for (const e of this.events()?.turnStart(this.eventContext()) ?? [])
       out.push({ slot: 0, event: e });
+    // The historian reports at a random interval (0x00467591, header +0x142).
+    if (this.state.turn > (this.state.nextHistory ?? 0)) {
+      this.state.nextHistory = this.state.turn + this.rng.nextInt(40) + 20;
+      const historian = this.rng.nextInt(11);
+      out.push({ slot: 0, event: history(this, historian, this.rng.nextInt(5)) });
+    }
     // The turn driver spawns barbarians before the civilizations move (0x00467591, turn ≠ 0).
     if (this.state.turn !== 0) {
       for (const e of spawnBarbarians(this.world, this.rules, this.barbarianContext()))

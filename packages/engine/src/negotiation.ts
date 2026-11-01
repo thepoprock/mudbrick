@@ -721,6 +721,8 @@ class Talk {
       a.ask2 = -1;
       this.warm(-cost);
       a.hostile = false;
+      h.everExchanged = true;
+      c.everExchanged = true;
       if (mode === 0) return true;
     }
   }
@@ -731,6 +733,8 @@ class Talk {
     if (kind === 'alliance') {
       this.warm(-25);
       this.sign(TREATY.alliance);
+      h.everAllied = true;
+      c.everAllied = true;
     } else if (kind === 'peace') {
       this.sign(TREATY.peace | TREATY.firstContact);
     } else {
