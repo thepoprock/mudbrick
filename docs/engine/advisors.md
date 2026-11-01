@@ -110,3 +110,9 @@ A human with a Palace earns a piece when the score reaches `Σ (7 − difficulty
 piece n (0x00467035, 0x0046708f), up to 38. The player raises one of seven parts, each with four
 levels. The room is picture 100 of pv.dll with picture `105 + part × 5 + level − 1` on top, cut by
 the table at 0x005a9068. The extra pieces from flags at +0x3fb (pictures 160 on) are not ported.
+
+## Spaceship picture (0x004a224f)
+
+The ship is picture `400 + n` of ss.dll, n the largest entry of a table not above the structurals
+built, over the starfield 499. The original then draws each part on the frame from the same table;
+only the frames are ported.

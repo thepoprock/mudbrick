@@ -1616,7 +1616,44 @@ export class PlaySession {
           this.startTalk(r.civ.slot, true),
         );
     }
+    if (key === 'F12') {
+      const ship = this.civ.spaceship;
+      if (ship) {
+        const canvas = document.createElement('canvas');
+        canvas.style.width = '100%';
+        box.appendChild(canvas);
+        void this.drawShip(canvas, ship.parts[0] ?? 0);
+      }
+    }
     this.talkButton(box, 'Close', () => this.closeTalk());
+  }
+
+  /** The ship against the stars: the picture for as many structurals as are built (ss.dll). */
+  private async drawShip(canvas: HTMLCanvasElement, structurals: number): Promise<void> {
+    const g = canvas.getContext('2d');
+    if (!g) return;
+    canvas.width = 640;
+    canvas.height = 480;
+    const load = (url: string) =>
+      new Promise<HTMLImageElement>((resolve, reject) => {
+        const i = new Image();
+        i.onload = () => resolve(i);
+        i.onerror = reject;
+        i.src = url;
+      });
+    const stars = await this.folder.art('SS.DLL', 499, true);
+    if (!stars) {
+      canvas.remove();
+      return;
+    }
+    g.drawImage(await load(stars), 0, 0);
+    const frames = [
+      0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 21, 24, 25, 26, 27, 28, 29, 30, 33, 36, 39,
+    ];
+    let frame = 0;
+    for (const f of frames) if (f <= structurals) frame = f;
+    const url = await this.folder.art('SS.DLL', 400 + frame);
+    if (url) g.drawImage(await load(url), 0, 0);
   }
 
   private reportPage(key: string): { title: string; lines: string[] } {
