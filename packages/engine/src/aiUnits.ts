@@ -103,6 +103,7 @@ export interface AiUnitContext extends MovementContext {
   /** Scenario event hooks (UNITKILLED, CITYTAKEN). */
   onUnitKilled?: (type: number, attacker: number, defender: number) => void;
   onCityEmptied?: (city: City) => void;
+  onAttacked?: (attacker: number, defender: number) => void;
   capitalFalls?: (city: City, loser: Civ, captor: Civ) => boolean;
   onCityTaken?: (city: string, attacker: number, defender: number) => void;
   /** A human's turn: only the units on automatic move (order `k`, unit flag 0x8000). */
@@ -730,6 +731,7 @@ function act(
       attackerMovesLeft: movesLeft(rules, unit, ctx),
       ...(ctx.onUnitKilled ? { onUnitKilled: ctx.onUnitKilled } : {}),
       ...(ctx.onCityEmptied ? { onCityEmptied: ctx.onCityEmptied } : {}),
+      ...(ctx.onAttacked ? { onAttacked: ctx.onAttacked } : {}),
     });
     if (ev.kind === 'nuclear' && !ev.blast.stoppedBy)
       nuclearFollowUp(
@@ -981,6 +983,7 @@ export function aiMoveUnits(
             attackerMovesLeft: movesLeft(rules, unit, ctx),
             ...(ctx.onUnitKilled ? { onUnitKilled: ctx.onUnitKilled } : {}),
             ...(ctx.onCityEmptied ? { onCityEmptied: ctx.onCityEmptied } : {}),
+            ...(ctx.onAttacked ? { onAttacked: ctx.onAttacked } : {}),
           });
           if (ev.kind === 'fought')
             events.push({

@@ -200,3 +200,18 @@ the Great Wall, ×3 with SDI, halved on another land mass. A human is asked; a c
 does it if it has started a ship, holds over 11 cities or has 2000 gold. No escape when the Palace
 was just put into production. **A spaceship is lost only if the government does not escape.** The
 quirk that the first city in the table is never chosen is kept.
+
+## An ally calls for help (VERIFIED 0x00444c22, the combat routine 0x0052d472)
+
+When a human's computer ally is attacked by someone the human is neither fighting nor allied to, the
+ally asks the human to declare war. If refused it may offer gold: for each of its land masses with
+more cities than one (where it has any others) and fewer units than the attacker's attack total, the
+attack total × 2 (× 4 at Chieftain) over units + 1, capped by its treasury, in fifties. Agreeing
+breaks the treaty with the attacker (`breakTreaty`, the ally as witness). Refusing costs 100 attitude
+below 51, and otherwise ends the alliance.
+
+## A new government (VERIFIED 0x0049300e)
+
+Learning Monarchy under Despotism offers a revolution (AUTOMONARCHY). Learning Communism,
+Fundamentalism, The Republic or Democracy offers one (AUTOREV), unless already under that government,
+under Democracy, or in Anarchy.

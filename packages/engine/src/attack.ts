@@ -46,6 +46,8 @@ export interface AttackContext {
   /** Scenario events: a unit of this type, owned by `defender`, fell to `attacker` (UNITKILLED). */
   /** A city survived the fight with nobody left to defend it. */
   onCityEmptied?: (city: City) => void;
+  /** A real attack is about to be fought. */
+  onAttacked?: (attacker: number, defender: number) => void;
   onUnitKilled?: (type: number, attacker: number, defender: number) => void;
 }
 
@@ -100,6 +102,7 @@ export function resolveAttack(
   };
   const defender = chooseDefender(world, rules, enemies, attacker, combatCtx);
   if (!defender) return { kind: 'no-defender' };
+  ctx.onAttacked?.(attacker.owner, defender.owner);
   const result = resolveCombat(world, rules, rng, attacker, defender, combatCtx);
   applyCombat(rules, result, attacker, defender);
   // VERIFIED 0x0052d472: a Coastal Fortress that doubled the defence against a ship is now known.

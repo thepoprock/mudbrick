@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { rawYields, shieldTotals, tradeSplit, unitSupport } from '../src/city.js';
 import { removeCity } from '../src/fertility.js';
+import { adjustAttitude, hasTreaty, setTreaty, TREATY } from '../src/diplomacy.js';
 import { Game } from '../src/game.js';
 import { longMoveCount } from '../src/turnStart.js';
 import { researchChoices, researchableAdvances } from '../src/outcome.js';
@@ -252,6 +253,27 @@ describe('Game turn loop', () => {
     rival.treasury = 30000;
     expect(game.powerRank(rival.slot)).toBe(7);
     expect(game.powerRank(human.slot)).toBeLessThan(7);
+  });
+
+  it('an ally under attack calls on a human, and refusal can end the alliance', () => {
+    const { world, game } = setup();
+    const ally = world.civs[1];
+    if (!ally) throw new Error('no civs');
+    const human = { ...ally, slot: 4, name: 'Us' };
+    world.civs.push(human, { ...ally, slot: 3, name: 'Foe' });
+    human.isHuman = true;
+    ally.isHuman = false;
+    game.wantsTalks = true;
+    setTreaty(world, human.slot, ally.slot, TREATY.alliance);
+    setTreaty(world, ally.slot, human.slot, TREATY.alliance);
+    game.attacked(3, ally.slot);
+    game.attacked(3, ally.slot);
+    expect(game.allyCalls).toHaveLength(1);
+    const call = game.allyCalls[0];
+    if (!call) throw new Error('no call');
+    adjustAttitude(world, ally.slot, human.slot, 60);
+    game.answerAllyCall(call, false);
+    expect(hasTreaty(world, human.slot, ally.slot, TREATY.alliance)).toBe(false);
   });
 
   it('the go-to counter adds one a step and fifteen more for turning back', () => {

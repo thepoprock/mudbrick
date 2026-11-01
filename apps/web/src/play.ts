@@ -623,6 +623,7 @@ export class PlaySession {
       attackerMovesLeft: movesLeft(this.rules, unit, this.moveCtx()),
       onUnitKilled: (t, a, d) => this.game.unitKilled(t, a, d),
       onCityEmptied: (c) => this.game.cityEmptied(c),
+      onAttacked: (a, d) => this.game.attacked(a, d),
     });
     if (ev.kind === 'nuclear') {
       this.sound('NUKEXPLO');
@@ -897,6 +898,7 @@ export class PlaySession {
       const text = this.eventText(e);
       if (text) this.log(text);
       this.eventSound(e.event);
+      if (e.event.kind === 'discovered') this.offerRevolution(e.event.advance);
       if (text && e.event.kind === 'disorder') this.queueNews(NEWS_DISORDER, text);
       if (text && e.event.kind === 'celebration-start') this.queueNews(NEWS_CELEBRATION, text);
     }
@@ -1218,6 +1220,71 @@ export class PlaySession {
     bar.style.left = '0';
     bar.style.zIndex = '20';
     this.el.canvas.parentElement?.prepend(bar);
+  }
+
+  /** An ally asks for help (ALLYUNDERATTACK, DEMANDHELP, HELPBONUS, DIDNTHELP; 0x00444c22). */
+  private showAllyCall(call: { human: number; ally: number; attacker: number }): void {
+    const ally = this.game.civ(call.ally);
+    const foe = this.game.civ(call.attacker);
+    const box = this.talkBox();
+    box.replaceChildren();
+    const text = document.createElement('p');
+    text.textContent = `The ${foe.name} attack our ${ally.name} allies, who ask us to declare war.`;
+    box.append(text);
+    const answer = (help: boolean, gold: number) => {
+      this.game.answerAllyCall(call, help, gold);
+      this.log(
+        help ? `We declare war on the ${foe.name}.` : `The ${ally.name} remember our refusal.`,
+      );
+      this.closeTalk();
+    };
+    this.talkButton(box, 'Declare war', () => answer(true, 0));
+    this.talkButton(box, 'Refuse', () => {
+      const gold = this.game.allyBonus(call.ally, call.attacker);
+      if (gold === 0) {
+        answer(false, 0);
+        return;
+      }
+      box.replaceChildren();
+      const offer = document.createElement('p');
+      offer.textContent = `The ${ally.name} offer ${gold} gold if we join them.`;
+      box.append(offer);
+      this.talkButton(box, 'Accept', () => answer(true, gold));
+      this.talkButton(box, 'Refuse', () => answer(false, 0));
+    });
+  }
+
+  /** A government advance offers a revolution (0x0049300e). */
+  private offerRevolution(advance: number): void {
+    const civ = this.civ;
+    const now = civ.government;
+    let asks = false;
+    if (advance === 54) asks = now === 1;
+    else if ([15, 21, 31, 71].includes(advance)) {
+      const same =
+        (advance === 71 && now === 5) ||
+        (advance === 15 && now === 3) ||
+        (advance === 31 && now === 4);
+      asks = !same && now !== 6 && now !== 0;
+    }
+    if (!asks) return;
+    this.pendingRevolution = advance;
+  }
+
+  private pendingRevolution: number | null = null;
+
+  private showRevolution(advance: number): void {
+    const box = this.talkBox();
+    box.replaceChildren();
+    const text = document.createElement('p');
+    text.textContent = `With ${this.rules.advances[advance]?.name ?? 'this advance'} we could change our government. Start a revolution?`;
+    box.append(text);
+    this.talkButton(box, 'Yes', () => {
+      startRevolution(this.world, this.civ);
+      this.log(`The ${this.civ.name} begin a revolution.`);
+      this.closeTalk();
+    });
+    this.talkButton(box, 'No', () => this.closeTalk());
   }
 
   private readonly news: { picture: number; text: string }[] = [];
@@ -2074,6 +2141,18 @@ export class PlaySession {
     if (this.talk || this.seatPending) return;
     const talk = this.game.nextPendingTalk(this.humanSlot);
     if (!talk) {
+      if (this.pendingRevolution !== null) {
+        const advance = this.pendingRevolution;
+        this.pendingRevolution = null;
+        this.showRevolution(advance);
+        return;
+      }
+      const i = this.game.allyCalls.findIndex((c) => c.human === this.humanSlot);
+      if (i >= 0) {
+        const [call] = this.game.allyCalls.splice(i, 1);
+        if (call) this.showAllyCall(call);
+        return;
+      }
       const item = this.news.shift();
       if (item) {
         this.showNews(item);

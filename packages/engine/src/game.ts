@@ -86,6 +86,8 @@ import {
   atPeace as treatyAtPeace,
   atWar as treatyAtWar,
   adjustAttitude,
+  breakTreaty,
+  cancelAlliance,
   canAttack as treatyCanAttack,
   treatiesOf,
   contactSweep,
@@ -633,6 +635,65 @@ export class Game {
           }
         : {}),
     };
+  }
+
+  /** Allies under attack waiting on a human's answer (ALLYUNDERATTACK, DEMANDHELP). */
+  allyCalls: { human: number; ally: number; attacker: number; turn: number }[] = [];
+
+  /** A human's ally is attacked by someone the human is neither fighting nor allied to. */
+  attacked(attacker: number, defender: number): void {
+    if (this.wantsTalks === false) return;
+    for (const h of this.world.civs) {
+      if (!h.isHuman || h.slot === 0 || h.slot === defender || h.slot === attacker) continue;
+      if (this.civ(defender).isHuman || defender === 0) continue;
+      if (!hasTreaty(this.world, defender, h.slot, TREATY.alliance)) continue;
+      if (hasTreaty(this.world, h.slot, attacker, TREATY.war | TREATY.alliance)) continue;
+      const turn = this.state.turn;
+      if (
+        this.allyCalls.some(
+          (c) =>
+            c.human === h.slot && c.ally === defender && c.attacker === attacker && c.turn === turn,
+        )
+      )
+        continue;
+      this.allyCalls.push({ human: h.slot, ally: defender, attacker, turn });
+    }
+  }
+
+  /** Gold the ally offers a reluctant human (0x00444c22), a multiple of 50. */
+  allyBonus(ally: number, attacker: number): number {
+    const a = this.civ(ally).strategy;
+    const b = this.civ(attacker).strategy;
+    if (!a || !b) return 0;
+    const spread = this.citiesOf(ally).length > 1 ? 1 : 0;
+    let sum = 0;
+    for (let lm = 1; lm < 63; lm++) {
+      const units = a.unitsOn[lm] ?? 0;
+      const force = b.attackOn[lm] ?? 0;
+      if (spread < (a.citiesOn[lm] ?? 0) && units < force)
+        sum += Math.trunc((force * (this.state.difficulty === 0 ? 4 : 2)) / (units + 1));
+    }
+    return Math.min(sum, Math.trunc(this.civ(ally).treasury / 50)) * 50;
+  }
+
+  /** The human's answer (0x00444c22): war on the attacker, or the ally's displeasure. */
+  answerAllyCall(
+    call: { human: number; ally: number; attacker: number },
+    help: boolean,
+    gold = 0,
+  ): void {
+    const ctx = this.diplomacyContext();
+    if (help) {
+      if (gold > 0) {
+        this.civ(call.ally).treasury -= gold;
+        this.civ(call.human).treasury += gold;
+      }
+      breakTreaty(this.world, call.human, call.attacker, call.ally, ctx, []);
+      return;
+    }
+    if (attitude(this.world, call.ally, call.human) < 51)
+      adjustAttitude(this.world, call.ally, call.human, 100);
+    else cancelAlliance(this.world, call.human, call.ally, []);
   }
 
   /** A human's answer to CANESCAPE; unset, a human pays. */
@@ -1386,6 +1447,7 @@ export class Game {
         onUnitKilled: (t, a, d) => this.unitKilled(t, a, d),
         onCityEmptied: (c) => this.cityEmptied(c),
         capitalFalls: (c, l, w) => this.capitalFalls(c, l, w),
+        onAttacked: (a, d) => this.attacked(a, d),
         onCityTaken: (c, a, d) => this.cityTaken(c, a, d),
         advanceGained: (c, a) => this.advanceGained(c, a),
         guerillaWarfareDiscovered: (this.state.firstDiscoveredBy[34] ?? 0) !== 0,
@@ -1720,6 +1782,7 @@ export class Game {
       onUnitKilled: (t, a, d) => this.unitKilled(t, a, d),
       onCityEmptied: (c) => this.cityEmptied(c),
       capitalFalls: (c, l, w) => this.capitalFalls(c, l, w),
+      onAttacked: (a, d) => this.attacked(a, d),
       realisticCombat: this.state.realisticCombat,
       anyoneKnows: (a) => this.world.civs.some((c) => c.slot !== 0 && c.knownAdvances[a] === true),
       humanKnows: (a) => this.world.civs.some((c) => c.isHuman && c.knownAdvances[a] === true),

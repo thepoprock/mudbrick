@@ -82,6 +82,7 @@ export interface BarbarianContext extends MovementContext {
   /** Scenario events: UNITKILLED. */
   onUnitKilled?: (type: number, attacker: number, defender: number) => void;
   onCityEmptied?: (city: City) => void;
+  onAttacked?: (attacker: number, defender: number) => void;
   capitalFalls?: (city: City, loser: Civ, captor: Civ) => boolean;
   rng: Rng;
   turn: number;
@@ -757,6 +758,7 @@ function attackSquare(
     attackerMovesLeft: movesLeft(rules, unit, ctx),
     ...(ctx.onUnitKilled ? { onUnitKilled: ctx.onUnitKilled } : {}),
     ...(ctx.onCityEmptied ? { onCityEmptied: ctx.onCityEmptied } : {}),
+    ...(ctx.onAttacked ? { onAttacked: ctx.onAttacked } : {}),
   });
   if (ev.kind === 'fought') {
     events.push({
