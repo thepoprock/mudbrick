@@ -110,15 +110,18 @@ ignored scenario months. `apps/web/test/civilwar.conformance.test.ts` pins the f
 
 Second turn (the original's units put on sentry, its AI moving freely): the original reaches
 August 1861 with 158 gold (+20) and 17,250,000 people after losing 4 units to Confederate
-attacks; the engine's second turn gives 174 gold (+36) with no attacks modelled on the same
-squares, so the gap is not yet attributable. The original's Springfield2 at August: food 18,
-surplus 5, trade 8 (tax 8, luxuries 8, science 3), production 8, 2 happy, 6 content, 1
-entertainer — its workers had been rearranged since July (food 23 there), the keep rule freeing
-citizens whose squares an enemy had entered.
+attacks. VERIFIED by running the engine's city turn for every Federal city on the July autosave
+and comparing with the August one: the engine reaches 158 gold exactly. The 18-gold difference
+from the sum of stored tax minus upkeep (502 − 464 = 38) is Pittsburgh: its Settlers complete,
+its entertainer goes, 3 unhappy outnumber 2 happy and its 18 tax is lost that same turn.
 
-Open: from the third turn the engine's Pittsburgh falls into disorder (its Engineers complete,
-the city shrinks and its entertainer goes back to work, luxuries drop); the original has not
-been played forward under the same moves yet, so the later turns are unchecked.
+The cities still differ only where the saves show an outside cause. Syracuse, Cleveland,
+Indianapolis, Terra Haute, Detroit and Milwaukee each lost a unit homed there, which gives them
+one more shield and 2 fewer unhappy in the original. Washington's workers moved, INFERRED because
+an enemy entered a worked square. Springfield2's August figures are of the same kind: food 18,
+surplus 5, trade 8 (tax 8, luxuries 8, science 3), production 8, 2 happy, 6 content, 1 entertainer.
+
+The later turns have not been played forward under the same moves, so they stay unchecked.
 
 ## Conformance against stored city figures (`scripts/conform-cities.ts`)
 

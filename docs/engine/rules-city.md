@@ -11,10 +11,14 @@ INFERRED and labelled.
 1. Every 64 turns a city held by a conqueror becomes "originally theirs" (founder := owner).
 2. **Growth and starvation** (0x004b7654) on last turn's stored food. A destroyed city ends
    processing (the caller sees −999).
-3. Totals computed (0x004b6f63): worked squares, yields, support, happiness, trade split.
+3. Totals computed (0x004b6f63 with 1): worker placement (0x004b49b5), yields, support, happiness,
+   trade split. This pass runs with the city-turn flag 0x005b864c clear.
 4. Food surplus = food − size × food-per-citizen − supported settlers × settlers' food, added to
    storage. FOODSHORTAGE warning when storage fell this turn and `stored + 3 × surplus < 0`.
-5. **Production** (0x004b7e74), then the shield-shortage disband (0x004ba99a), then totals again.
+5. **Production** (0x004b7e74), then the shield-shortage disband (0x004ba99a), then totals again,
+   this time with 0x005b864c set. The workers are placed again in this pass, so a citizen spent
+   on Settlers drops a spare specialist before happiness is judged, and a computer city puts one
+   specialist back to work. This pass, not the first, is the "city turn's own recompute" below.
 6. Per-civilization AI statistics: shield shortfall, units over each government's free support,
    and the attitude counters toward the human player.
 7. **Disorder, celebration and revolt** (0x004bafef).

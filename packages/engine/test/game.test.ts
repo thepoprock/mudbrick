@@ -192,6 +192,23 @@ describe('Game turn loop', () => {
     expect(built.length).toBe(shields.surplus >= 10 ? 1 : 0);
   });
 
+  it('a citizen spent on Settlers takes the spare specialist with it in the same turn', () => {
+    const worked = (1 << CITY_CENTRE_INDEX) | 1 | 2 | 4;
+    const { world, city, civ, game } = setup({
+      size: 4,
+      worked,
+      specialists: { entertainers: 1, taxCollectors: 0, scientists: 0 },
+      production: { kind: 'unit', index: 0 },
+      shieldsStored: 200,
+    });
+    civ.isHuman = true;
+    world.revealRadius(city.position.x, city.position.y, city.owner);
+    game.processCity(city);
+    expect(city.size).toBe(3);
+    expect(city.specialists.entertainers).toBe(0);
+    expect(city.worked).toBe(worked);
+  });
+
   it('collects no gold in disorder and lets a Democracy fall after two disorder turns', () => {
     const { city, civ } = setup();
     civ.government = GOVERNMENT.democracy;

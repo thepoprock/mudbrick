@@ -519,8 +519,8 @@ export class Game {
     }
     if (growth.grew) push({ kind: 'grew' });
     if (growth.blockedBy) push({ kind: 'growth-blocked', blockedBy: growth.blockedBy });
-    // The city turn's own recompute places the workers again (a new citizen, a specialist back).
-    this.placeNewWorker(city, ctx);
+    // The first recompute (0x004b6f63) places the workers for the size growth left.
+    this.ensureWorkers(city, ctx);
 
     // 2. Totals.
     const shakespeares = this.wonderCity(IMPROVEMENT.shakespeares);
@@ -587,6 +587,10 @@ export class Game {
       government: civ.government,
     }))
       push(e);
+    // The second recompute runs with the city-turn flag (0x005b864c): the workers are placed
+    // again, so a citizen spent on Settlers leaves a specialist's place if that was the spare one,
+    // and a computer city puts one specialist back to work.
+    this.placeNewWorker(city, ctx);
     t = totals();
     city.lastHappy = t.mood.happy;
     city.lastUnhappy = t.mood.unhappy;
@@ -608,7 +612,7 @@ export class Game {
       { allowRevolt: !this.state.forbidGovernmentChange },
     )) {
       push(e);
-      if (e.kind === 'rapture-growth') this.placeNewWorker(city, ctx);
+      if (e.kind === 'rapture-growth') this.ensureWorkers(city, ctx);
     }
 
     // 6. Science.
@@ -1256,7 +1260,7 @@ export class Game {
     });
   }
 
-  /** The city turn's recompute of the workers (a new citizen, a specialist back to work). */
+  /** The city turn's second recompute of the workers, flagged by 0x005b864c. */
   placeNewWorker(city: City, ctx: CityContext): void {
     this.ensureWorkers(city, ctx, true);
   }
