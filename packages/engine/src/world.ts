@@ -122,6 +122,8 @@ export interface Civ {
   everExchanged?: boolean;
   /** The Eiffel Tower's one-time amnesty has been used (civilization byte 0 bit 4, 0x004b7d88). */
   eiffelApplied?: boolean;
+  /** Units of each type lost so far (record +278). */
+  casualties?: number[];
   /** Conversations with humans this round (record +31); the patience counter in negotiation. */
   talks?: number;
   /** What this civilization has forgiven of each other's reputation (record +72, signed). */

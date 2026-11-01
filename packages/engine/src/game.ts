@@ -251,6 +251,8 @@ export class Game {
 
   /** Events raised outside a turn step (spaceship parts), drained after each civilization. */
   private pendingEvents: TurnEvent[] = [];
+  /** Units killed this session, newest last. The original keeps its timeline in memory too. */
+  casualtyLog: { turn: number; type: number; attacker: number; defender: number }[] = [];
   /** Set by a UI that can hold a conversation: reviews then queue here instead of deciding. */
   wantsTalks = false;
   pendingTalks: { human: number; computer: number; relations?: boolean }[] = [];
@@ -976,6 +978,12 @@ export class Game {
 
   /** UNITKILLED hook for the attack routines. */
   unitKilled(type: number, attacker: number, defender: number): void {
+    const loser = this.world.civs.find((c) => c.slot === defender);
+    if (loser) {
+      loser.casualties ??= Array<number>(62).fill(0);
+      loser.casualties[type] = Math.min(255, (loser.casualties[type] ?? 0) + 1);
+    }
+    this.casualtyLog.push({ turn: this.state.turn, type, attacker, defender });
     const ev = this.events();
     if (!ev) return;
     for (const e of ev.unitKilled(type, attacker, defender, this.eventContext()))

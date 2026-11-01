@@ -304,6 +304,12 @@ export class PlaySession {
       case 'C':
         this.findCity();
         return true;
+      case 'd':
+        if (e.ctrlKey) {
+          this.showCasualties();
+          return true;
+        }
+        return false;
       case 'T':
         this.log(`Rates are in the panel: up to ${maxRate(this.civ.government) * 10} % each.`);
         return true;
@@ -1070,7 +1076,8 @@ export class PlaySession {
         m.addEventListener('change', () => {
           const value = m.value;
           m.selectedIndex = 0;
-          if (value) this.handleKey({ key: value, target: null } as unknown as KeyboardEvent);
+          if (value === 'CASUALTY') this.showCasualties();
+          else if (value) this.handleKey({ key: value, target: null } as unknown as KeyboardEvent);
           this.refresh();
         });
         bar.append(m);
@@ -1084,16 +1091,35 @@ export class PlaySession {
       if (key === 'SPACE') code = ' ';
       if (label.startsWith('End Player')) code = 'Enter';
       if (label === 'Consult High Council') code = 'F10';
+      if (label.startsWith('Casualty')) code = 'CASUALTY';
       if (section === 'PEDIA') code = '?';
       const bound =
         /^F\d+$/.test(code) ||
-        ['Enter', ' ', '?'].includes(code) ||
+        ['Enter', ' ', '?', 'CASUALTY'].includes(code) ||
         (code.length === 1 && 'brimopgfshwkauljFEPDHCMTR'.includes(code));
       opt.value = bound ? code : '';
       opt.disabled = !bound;
       menu?.append(opt);
     }
     this.el.canvas.parentElement?.prepend(bar);
+  }
+
+  /** The Casualty Timeline: units of ours lost, newest first. */
+  private showCasualties(): void {
+    const box = this.talkBox();
+    box.replaceChildren();
+    const body = document.createElement('pre');
+    body.style.cssText = 'margin:8px 0;max-height:60vh;overflow:auto;font:12px monospace';
+    const lines = this.game.casualtyLog
+      .filter((c) => c.defender === this.humanSlot)
+      .reverse()
+      .map(
+        (c) =>
+          `Turn ${c.turn}: ${this.rules.units[c.type]?.name ?? '?'} lost to the ${this.world.civs.find((x) => x.slot === c.attacker)?.name ?? 'barbarians'}`,
+      );
+    body.textContent = lines.length ? lines.join('\n') : 'No casualties reported.';
+    box.append(body);
+    this.talkButton(box, 'Close', () => this.closeTalk());
   }
 
   private airliftMenu(unit: Unit): void {
@@ -1362,10 +1388,10 @@ export class PlaySession {
         return {
           title: 'Defense Minister',
           lines: [
-            `${pad('Unit', 22)}${num('A/D/M', 9)}${num('Active', 8)}${num('Building', 10)}`,
+            `${pad('Unit', 22)}${num('A/D/M', 9)}${num('Active', 8)}${num('Building', 10)}${num('Lost', 6)}`,
             ...defenseRows(game, slot).map(
               (r) =>
-                `${pad(r.type.name, 22)}${num(`${r.type.attack}/${r.type.defence}/${r.type.move}`, 9)}${num(r.active, 8)}${num(r.building, 10)}`,
+                `${pad(r.type.name, 22)}${num(`${r.type.attack}/${r.type.defence}/${r.type.move}`, 9)}${num(r.active, 8)}${num(r.building, 10)}${num(r.lost, 6)}`,
             ),
           ],
         };

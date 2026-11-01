@@ -57,7 +57,14 @@ export function cityRows(game: Game, slot: number): CityRow[] {
 
 /** F2: units in play and in production, per type. */
 export function defenseRows(game: Game, slot: number) {
-  const rows = game.rules.units.map((type, index) => ({ index, type, active: 0, building: 0 }));
+  const lost = game.world.civs.find((c) => c.slot === slot)?.casualties ?? [];
+  const rows = game.rules.units.map((type, index) => ({
+    index,
+    type,
+    active: 0,
+    building: 0,
+    lost: lost[index] ?? 0,
+  }));
   for (const u of game.world.units) {
     const r = rows[u.type];
     if (u.owner === slot && r) r.active += 1;
@@ -67,7 +74,7 @@ export function defenseRows(game: Game, slot: number) {
     const r = rows[c.production.index];
     if (r) r.building += 1;
   }
-  return rows.filter((r) => r.active > 0 || r.building > 0);
+  return rows.filter((r) => r.active > 0 || r.building > 0 || r.lost > 0);
 }
 
 /** F3: the civilizations this one has met. */
