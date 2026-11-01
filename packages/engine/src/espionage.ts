@@ -10,6 +10,7 @@
 import { captureCity } from './conquest.js';
 import { distance } from './city.js';
 import { adjustAttitude, clearTreaty, hasTreaty, setTreaty, TREATY } from './diplomacy.js';
+import { nuclearStrike } from './nuclear.js';
 import { grantAdvance } from './research.js';
 import { GOVERNMENT, IMPROVEMENT, type EngineRules } from './rules.js';
 import type { Rng } from './rng.js';
@@ -466,10 +467,7 @@ export function performEspionage(
         text: `a nuclear device destroys ${city.name}`,
         city: city.id,
       });
-      // The blast (INFERRED: the engine's nuke effect — half the citizens and every unit).
-      city.size = Math.max(1, city.size >> 1);
-      for (const u of [...world.units])
-        if (distance(world, u.position, city.position) <= 1) spend(world, u);
+      nuclearStrike(world, ctx.rng, me, city.position.x, city.position.y, false);
       if (meCiv.government !== GOVERNMENT.fundamentalism) {
         const n = unit.veteran ? 4 : 2;
         if (ctx.rng.nextInt(n) === 0) {

@@ -525,6 +525,17 @@ export class PlaySession {
       attackerMovesLeft: movesLeft(this.rules, unit, this.moveCtx()),
       onUnitKilled: (t, a, d) => this.game.unitKilled(t, a, d),
     });
+    if (ev.kind === 'nuclear') {
+      this.sound('NUKEXPLO');
+      this.selected = null;
+      this.log(
+        ev.blast.stoppedBy
+          ? `SDI Defense in ${ev.blast.stoppedBy.name} stops the missile.`
+          : `Nuclear strike: ${ev.blast.killed.length} units destroyed.`,
+      );
+      this.afterAction();
+      return;
+    }
     if (ev.kind === 'cannot-attack') {
       this.log('This unit cannot attack.');
       return;

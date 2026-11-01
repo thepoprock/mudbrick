@@ -16,6 +16,7 @@ import {
   type CombatResult,
 } from './combat.js';
 import { chooseDefender } from './defender.js';
+import { NUCLEAR_ATTACK, nuclearStrike, type Blast } from './nuclear.js';
 import { releaseCitySite } from './fertility.js';
 import type { Rng } from './rng.js';
 import { DOMAIN_GROUND, IMPROVEMENT, type EngineRules } from './rules.js';
@@ -49,6 +50,7 @@ export interface AttackContext {
 export type AttackEvent =
   | { kind: 'no-defender' }
   | { kind: 'cannot-attack'; reason: 'non-combat' }
+  | { kind: 'nuclear'; blast: Blast }
   | {
       kind: 'fought';
       result: CombatResult;
@@ -74,6 +76,10 @@ export function resolveAttack(
 ): AttackEvent {
   const aType = rules.units[attacker.type];
   if (!aType || aType.attack === 0) return { kind: 'cannot-attack', reason: 'non-combat' };
+  if (aType.attack >= NUCLEAR_ATTACK) {
+    world.units.splice(world.units.indexOf(attacker), 1);
+    return { kind: 'nuclear', blast: nuclearStrike(world, rng, attacker.owner, to.x, to.y, true) };
+  }
   const enemies = world.unitsAt(to.x, to.y).filter((u) => u.owner !== attacker.owner);
   const city = world.cityAt(to.x, to.y) ?? null;
   const defenderSlot = enemies[0]?.owner ?? city?.owner ?? 0;

@@ -195,3 +195,18 @@ argument 0): it prepares both sides with every modifier above but without the fa
 then — with simplified combat off — weights each side by `hit points left + firepower × 8`,
 halves both while the attacker's exceeds 3999, and returns `8 × A / (D + 1)` capped at 1024
 (999 when no unit stands on the target square). The engine's `combatOdds` is this.
+
+## Nuclear (VERIFIED 0x0052cb14, 0x00559699)
+
+A unit with attack 99 or more detonates over its target. An SDI Defense within three squares of the
+target, in a city not the attacker's, stops it, and the missile is lost either way. A spy's
+device skips that test. Every unit on the nine squares dies. Each owner hit sets vendetta and bit 8
+on its word toward the attacker, the attacker sets bit 17 on its word, and the owner's attitude
+rises by 100.
+
+Fallout on the nine squares: a city loses `size >> 1` citizens. Land outside cities loses a
+fortress, and at even odds each of railroad, mine and irrigation, and takes pollution two times in
+three. Everyone's memory of the square is refreshed.
+
+A computer player that detonates follows up with paratroopers and an advance on the target
+(0x0052cfed). This is not ported.
