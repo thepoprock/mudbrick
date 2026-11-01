@@ -2197,6 +2197,7 @@ export function* relationsTurn(
   raceOn: boolean,
 ): Conversation {
   const t = new Talk(env, human, computer, false);
+  t.firstPass = false; // VERIFIED 0x00449c70: only a real audience makes the first assessment
   t.assess();
   t.firstPass = false;
   const { h, c } = t;

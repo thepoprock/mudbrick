@@ -51,7 +51,6 @@ for (const f of files) {
   }
   const after = worldFromSave(save, parsed);
   const next = gameFromSave(save, parsed, after);
-  for (const c of after.civs) c.isHuman = false;
   next.endTurn();
   for (const c of after.civs) {
     if (c.slot === 0) continue;
