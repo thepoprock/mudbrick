@@ -34,11 +34,11 @@ Every function in `docs/engine/function-status.tsv` has a `category`:
 
 | Category              | Functions |   Bytes | Meaning                                                                              |
 | --------------------- | --------- | ------: | ------------------------------------------------------------------------------------ |
-| `read`                | 699       | 801,915 | Opened and compared with the rules                                                   |
+| `read`                | 703       | 810,517 | Opened and compared with the rules                                                   |
 | `library`             | 508       |  85,009 | The C and MFC runtime, not the game's own                                            |
 | `generic`             | 3,175     | 317,733 | Touches no game table: arithmetic, lists, graphics, windows                          |
-| `interface`           | 489       | 262,331 | Draws or handles a window                                                            |
-| `game-data`           | 227       | 164,220 | Reads game tables but is display, file loading, options or the map and event editors |
+| `interface`           | 487       | 255,075 | Draws or handles a window                                                            |
+| `game-data`           | 225       | 162,874 | Reads game tables but is display, file loading, options or the map and event editors |
 | `editor-or-reference` | 21        |  40,477 | Editors, cheats, the Civilopedia                                                     |
 | `network`             | 21        |  19,996 | Multiplayer transport                                                                |
 
@@ -57,6 +57,24 @@ weeks. Run the engine on the original's own saves instead:
 - `scripts/compare-saves.ts` reports government scores, research rank, units and terrain.
 - `scripts/probe-engine.ts` plays a whole game. It keeps an idle human on purpose: computers alone
   build about half as many units again.
+- Run the engine forward from an original save and compare with the original's later saves. This
+  found more than any other check: it isolates which number drifts from a state both games share.
+
+Measured from the original's turn 172 save, run on to about turn 250:
+
+| At turn 250 | Cities | Units | Irrigation | Mines | Roads |
+| ----------- | ------ | ----- | ---------- | ----- | ----- |
+| Original    | 44     | 176   | 141        | 40    | 186   |
+| Engine      | 41     | 171   | 108        | 36    | 183   |
+
+New games vary much more from seed to seed: at turn 250 three seeds gave 29 to 52 cities and 163 to
+321 units, with 47 to 67 irrigated squares. They run heavy on Warriors, 32 to 150 against 18. Only
+one original game exists to compare with, so part of that is one game's luck and part is a real gap
+in the opening. From the turn 172 start the gap closes, so look before that turn first.
+
+The two chooser comparisons can mislead. `compare-builds.ts` asks every city at once, so a rule
+that wants one unit per land mass looks like an overbuild. Research picks are a weighted roll, so
+the original's pick need only be among the high values, not on top.
 
 Compare only at the same difficulty; `docs/engine/difficulty.md` lists what difficulty changes.
 

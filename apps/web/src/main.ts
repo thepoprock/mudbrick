@@ -235,7 +235,10 @@ function startNewGame(): void {
       age: selectValue('ngAge'),
     },
     difficulty: selectValue('ngDifficulty'),
-    civCount: selectValue('ngCivs'),
+    civCount: selectValue('ngCivs') || 3 + rng.nextInt(5),
+    ...(byId<HTMLSelectElement>('ngGender').value
+      ? { humanFemale: byId<HTMLSelectElement>('ngGender').value === 'f' }
+      : {}),
     humanTribe: selectValue('ngTribe'),
     leaders: folder.rules.leaders,
     barbarianActivity: selectValue('ngBarb'),

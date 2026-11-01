@@ -1544,7 +1544,7 @@ address	size	kind	status	category	callers	touches
 00474b93	144	helper	unread	generic	6	
 00474c23	137	helper	unread	game-data	2	
 00474cac	192	rules	read	read	6	terrain,header
-00474d90	326	rules-small	unread	game-data	2	improvement
+00474d90	326	rules-small	read	read	2	improvement
 00474edb	29401	rules	read	read	2	civ,city,header,unit-type
 0047c310	53	helper	unread	generic	29	
 0047c345	789	helper	unread	game-data	1	
@@ -2054,7 +2054,7 @@ address	size	kind	status	category	callers	touches
 004ade04	36	helper	unread	generic	3	
 004ade28	668	rules	unread	game-data	2	header
 004ae0c4	423	rules	unread	game-data	2	header
-004ae26b	1020	network	unread	game-data	2	landmass,header
+004ae26b	1020	network	read	read	2	landmass,header
 004ae667	318	rules	read	read	2	unit-type,terrain,header
 004ae7a5	785	rules	unread	game-data	2	header
 004aeab6	2918	rules	read	read	5	unit,header,city,civ
@@ -3333,14 +3333,14 @@ address	size	kind	status	category	callers	touches
 0054d0c9	183	helper	unread	generic	0	
 0054d180	212	rules	read	read	0	header
 0054d254	225	rules	read	read	0	header
-0054d335	3951	network	unread	interface	1	header,terrain,city,unit
+0054d335	3951	network	read	read	1	header,terrain,city,unit
 0054e2a4	12	helper	unread	generic	1	
 0054e2ba	14	helper	unread	generic	1	
 0054e2c8	125	rules-small	read	read	0	terrain
 0054e345	125	rules-small	read	read	0	terrain
 0054e3c2	157	rules-small	read	read	0	terrain
 0054e45f	155	rules-small	read	read	0	terrain
-0054e4fa	3305	network	unread	interface	1	terrain,header,unit,city
+0054e4fa	3305	network	read	read	1	terrain,header,unit,city
 0054f1e3	12	helper	unread	generic	1	
 0054f1f9	15	helper	unread	generic	1	
 0054f210	365	helper	unread	generic	1	

@@ -16,7 +16,7 @@ data.** What works today:
 
 - Hot seat, and network play through a small relay, with players moving in turn.
 
-Not yet: simultaneous moves, the map and scenario editors, wonder and council videos, music.
+Not yet: the map and scenario editors, wonder and council videos, music.
 
 **The decode is not finished.** [docs/decoding.md](docs/decoding.md) says how far it has got and how
 to help.
