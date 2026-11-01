@@ -751,6 +751,12 @@ export class PlaySession {
     if (!loser) return;
     const ev = captureCity(this.world, this.rules, this.game.rng, city, this.civ, loser, {
       capitalFalls: (c, l, w) => this.game.capitalFalls(c, l, w),
+      shipLost: (l, launched) =>
+        this.game.tellHumans(
+          launched
+            ? `The ${l.name} spaceship returns to earth: its capital has fallen.`
+            : `The ${l.name} spaceship has been destroyed.`,
+        ),
       turn: this.game.state.turn,
       difficulty: this.game.state.difficulty,
       conquest: true,

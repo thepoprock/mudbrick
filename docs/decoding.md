@@ -28,8 +28,45 @@ You need your own copy of Civilization II Multiplayer Gold; none of it belongs i
 Keep that output on your own machine. Decompiled code does not go in this repository (`LEGAL.md`):
 write down the rule in your own words, cite the address, and mark it VERIFIED or INFERRED.
 
+## Where the decode stands
+
+Every function in `docs/engine/function-status.tsv` has a `category`:
+
+| Category              | Functions |   Bytes | Meaning                                                                              |
+| --------------------- | --------- | ------: | ------------------------------------------------------------------------------------ |
+| `read`                | 699       | 801,915 | Opened and compared with the rules                                                   |
+| `library`             | 508       |  85,009 | The C and MFC runtime, not the game's own                                            |
+| `generic`             | 3,175     | 317,733 | Touches no game table: arithmetic, lists, graphics, windows                          |
+| `interface`           | 489       | 262,331 | Draws or handles a window                                                            |
+| `game-data`           | 227       | 164,220 | Reads game tables but is display, file loading, options or the map and event editors |
+| `editor-or-reference` | 21        |  40,477 | Editors, cheats, the Civilopedia                                                     |
+| `network`             | 21        |  19,996 | Multiplayer transport                                                                |
+
+The categories other than `read` came from a signature search, then a scan of all 227 `game-data`
+functions and of every unread function that writes game state and is reachable from the turn
+routines: none held a game rule missed by the port. The `generic` and `interface` functions were not
+read one by one, and multiplayer rules for simultaneous moves are not decoded. So the claim is:
+no rule of the single-player game is known to be missing, not that every line has been read.
+
+## Checking against the original
+
+Reading alone misses things. The computer's treasury spending sat in a routine marked read for
+weeks. Run the engine on the original's own saves instead:
+
+- `scripts/compare-builds.ts` compares the build chooser with what the original was building.
+- `scripts/compare-saves.ts` reports government scores, research rank, units and terrain.
+- `scripts/probe-engine.ts` plays a whole game. It keeps an idle human on purpose: computers alone
+  build about half as many units again.
+
+Compare only at the same difficulty; `docs/engine/difficulty.md` lists what difficulty changes.
+
+## Known gaps
+
+The human's auto-build option (`CITYPREF.TXT`, 0x00474d90, and the human branches of 0x00474edb) is
+not ported, nor are simultaneous moves.
+
 ## How to help
 
-Take an `unread` function, largest `rules` first. Read it, add the rule to the right file in
+Take a function not marked `read`, `game-data` first. Read it, add the rule to the right file in
 `docs/engine/`, compare it with the engine, and fix the engine if they differ. A note is only
 VERIFIED if you read the code or measured the running game.

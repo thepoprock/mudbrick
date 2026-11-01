@@ -963,7 +963,7 @@ export class Game {
   }
 
   /** Tell every human something (the travellers' reports and the advisors' notices). */
-  private tellHumans(text: string): void {
+  tellHumans(text: string): void {
     for (const c of this.world.civs) {
       if (c.isHuman && c.slot !== 0)
         this.pendingEvents.push({ slot: c.slot, event: { kind: 'climate', text } });
@@ -1905,6 +1905,12 @@ export class Game {
         onUnitKilled: (t, a, d) => this.unitKilled(t, a, d),
         onCityEmptied: (c) => this.cityEmptied(c),
         capitalFalls: (c, l, w) => this.capitalFalls(c, l, w),
+        shipLost: (l, launched) =>
+          this.tellHumans(
+            launched
+              ? `The ${l.name} spaceship returns to earth: its capital has fallen.`
+              : `The ${l.name} spaceship has been destroyed.`,
+          ),
         onAttacked: (a, d) => this.attacked(a, d),
         onCityTaken: (c, a, d) => this.cityTaken(c, a, d),
         advanceGained: (c, a) => this.advanceGained(c, a),

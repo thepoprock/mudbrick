@@ -1,4 +1,4 @@
-import { loseShip } from './spaceship.js';
+import { hasLaunched, hasStarted, loseShip } from './spaceship.js';
 /**
  * Capturing a city.
  *
@@ -29,6 +29,8 @@ export interface CaptureContext {
   /** Run the consequences of an advance just granted (Game.advanceGained). */
   advanceGained?: (civ: Civ, advance: number) => void;
   /** Scenario events: CITYTAKEN, after the city has changed hands. */
+  /** A capital fell with a ship building or in flight (0x0048090d). */
+  shipLost?: (loser: Civ, launched: boolean) => void;
   onCityTaken?: (city: string, attacker: number, defender: number) => void;
   /** A capital falls while its owner still holds it; true when the government got away. */
   capitalFalls?: (city: City, loser: Civ, captor: Civ) => boolean;
@@ -107,7 +109,12 @@ export function captureCity(
         if (i === IMPROVEMENT.palace) {
           // Civil war, flight or a new Palace; a ship survives only a flight (0x00528720).
           const fled = ctx.capitalFalls?.(city, loser, captor) ?? false;
-          if (!fled) loseShip(loser);
+          if (!fled) {
+            const launched = hasLaunched(loser);
+            const started = hasStarted(loser);
+            loseShip(loser);
+            if (launched || started) ctx.shipLost?.(loser, launched);
+          }
         }
         city.improvements[i] = false;
         destroyed.push(i);

@@ -107,6 +107,7 @@ export interface AiUnitContext extends MovementContext {
   onCityEmptied?: (city: City) => void;
   onAttacked?: (attacker: number, defender: number) => void;
   capitalFalls?: (city: City, loser: Civ, captor: Civ) => boolean;
+  shipLost?: (loser: Civ, launched: boolean) => void;
   onCityTaken?: (city: string, attacker: number, defender: number) => void;
   /** A human's turn: only the units on automatic move (order `k`, unit flag 0x8000). */
   automatedOnly?: boolean;
@@ -811,6 +812,7 @@ function takeCityHere(
     conquest: true,
     guerillaWarfareDiscovered: ctx.guerillaWarfareDiscovered ?? false,
     ...(ctx.capitalFalls ? { capitalFalls: ctx.capitalFalls } : {}),
+    ...(ctx.shipLost ? { shipLost: ctx.shipLost } : {}),
     ...(ctx.onCityTaken ? { onCityTaken: ctx.onCityTaken } : {}),
     ...(ctx.advanceGained ? { advanceGained: ctx.advanceGained } : {}),
   });
