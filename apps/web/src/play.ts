@@ -135,6 +135,12 @@ const DIRECTIONS: Record<string, Point> = {
 };
 
 /** x, y, width, height of each of the four levels of the seven parts (pv.dll, 0x005a9068). */
+/** The event engravings of tiles.dll (0x004b7280); each has a later twin at + 1. */
+const NEWS_CAPTURE = 70;
+const NEWS_DISORDER = 72;
+const NEWS_CELEBRATION = 74;
+const NEWS_FOUNDED = 76;
+
 const THRONE_ART = [
   145, 1, 322, 318, 118, 1, 360, 311, 137, 1, 348, 298, 169, 1, 267, 325, 1, 278, 640, 203, 1, 277,
   640, 204, 1, 277, 640, 204, 1, 277, 640, 204, 1, 301, 640, 180, 213, 299, 202, 182, 247, 315, 110,
@@ -715,6 +721,8 @@ export class PlaySession {
             : '') +
           '.',
       );
+      this.queueNews(NEWS_CAPTURE, `${city.name} falls to the ${this.civ.name}.`);
+      this.nextTalk();
       this.openCity = city;
     }
     unit.movesSpent = fullMoves(this.rules, unit, this.moveCtx());
@@ -784,6 +792,8 @@ export class PlaySession {
     const city = foundCity(this.world, this.rules, this.civ, unit, { name });
     this.game.ensureWorkers(city);
     this.log(`${name} founded.`);
+    this.queueNews(NEWS_FOUNDED, `${name} founded.`);
+    this.nextTalk();
     this.selected = null;
     this.openCity = city;
   }
@@ -882,6 +892,8 @@ export class PlaySession {
       const text = this.eventText(e);
       if (text) this.log(text);
       this.eventSound(e.event);
+      if (text && e.event.kind === 'disorder') this.queueNews(NEWS_DISORDER, text);
+      if (text && e.event.kind === 'celebration-start') this.queueNews(NEWS_CELEBRATION, text);
     }
     if (this.game.throneDue(this.humanSlot)) this.showThrone(true);
     this.sound('ENDOTURN');
@@ -1190,6 +1202,28 @@ export class PlaySession {
     bar.style.left = '0';
     bar.style.zIndex = '20';
     this.el.canvas.parentElement?.prepend(bar);
+  }
+
+  private readonly news: { picture: number; text: string }[] = [];
+
+  /** An event worth an engraving (0x004b7280): the second of each pair after advance 37. */
+  private queueNews(picture: number, text: string): void {
+    this.news.push({ picture: picture + (this.civ.knownAdvances[37] === true ? 1 : 0), text });
+  }
+
+  private showNews(item: { picture: number; text: string }): void {
+    const box = this.talkBox();
+    box.replaceChildren();
+    const img = document.createElement('img');
+    img.style.cssText = 'display:block;margin:0 auto 8px;max-width:100%';
+    void this.folder.art('TILES.DLL', item.picture, true).then((url) => {
+      if (url) img.src = url;
+      else img.remove();
+    });
+    const text = document.createElement('p');
+    text.textContent = item.text;
+    box.append(img, text);
+    this.talkButton(box, 'Continue', () => this.closeTalk());
   }
 
   /** Choosing what to research (0x00495ee8): the advisor's pick first. */
@@ -1974,6 +2008,11 @@ export class PlaySession {
     if (this.talk || this.seatPending) return;
     const talk = this.game.nextPendingTalk(this.humanSlot);
     if (!talk) {
+      const item = this.news.shift();
+      if (item) {
+        this.showNews(item);
+        return;
+      }
       const part = this.civ.pendingParts?.[0];
       if (part !== undefined) this.showPartChoice(part);
       else if (this.civ.researching === null && this.game.state.turn > 0) this.showResearch();

@@ -123,3 +123,8 @@ dim sheet.
 
 The negotiation window is the picture `200 + the other civilization's government` of mk.dll with the
 leader's portrait (`220 + portrait`) on it.
+
+## Event engravings (0x004b7280)
+
+City captured (CITYCAPTURE, CITYCAPTURE2, CITYWINALLY, CITYLOSEALLY) shows tiles.dll 70, disorder
+72, We Love the King Day 74 and a founding 76, each one higher once the player knows advance 37.
