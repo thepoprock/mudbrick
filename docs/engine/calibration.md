@@ -38,6 +38,11 @@ engine seeds at the same turn:
 | 211  | governments                 | Republic ×3, Monarchy ×1, Despotism ×2 | Republic ×1, Monarchy ×5 / Republic ×1, Monarchy ×4, Despotism ×1 |
 | 211  | roads / irrigation per city | 3.0–4.5 / 1.1–5.3                      | 2.0–4.9 / 0.8–3.3 / 1.2–7.0 / 0.3–3.0                             |
 
+After the worker-placement port (bfe4ce3) the same two engine seeds at turn 211 read 38 / 44
+cities, 141 / 176 units, advances 11–19 / 8–22, city sizes 2–7 and gold 345–1193 — the sizes and
+gold now sit where the original's do (its computer players pay no upkeep), research a shade
+slower.
+
 What the comparison found and fixed (all VERIFIED against the executable afterwards):
 
 1. **The build advisor's sixteen-fold factor** (0x00474edb) applies to every unit except
