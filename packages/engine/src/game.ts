@@ -1182,9 +1182,11 @@ export class Game {
     })) {
       out.push({ slot, event: e });
     }
-    if (!civ.isHuman) {
+    const automated = civ.isHuman && this.world.units.some((u) => u.owner === slot && u.automated);
+    if (!civ.isHuman || automated) {
       let names = this.citiesOf(slot).length;
       for (const e of aiMoveUnits(this.world, this.rules, slot, {
+        automatedOnly: civ.isHuman,
         rng: this.rng,
         civ,
         difficulty: this.state.difficulty,

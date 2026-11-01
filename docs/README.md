@@ -19,8 +19,8 @@ Labels: **VERIFIED** = checked against the files, the game or a test; **INFERRED
 
 Scenario events: [formats/events-format.md](formats/events-format.md) (the `events.txt` language, as the
 original's parser reads it) and [engine/events.md](engine/events.md) (what the triggers and actions do).
-Coming next: menus (Menu.txt), the `EVNT` block of saves made inside scenarios, the images stored
-inside the game's DLLs.
+Not yet ported: multiplayer, the editors, videos, music, the Throne Room, the Casualty Timeline.
+Of the game's rules, what stands in for an unread detail is marked INFERRED where it is written.
 
 ## Engine behaviour (`engine/`)
 

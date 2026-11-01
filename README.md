@@ -5,14 +5,15 @@ from scratch in TypeScript. Mudbrick can load the data files of _Sid Meier's Civ
 (Multiplayer Gold Edition), a trademark of Take-Two Interactive, which is not affiliated with
 this project. See [LEGAL.md](LEGAL.md) for the full picture.
 
-**Status: early.** The data-file formats are being decoded and documented; the first playable
-milestone is not here yet. What works today:
+**Status: playable, single player, with your own copy of the game's data.** What works today:
 
-- Parsers for the original rules tables (`RULES.TXT`) and map files (`.MP`), with tests that
-  run against the real files when you have them.
-- A documented layout of every sprite in the original art sheets.
-- A browser map viewer that renders the original world maps from your own copy of the game.
-- A headless renderer that turns a map into a PNG from the command line.
+- A full turn: cities, production, research, combat, terrain work, trade, diplomacy, espionage,
+  barbarians, the computer players, spaceships, nuclear weapons and the end of the game.
+- Negotiation with computer players, every advisor report, the High Council, the Civilopedia,
+  the menus and the sound effects, all read from your own files.
+- Saved games load and save in the original format.
+
+Not yet: multiplayer, the map and scenario editors, wonder and council videos, music.
 
 ## Why
 

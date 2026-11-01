@@ -95,6 +95,8 @@ export interface AiUnitContext extends MovementContext {
   /** Scenario event hooks (UNITKILLED, CITYTAKEN). */
   onUnitKilled?: (type: number, attacker: number, defender: number) => void;
   onCityTaken?: (city: string, attacker: number, defender: number) => void;
+  /** A human's turn: only the units on automatic move (order `k`, unit flag 0x8000). */
+  automatedOnly?: boolean;
   /** Run the consequences of an advance just granted (Game.advanceGained). */
   advanceGained?: (civ: Civ, advance: number) => void;
 }
@@ -722,6 +724,7 @@ export function aiMoveUnits(
   const events: AiUnitEvent[] = [];
   for (const unit of [...world.units]) {
     if (unit.owner !== slot || !world.units.includes(unit)) continue;
+    if (ctx.automatedOnly && !unit.automated) continue;
     const type = rules.units[unit.type];
     if (!type) continue;
     if (unit.order !== null && unit.order >= ORDER.fortress && unit.order <= ORDER.airbase)

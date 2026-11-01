@@ -1,4 +1,4 @@
-import { descriptionFor } from '@mudbrick/formats';
+import { decodeText, descriptionFor } from '@mudbrick/formats';
 /**
  * The interactive layer: a human plays one civilization from a loaded save.
  *
@@ -25,6 +25,7 @@ import {
   joinCity,
   mood,
   movesLeft,
+  GOVERNMENT,
   ORDER,
   orderGoTo,
   cityRows,
@@ -177,6 +178,7 @@ export class PlaySession {
     readonly renderOptions: () => WorldRenderOptions,
   ) {
     game.wantsTalks = folder.popups.size > 0;
+    void this.buildMenuBar();
     this.log(`You lead the ${this.civ.name}. Arrow keys or the number pad move the selected unit.`);
     this.selectNext();
     this.refresh();
@@ -300,6 +302,33 @@ export class PlaySession {
       case 'C':
         this.findCity();
         return true;
+      case 'T':
+        this.log(`Rates are in the panel: up to ${maxRate(this.civ.government) * 10} % each.`);
+        return true;
+      case 'R':
+        if (this.civ.government !== GOVERNMENT.anarchy) {
+          startRevolution(this.world, this.civ);
+          this.sound('REVOLT');
+          this.log('Revolution! The government falls into Anarchy.');
+          this.refresh();
+        }
+        return true;
+      case 'k':
+        return this.withSelected((u) => {
+          if (this.rules.units[u.type]?.role !== 5) return;
+          u.automated = true;
+          this.log(`${this.unitName(u)} works on its own.`);
+          this.skipSelected();
+        });
+      case 'a':
+        return this.withSelected((u) => {
+          for (const o of this.world.unitsAt(u.position.x, u.position.y)) {
+            if (o.owner !== u.owner) continue;
+            o.automated = false;
+            if (o.order === ORDER.sleep) o.order = null;
+          }
+          this.log('Units here are awake.');
+        });
       case 'w':
       case ' ':
         this.skipSelected();
@@ -1005,6 +1034,64 @@ export class PlaySession {
       `keys: arrows/numpad move · f fortify · s sleep · g go to · w wait · b build city\n` +
       `r road · i irrigate · m mine · o transform · F fortress · E airbase · p clean pollution\n` +
       `P pillage · D disband · t trade route · h help wonder · Tab next unit · c centre · Enter end turn`;
+  }
+
+  /** The menu bar, from the folder's Menu.txt: same labels, same keys. */
+  private async buildMenuBar(): Promise<void> {
+    const file = await this.folder.file('MENU.TXT');
+    if (!file) return;
+    const text = decodeText(new Uint8Array(await file.arrayBuffer()));
+    const bar = document.createElement('div');
+    bar.id = 'menuBar';
+    bar.style.cssText = 'font:13px sans-serif;background:#ddd;padding:2px;user-select:none';
+    const skip = new Set(['CHEAT', 'EDITOR']);
+    let menu: HTMLSelectElement | null = null;
+    let section = '';
+    let first = false;
+    for (const raw of text.split(/\r?\n/)) {
+      const line = raw.trim();
+      if (line.startsWith(';') || line === '') continue;
+      if (line.startsWith('@')) {
+        section = line.slice(1);
+        first = true;
+        continue;
+      }
+      if (skip.has(section)) continue;
+      const [label = '', key = ''] = line.replace(/&/g, '').split('|');
+      if (first) {
+        first = false;
+        const m = document.createElement('select');
+        const title = document.createElement('option');
+        title.textContent = label;
+        title.value = '';
+        m.append(title);
+        m.addEventListener('change', () => {
+          const value = m.value;
+          m.selectedIndex = 0;
+          if (value) this.handleKey({ key: value, target: null } as unknown as KeyboardEvent);
+          this.refresh();
+        });
+        bar.append(m);
+        menu = m;
+        continue;
+      }
+      const opt = document.createElement('option');
+      opt.textContent = key ? `${label}    ${key}` : label;
+      let code = key.replace(/^Shift\+/, '');
+      if (key.startsWith('Shift+')) code = code.toUpperCase();
+      if (key === 'SPACE') code = ' ';
+      if (label.startsWith('End Player')) code = 'Enter';
+      if (label === 'Consult High Council') code = 'F10';
+      if (section === 'PEDIA') code = '?';
+      const bound =
+        /^F\d+$/.test(code) ||
+        ['Enter', ' ', '?'].includes(code) ||
+        (code.length === 1 && 'brimopgfshwkauljFEPDHCMTR'.includes(code));
+      opt.value = bound ? code : '';
+      opt.disabled = !bound;
+      menu?.append(opt);
+    }
+    this.el.canvas.parentElement?.prepend(bar);
   }
 
   private airliftMenu(unit: Unit): void {
