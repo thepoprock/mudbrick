@@ -83,6 +83,7 @@ export function foundCity(
   unit: Unit,
   opts: FoundOptions,
 ): City {
+  civ.hadCity = true;
   const { x, y } = unit.position;
   const firstCity = !world.cities.some((c) => c.owner === civ.slot);
   const improvements = Array<boolean>(Math.max(67, rules.improvements.length)).fill(false);

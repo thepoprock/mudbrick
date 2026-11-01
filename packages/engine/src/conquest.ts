@@ -138,6 +138,7 @@ export function captureCity(
     city.previousOwner = loser.slot;
     city.capturedTurn = ctx.turn;
     city.owner = captor.slot;
+    captor.hadCity = true;
     remarkTerritory(world, city, loser.slot);
     for (const u of [...world.units]) {
       if (u.owner !== loser.slot || u.homeCity !== city.id) continue;

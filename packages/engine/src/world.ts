@@ -93,6 +93,8 @@ export interface Civ {
   treasury: number;
   isHuman: boolean;
   inPlay: boolean;
+  /** The civilization has held a city (so losing its last one destroys it, 0x00483657). */
+  hadCity?: boolean;
   /** Beakers toward the current research target. */
   scienceStored: number;
   /** Advance index being researched, or null. */

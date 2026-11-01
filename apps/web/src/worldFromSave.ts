@@ -99,6 +99,7 @@ export function worldFromSave(save: SaveFile, rules: Rules): World {
           }
         : {}),
       inPlay: slot === 0 || (save.parameters.slotsInPlay[slot] ?? false),
+      hadCity: save.cities.some((c) => c.owner === slot),
     });
   }
 

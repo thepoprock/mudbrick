@@ -261,6 +261,20 @@ describe('Game turn loop', () => {
     expect(working).toBe(2);
   });
 
+  it('a civilization that has held a city dies with its last one; one that never did lingers', () => {
+    const { world, game, civ: c } = setup({}, { isHuman: false });
+    c.hadCity = true;
+    world.cities.length = 0;
+    game.endTurn();
+    expect(c.inPlay).toBe(false);
+    expect(world.units.some((u) => u.owner === 1)).toBe(false);
+    const fresh = setup({}, { isHuman: false });
+    fresh.world.cities.length = 0;
+    fresh.civ.hadCity = false;
+    fresh.game.endTurn();
+    expect(fresh.civ.inPlay).toBe(true);
+  });
+
   it('runs the AI rate policy for computer players', () => {
     const { game, civ } = setup({}, { isHuman: false });
     const events = game.endTurn();

@@ -855,6 +855,7 @@ export class Game {
       civ.treasury = civ.treasury > 30000 ? 30000 : civ.treasury < 0 ? 0 : civ.treasury;
       out.push(...this.processCivilization(civ.slot));
       out.push(...this.pendingEvents.splice(0));
+      out.push(...this.eliminateCityless());
     }
     out.push(...this.processBarbarians());
     this.state.turn += 1;
@@ -866,6 +867,38 @@ export class Game {
     }
     if (this.state.turn > 199) this.state.turnsOfPeace = (this.state.turnsOfPeace ?? 0) + 1;
     out.push(...this.endOfYear());
+    return out;
+  }
+
+  /**
+   * VERIFIED (0x00483657, run after a capture, a city's destruction, a ghost town or a
+   * disband): a civilization left without a city is destroyed — its units disbanded, its slot
+   * out of play, the destruction recorded. The engine checks after every civilization's turn
+   * and at the end of the turn, which can lag the original by part of a turn. A civilization
+   * that never founded a city is not touched (the original only asks on those events); one with
+   * neither city nor unit is dropped as well (INFERRED). The original may then start a new
+   * civilization in the slot (0x00480fc9) — not modelled.
+   */
+  eliminateCityless(): TurnEvent[] {
+    const out: TurnEvent[] = [];
+    for (const civ of this.world.civs) {
+      if (civ.slot === 0 || !civ.inPlay) continue;
+      if (this.citiesOf(civ.slot).length > 0) continue;
+      const units = this.world.units.filter((u) => u.owner === civ.slot).length;
+      if (!civ.hadCity && units > 0) continue;
+      civ.inPlay = false;
+      this.state.destroyedCivilizations = (this.state.destroyedCivilizations ?? 0) + 1;
+      for (const u of [...this.world.units])
+        if (u.owner === civ.slot) this.world.units.splice(this.world.units.indexOf(u), 1);
+      out.push({
+        slot: civ.slot,
+        event: {
+          kind: 'spaceship',
+          text: `the ${civ.name} civilization is destroyed`,
+          slot: civ.slot,
+        },
+      });
+    }
     return out;
   }
 
@@ -881,27 +914,7 @@ export class Game {
       this.state.gameOver = { winner: winner.slot, reason: 'spaceship' };
       return out;
     }
-    // INFERRED: a civilization with no city and no unit is gone; after turn 20 so is one with
-    // no city at all (the original kills a civilization when its last city falls).
-    for (const civ of this.world.civs) {
-      if (civ.slot === 0 || !civ.inPlay) continue;
-      const cities = this.citiesOf(civ.slot).length;
-      const units = this.world.units.filter((u) => u.owner === civ.slot).length;
-      if (cities === 0 && (units === 0 || this.state.turn > 20)) {
-        civ.inPlay = false;
-        this.state.destroyedCivilizations = (this.state.destroyedCivilizations ?? 0) + 1;
-        for (const u of [...this.world.units])
-          if (u.owner === civ.slot) this.world.units.splice(this.world.units.indexOf(u), 1);
-        out.push({
-          slot: civ.slot,
-          event: {
-            kind: 'spaceship',
-            text: `the ${civ.name} civilization is destroyed`,
-            slot: civ.slot,
-          },
-        });
-      }
-    }
+    out.push(...this.eliminateCityless());
     const alive = this.world.civs.filter((c) => c.slot !== 0 && c.inPlay);
     if (alive.length === 1 && this.state.turn > 1 && alive[0]) {
       this.state.gameOver = { winner: alive[0].slot, reason: 'conquest' };

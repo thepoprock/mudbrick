@@ -80,3 +80,15 @@ scenario flag bit 2 counts wonders; the protagonist's total (or the civilization
 a protagonist) against the four thresholds gives decisive victory (1000), marginal victory
 (750), neither (500), marginal defeat (250) or decisive defeat (0) — every other civilization
 sees the level mirrored — plus ten an objective held, doubled with a conquest bonus.
+
+## A civilization's end (VERIFIED, 0x00483657)
+
+After a city capture, a city's destruction in combat, a ghost town or a disband, the game asks
+whether the loser still holds a city; with none it is destroyed: the DESTROYED message, an entry
+in the destroyed-civilizations table (turn, destroyer, name — the save's 338-byte block), every
+unit of the civilization disbanded (units it carried are set down), the slot taken out of play
+and, for the only human, the game over. A new civilization may then restart in the slot
+(0x00480fc9: an unused tribe, a fresh start site; not modelled). The engine runs the check after
+every civilization's turn and at the end of the turn (`eliminateCityless`), lagging the original
+by at most part of a turn; a civilization that never founded a city is left alone, as the
+original never asks about it, except when it has no unit either (INFERRED).
