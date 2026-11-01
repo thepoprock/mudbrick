@@ -243,6 +243,8 @@ export interface Unit {
   automated?: boolean;
   /** Warned off a computer player's territory (unit flag 0x20). */
   warned?: boolean;
+  /** Warned during the turn just gone (unit flag 4). */
+  warnedNow?: boolean;
   /** True while the order is Fortified (kept in step with `order`). */
   fortified: boolean;
   homeCity: number | null;

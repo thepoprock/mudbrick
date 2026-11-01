@@ -297,7 +297,14 @@ export function processProduction(
         unit.commodity = 0xff; // food caravan
       }
     } else {
-      unit.commodity = rng.nextInt(16);
+      // VERIFIED 0x004b7c3c: the first unused supply from a random start, else any of the three.
+      const start = rng.nextInt(3);
+      let picked: number | null = null;
+      for (let i = 0; i < 3 && picked === null; i++) {
+        const c = inputs.supplied[(start + i) % 3];
+        if (c !== undefined && c >= 0) picked = c;
+      }
+      unit.commodity = picked ?? Math.abs(inputs.supplied[rng.nextInt(3)] ?? 0);
     }
   }
 

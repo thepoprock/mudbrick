@@ -416,6 +416,23 @@ function nearestCityOf(world: World, from: Point, owner: number | null): City | 
   return best;
 }
 
+/**
+ * A human's city stands empty (0x004f2495): every loaded computer transport at sea that could reach
+ * it this turn, not at peace with the owner, turns for it.
+ */
+export function rushEmptyCity(world: World, rules: EngineRules, city: City): void {
+  for (const u of world.units) {
+    const type = rules.units[u.type];
+    if (u.owner === 0 || u.owner === city.owner || !type || (type.holds ?? 0) === 0) continue;
+    if (world.civs.find((c) => c.slot === u.owner)?.isHuman === true) continue;
+    if (hasTreaty(world, u.owner, city.owner, TREATY.peace)) continue;
+    if (world.terrainAt(u.position.x, u.position.y) !== OCEAN) continue;
+    if (world.unitsAt(u.position.x, u.position.y).length < 2) continue;
+    if (distance(world, city.position, u.position) >= type.move * 3) continue;
+    orderGoTo(u, city.position);
+  }
+}
+
 /** Which land masses touch which oceans (the original's table 0x005ead57, read by 0x00559951). */
 const shores = new WeakMap<World, Set<number>>();
 

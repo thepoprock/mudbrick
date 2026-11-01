@@ -44,6 +44,8 @@ export interface AttackContext {
   /** Attacker's moves left in thirds (FATIGUE scaling). */
   attackerMovesLeft: number;
   /** Scenario events: a unit of this type, owned by `defender`, fell to `attacker` (UNITKILLED). */
+  /** A city survived the fight with nobody left to defend it. */
+  onCityEmptied?: (city: City) => void;
   onUnitKilled?: (type: number, attacker: number, defender: number) => void;
 }
 
@@ -155,6 +157,8 @@ export function resolveAttack(
         if (city.size <= 0) {
           removeCity(world, rules, city);
           cityDestroyed = true;
+        } else if (world.unitsAt(city.position.x, city.position.y).length === 0) {
+          ctx.onCityEmptied?.(city); // VERIFIED 0x0052d472
         }
       }
     }

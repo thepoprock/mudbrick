@@ -52,6 +52,7 @@ import {
 import { beginUnitsTurn, type UnitTurnEvent } from './turnStart.js';
 import { fallout } from './nuclear.js';
 import { enterHut } from './huts.js';
+import { rushEmptyCity } from './aiShips.js';
 import { cityPollution, meltdownRoll, pollutionRoll, type PollutionEvent } from './pollution.js';
 import { aiChooseProduction } from './aiBuild.js';
 import { runStrategy, type StrategyEvent } from './aiStrategy.js';
@@ -630,6 +631,21 @@ export class Game {
     };
   }
 
+  /**
+   * A city lost its last defender and lived (0x0052d472): a computer player rethinks production on
+   * that land mass at once (0x00431591), and raiders turn for a human's (0x004f2495).
+   */
+  cityEmptied(city: City): void {
+    const civ = this.civ(city.owner);
+    if (civ.isHuman) {
+      rushEmptyCity(this.world, this.rules, city);
+      return;
+    }
+    const land = (c: City) => this.world.landmass[this.world.index(c.position.x, c.position.y)];
+    for (const c of this.citiesOf(city.owner))
+      if (land(c) === land(city)) this.aiChooseProduction(c);
+  }
+
   /** Mark what a civilization's units and cities can see (unit sight VERIFIED, city radius INFERRED). */
   revealFor(slot: number): void {
     for (const u of this.world.units) if (u.owner === slot) lookAround(this.world, this.rules, u);
@@ -1157,6 +1173,12 @@ export class Game {
   processCivilization(slot: number): TurnEvent[] {
     const out: TurnEvent[] = [];
     const civ = this.civ(slot);
+    // VERIFIED 0x0046732a: a warning off foreign land fades on the unit's turn in four.
+    this.world.units.forEach((u, i) => {
+      if (u.owner !== slot) return;
+      if (u.warned && !u.warnedNow && ((this.state.turn ^ (i & 3)) & 3) === 0) delete u.warned;
+      delete u.warnedNow;
+    });
     this.revealFor(slot);
     resetGovernmentScores(civ);
     civ.bestProduction = 0;
@@ -1301,6 +1323,7 @@ export class Game {
           });
         },
         onUnitKilled: (t, a, d) => this.unitKilled(t, a, d),
+        onCityEmptied: (c) => this.cityEmptied(c),
         onCityTaken: (c, a, d) => this.cityTaken(c, a, d),
         advanceGained: (c, a) => this.advanceGained(c, a),
         guerillaWarfareDiscovered: (this.state.firstDiscoveredBy[34] ?? 0) !== 0,
@@ -1633,6 +1656,7 @@ export class Game {
       difficulty: this.state.difficulty,
       activity: this.state.barbarianActivity ?? 0,
       onUnitKilled: (t, a, d) => this.unitKilled(t, a, d),
+      onCityEmptied: (c) => this.cityEmptied(c),
       realisticCombat: this.state.realisticCombat,
       anyoneKnows: (a) => this.world.civs.some((c) => c.slot !== 0 && c.knownAdvances[a] === true),
       humanKnows: (a) => this.world.civs.some((c) => c.isHuman && c.knownAdvances[a] === true),

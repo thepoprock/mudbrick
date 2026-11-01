@@ -621,6 +621,7 @@ export class PlaySession {
       barbarianActivity: 1,
       attackerMovesLeft: movesLeft(this.rules, unit, this.moveCtx()),
       onUnitKilled: (t, a, d) => this.game.unitKilled(t, a, d),
+      onCityEmptied: (c) => this.game.cityEmptied(c),
     });
     if (ev.kind === 'nuclear') {
       this.sound('NUKEXPLO');

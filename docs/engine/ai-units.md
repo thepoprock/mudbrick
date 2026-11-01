@@ -436,3 +436,14 @@ its housekeeping and persistent goals, settlers wanted, free upgrades, and the a
 hands ground units go-to orders; aircraft are not assigned yet, hold is modelled as fortify, and
 the immediate go-to for naval and air objectives is left out. The barbarian, air and nuclear
 choosers and the combat evaluator remain to be read.
+
+## Reactions outside the move chooser
+
+- **A city left empty** by a fight it survives (0x0052d472): a computer owner re-chooses production
+  in all its cities on that land mass at once (0x00431591, 0x00430b61 with 99). Under a human owner,
+  every loaded computer transport at sea within reach, not at peace with the owner, turns for the
+  city (0x004f2495).
+- **A computer caravan's commodity** (0x004b7c3c): the first unused entry of the city's supply list
+  from a random start, else any of the three.
+- **The warned-off flag** (0x0046732a) clears on the unit's turn in four unless it was warned in the
+  turn just gone.

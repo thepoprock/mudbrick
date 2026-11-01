@@ -102,6 +102,7 @@ export interface AiUnitContext extends MovementContext {
   leader?: number;
   /** Scenario event hooks (UNITKILLED, CITYTAKEN). */
   onUnitKilled?: (type: number, attacker: number, defender: number) => void;
+  onCityEmptied?: (city: City) => void;
   onCityTaken?: (city: string, attacker: number, defender: number) => void;
   /** A human's turn: only the units on automatic move (order `k`, unit flag 0x8000). */
   automatedOnly?: boolean;
@@ -727,6 +728,7 @@ function act(
       barbarianActivity: 1,
       attackerMovesLeft: movesLeft(rules, unit, ctx),
       ...(ctx.onUnitKilled ? { onUnitKilled: ctx.onUnitKilled } : {}),
+      ...(ctx.onCityEmptied ? { onCityEmptied: ctx.onCityEmptied } : {}),
     });
     if (ev.kind === 'nuclear' && !ev.blast.stoppedBy)
       nuclearFollowUp(
@@ -976,7 +978,7 @@ export function aiMoveUnits(
             barbarianActivity: 1,
             attackerMovesLeft: movesLeft(rules, unit, ctx),
             ...(ctx.onUnitKilled ? { onUnitKilled: ctx.onUnitKilled } : {}),
-            ...(ctx.onUnitKilled ? { onUnitKilled: ctx.onUnitKilled } : {}),
+            ...(ctx.onCityEmptied ? { onCityEmptied: ctx.onCityEmptied } : {}),
           });
           if (ev.kind === 'fought')
             events.push({

@@ -2008,6 +2008,7 @@ export function scanIntrusions(env: NegotiationEnv, computer: number, human: num
         out.city = city;
         if (u.warned) out.strikes += 1;
         u.warned = true;
+        u.warnedNow = true;
         here += 1;
         out.units += 1;
         out.severity += 1;
