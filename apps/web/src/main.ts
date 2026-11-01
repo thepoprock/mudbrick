@@ -239,6 +239,10 @@ function startNewGame(): void {
     humanTribe: selectValue('ngTribe'),
     leaders: folder.rules.leaders,
     barbarianActivity: selectValue('ngBarb'),
+    ...(byId<HTMLInputElement>('ngSimple').checked ? { realisticCombat: false } : {}),
+    ...(byId<HTMLInputElement>('ngBloodlust').checked ? { bloodlust: true } : {}),
+    ...(byId<HTMLInputElement>('ngNoRestart').checked ? { noRestart: true } : {}),
+    ...(selectValue('ngStart') > 0 ? { accelerated: selectValue('ngStart') - 1 } : {}),
   });
   save = undefined;
   saveBytes = undefined;

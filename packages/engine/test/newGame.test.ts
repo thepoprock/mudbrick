@@ -190,4 +190,33 @@ describe.skipIf(!rules)('a restart', () => {
     expect(settlers.length).toBe(2); // after turn 20 with no human in sight: two Settlers
     expect(victim.hadCity).toBe(false);
   });
+
+  it('an accelerated start opens later with every civilization settled', () => {
+    if (!rules) return;
+    const out = newGame(rules, new Rng(5), {
+      map: {
+        columns: 50,
+        rows: 80,
+        flatEarth: false,
+        landMass: 1,
+        landForm: 0,
+        climate: 0,
+        temperature: 0,
+        age: 1,
+      },
+      difficulty: 2,
+      civCount: 7,
+      humanTribe: 0,
+      leaders,
+      barbarianActivity: 1,
+      accelerated: 1,
+    });
+    expect(out.state.turn).toBe(41);
+    const players = out.world.civs.filter((c) => c.slot !== 0 && c.inPlay);
+    for (const c of players) {
+      expect(out.world.cities.some((x) => x.owner === c.slot)).toBe(true);
+      expect(c.advancesCount).toBeGreaterThanOrEqual(7);
+      expect(c.treasury).toBeGreaterThan(0);
+    }
+  });
 });

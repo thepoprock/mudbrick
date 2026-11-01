@@ -69,3 +69,21 @@ disbanded, Settlers placed on the site, a second Settlers after turn 20 when no 
 the square — with a Phalanx (unit type 3) after turn 40 when it can be built — and the 21 squares
 around are revealed. `newGame.ts` `restartCivilization`, run by the game right after the
 destruction; the save's option and the tribes already played come through `gameFromSave`.
+
+## Advanced options (0x004de5aa)
+
+Simplified combat (options bit 4 clear), flat world (bit 15), bloodlust (bit 7), don't restart
+(bit 8) and the accelerated start.
+
+## Accelerated start (0x00482a65, 0x00482693)
+
+Level 0 opens on turn 21, level 1 on turn 41. Each civilization gets advances 36, 9, 1 and 8, three
+more at level 1, and a city where it stands of size 3 (level 1: 5) with `(rand % 50 + 25) × (level
+
+- 1)` gold, a fortified Archers (Pikemen if that is in production) and Phalanx, Horsemen or Chariot,
+  and a Temple. Level 1 adds Chariot or Elephants, a Granary with advance 65, and a Marketplace with
+  advance 20 or else Barracks. Two squares (level 1: four) get a road and irrigation, or a mine on
+  hills, chosen by terrain, nearness and specials, and the land around is seen. At level 1 a second
+  city of size 3 goes five squares out on grassland or plains, with a road home within 22 squares. If
+  there is no room the capital instead grows to 7, gains a Colosseum, 25 gold, six more advances and
+  three more units.

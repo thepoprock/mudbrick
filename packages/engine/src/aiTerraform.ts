@@ -36,7 +36,7 @@ function landmassAt(world: World, p: Point): number {
 }
 
 /** Walk the go-to path from one city toward another (a ground unit of the owner). */
-function walkPath(
+export function walkPath(
   world: World,
   rules: EngineRules,
   owner: number,

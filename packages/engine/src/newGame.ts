@@ -14,6 +14,7 @@ import type { GameState } from './game.js';
 import { generateMap, type MapParams } from './mapgen.js';
 import { researchableAdvances } from './outcome.js';
 import { canBuildUnit } from './founding.js';
+import { acceleratedStart, acceleratedTurn } from './accelerated.js';
 import { grantAdvance } from './research.js';
 import type { Rng } from './rng.js';
 import { GOVERNMENT, type EngineRules } from './rules.js';
@@ -49,6 +50,12 @@ export interface NewGameOptions {
   barbarianActivity: number;
   /** Simplified combat off (the default). */
   realisticCombat?: boolean;
+  /** Accelerated start: none, or level 0 (turn 21) or 1 (turn 41). */
+  accelerated?: number;
+  /** Options byte 0 bit 7. */
+  bloodlust?: boolean;
+  /** Options byte 1 bit 0: "don't restart if eliminated". */
+  noRestart?: boolean;
   /** Overrides the leader's gender flip (INFERRED: the original asks the human). */
   humanFemale?: boolean;
 }
@@ -334,8 +341,15 @@ export function newGame(rules: EngineRules, rng: Rng, opts: NewGameOptions): New
 
   const tribesPlayed: number[] = [];
   for (const [index, count] of used) tribesPlayed[index] = count;
+  if (opts.accelerated !== undefined) {
+    acceleratedStart(world, rules, rng, opts.accelerated, (t, o, x, y) =>
+      placeUnit(world, t, o, x, y),
+    );
+  }
   const state: GameState = {
-    turn: 0,
+    turn: opts.accelerated !== undefined ? acceleratedTurn(opts.accelerated) : 0,
+    ...(opts.bloodlust ? { bloodlust: true } : {}),
+    ...(opts.noRestart ? { noRestart: true } : {}),
     difficulty: opts.difficulty,
     realisticCombat: opts.realisticCombat ?? true,
     firstDiscoveredBy: Array<number>(advances).fill(0),
