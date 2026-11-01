@@ -13,6 +13,7 @@ import { landValue } from './fertility.js';
 import type { GameState } from './game.js';
 import { generateMap, type MapParams } from './mapgen.js';
 import { researchableAdvances } from './outcome.js';
+import { canBuildUnit } from './founding.js';
 import { grantAdvance } from './research.js';
 import type { Rng } from './rng.js';
 import { GOVERNMENT, type EngineRules } from './rules.js';
@@ -124,10 +125,19 @@ export function findStartSite(
   rules: EngineRules,
   rng: Rng,
   isHuman: boolean,
+  turn = 0,
 ): { x: number; y: number } | null {
   const width = world.widthX2;
   const rows = world.rows;
   const stats = landmassStats(world, rules);
+  // VERIFIED (the same routine at a restart): after turn 0 only cities count for the distance,
+  // the land mass must have room less `turn / 16`, after turn 200 no city of anyone on it, and
+  // the square must lie in no city's territory.
+  const cityCount = new Map<number, number>();
+  for (const c of world.cities) {
+    const lm = (world.landmass[world.index(c.position.x, c.position.y)] ?? 0) & 63;
+    cityCount.set(lm, (cityCount.get(lm) ?? 0) + 1);
+  }
   let tries = 0;
   let x = 0;
   let y = 0;
@@ -142,7 +152,9 @@ export function findStartSite(
     let nearest = 30;
     for (const c of world.cities)
       nearest = Math.min(nearest, distance(world, { x, y }, c.position));
-    for (const u of world.units) nearest = Math.min(nearest, distance(world, { x, y }, u.position));
+    if (turn === 0)
+      for (const u of world.units)
+        nearest = Math.min(nearest, distance(world, { x, y }, u.position));
     const lm = (world.landmass[world.index(x, y)] ?? 0) & 63;
     const land = stats.land[lm] ?? 0;
     const bad =
@@ -151,8 +163,10 @@ export function findStartSite(
       nearest < 16 - (tries >> 7) ||
       (nearest < 2 && tries < 2001) ||
       nearest < 1 ||
-      land < 32 - (tries >> 6) ||
+      land < 32 - (turn >> 4) - (tries >> 6) ||
+      (turn > 200 && (cityCount.get(lm) ?? 0) > 0) ||
       (hutAt(world, x, y) && tries < 2001) ||
+      (world.territory[world.index(x, y)] ?? 0) !== 0 ||
       world.cityAt(x, y) !== undefined;
     if (!bad) break;
     if (tries >= 2001 && !isHuman) return null;
@@ -318,12 +332,149 @@ export function newGame(rules: EngineRules, rng: Rng, opts: NewGameOptions): New
       notes.push(`${civ.name} start knowing ${granted} advance${granted > 1 ? 's' : ''}`);
   }
 
+  const tribesPlayed: number[] = [];
+  for (const [index, count] of used) tribesPlayed[index] = count;
   const state: GameState = {
     turn: 0,
     difficulty: opts.difficulty,
     realisticCombat: opts.realisticCombat ?? true,
     firstDiscoveredBy: Array<number>(advances).fill(0),
     barbarianActivity: opts.barbarianActivity,
+    tribesPlayed,
   };
   return { world, state, humanSlot, notes };
+}
+
+export interface RestartContext {
+  turn: number;
+  difficulty: number;
+  /** Options byte 1 bit 0: "don't restart if eliminated". */
+  noRestart: boolean;
+  isHuman: (slot: number) => boolean;
+  /** The human's tribe (never handed to a restarted civilization). */
+  humanTribe: number;
+  /** Per advance: slots that know it (bit n) and the first discoverer (0 = nobody). */
+  knownBy: (advance: number) => number;
+  firstDiscoveredBy: number[];
+  /** Times each tribe has played this game (leader index → count). */
+  tribesPlayed: number[];
+}
+
+export interface RestartResult {
+  restarted: boolean;
+  civ: Civ;
+  notes: string[];
+}
+
+/** Count the set bits of a slot mask. */
+function popcount(mask: number): number {
+  let n = 0;
+  for (let m = mask; m !== 0; m &= m - 1) n += 1;
+  return n;
+}
+
+/**
+ * A destroyed computer civilization's slot is born again (VERIFIED, 0x00480fc9 after turn 0): the
+ * record is reset; a tribe of the slot's colour that has not played is chosen (any of the colour
+ * failing that; none, and the slot stays empty); gender, names, rates and attitudes as at the
+ * start; of the advances a human knows, each whose first discoverer is not a human or that more
+ * than two civilizations know is granted with probability `difficulty / (difficulty + 1)`; a start
+ * site is sought with the turn's relaxations (findStartSite); and while the turn is at most
+ * `350 − 35 × difficulty` and "don't restart" is off, the civilization is placed: barbarian units
+ * within eight squares disbanded, Settlers on the site, a second Settlers after turn 20 when no
+ * human has seen the square — with a Phalanx (unit type 3) after turn 40 when it can be built —
+ * and the 21 squares around revealed. A failure leaves the slot out of play.
+ */
+export function restartCivilization(
+  world: World,
+  rules: EngineRules,
+  rng: Rng,
+  slot: number,
+  leaders: NewGameLeader[],
+  ctx: RestartContext,
+): RestartResult {
+  const civ = world.civs.find((c) => c.slot === slot);
+  const notes: string[] = [];
+  if (!civ) throw new Error(`no civilization ${slot}`);
+  const fresh = blankCiv(slot, rules.advances.length);
+  Object.assign(civ, fresh);
+  delete civ.spaceship;
+  delete civ.governmentScores;
+  civ.incidents = 0;
+  civ.civFlags = 0;
+  civ.hadCity = false;
+  civ.bestProduction = 0;
+  treatiesOf(civ).fill(0);
+  lastWarTurnsOf(civ).fill(-1);
+  for (const other of world.civs) {
+    if (other.slot === slot) continue;
+    treatiesOf(other)[slot] = 0;
+    const theirs = other.lastWarTurns;
+    if (theirs) theirs[slot] = -1;
+  }
+  let pool = leaders.filter(
+    (l) => l.color === slot && l.index !== ctx.humanTribe && (ctx.tribesPlayed[l.index] ?? 0) === 0,
+  );
+  if (pool.length === 0)
+    pool = leaders.filter((l) => l.color === slot && l.index !== ctx.humanTribe);
+  const leader = pool[rng.nextInt(Math.max(1, pool.length))] ?? pool[0];
+  if (!leader) {
+    civ.inPlay = false;
+    notes.push(`no tribe left for slot ${slot}`);
+    return { restarted: false, civ, notes };
+  }
+  ctx.tribesPlayed[leader.index] = (ctx.tribesPlayed[leader.index] ?? 0) + 1;
+  let female = leader.female;
+  if (rng.nextInt(3) === 0) female = !female;
+  civ.tribe = leader.index;
+  civ.name = leader.plural;
+  civ.adjective = leader.adjective;
+  civ.leader = female ? leader.femaleName || leader.name : leader.name;
+  civ.cityStyle = leader.cityStyle;
+  civ.colour = slot;
+  civ.government = GOVERNMENT.despotism;
+  civ.scienceRate = leader.civilize + 3;
+  civ.taxRate = 9 - civ.scienceRate;
+  civ.inPlay = true;
+  const mine = attitudesOf(civ);
+  mine[slot] = 100;
+  for (const other of world.civs) {
+    if (other.slot === 0 || other.slot === slot) continue;
+    const theirs = attitudesOf(other);
+    const value = ctx.isHuman(other.slot)
+      ? clamp(ctx.difficulty * 5 + rng.nextInt(80) + 10, 10, 75)
+      : rng.nextInt(80) + 10;
+    theirs[slot] = value;
+    mine[other.slot] = value;
+  }
+  let humanMask = 0;
+  for (let s = 1; s < 8; s++) if (ctx.isHuman(s)) humanMask |= 1 << s;
+  for (let a = 0; a < rules.advances.length; a++) {
+    const known = ctx.knownBy(a);
+    if ((known & humanMask) === 0) continue;
+    const first = ctx.firstDiscoveredBy[a] ?? 0;
+    if ((humanMask & (1 << first)) !== 0 && popcount(known) <= 2) continue;
+    if (ctx.difficulty > 0 && rng.nextInt(ctx.difficulty + 1) !== 0) grantAdvance(civ, a, 'other');
+  }
+  const site = findStartSite(world, rules, rng, false, ctx.turn);
+  const allowed = site !== null && !ctx.noRestart && ctx.turn <= 350 - 35 * ctx.difficulty;
+  if (!allowed || !site) {
+    civ.inPlay = false;
+    notes.push(`the ${civ.name} find no place to start`);
+    return { restarted: false, civ, notes };
+  }
+  for (const u of [...world.units])
+    if (u.owner === 0 && distance(world, site, u.position) < 9)
+      world.units.splice(world.units.indexOf(u), 1);
+  placeUnit(world, SETTLERS, slot, site.x, site.y);
+  let humanSaw = false;
+  for (let s = 1; s < 8; s++)
+    if (ctx.isHuman(s) && world.isSeen(site.x, site.y, s)) humanSaw = true;
+  if (ctx.turn > 20 && !humanSaw) {
+    placeUnit(world, SETTLERS, slot, site.x, site.y);
+    if (ctx.turn > 40 && canBuildUnit(rules, civ, 3)) placeUnit(world, 3, slot, site.x, site.y);
+  }
+  world.revealRadius(site.x, site.y, slot);
+  notes.push(`a new civilization, the ${civ.name}, arises`);
+  return { restarted: true, civ, notes };
 }

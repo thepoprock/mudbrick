@@ -153,7 +153,20 @@ export interface EngineRules {
   /** Indexed by RULES @CIVILIZE row. */
   advances: AdvanceRule[];
   /** RULES @LEADERS personalities (−1 … 1): the AI's rate policy and build choice read them. */
-  leaders?: { attack?: number; expand?: number; civilize: number }[];
+  /** RULES @LEADERS; the naming fields are present when the rules come from the parser. */
+  leaders?: {
+    attack?: number;
+    expand?: number;
+    civilize: number;
+    index?: number;
+    name?: string;
+    femaleName?: string;
+    female?: boolean;
+    color?: number;
+    cityStyle?: number;
+    plural?: string;
+    adjective?: string;
+  }[];
 }
 
 export const DOMAIN_GROUND = 0;

@@ -88,7 +88,7 @@ whether the loser still holds a city; with none it is destroyed: the DESTROYED m
 in the destroyed-civilizations table (turn, destroyer, name — the save's 338-byte block), every
 unit of the civilization disbanded (units it carried are set down), the slot taken out of play
 and, for the only human, the game over. A new civilization may then restart in the slot
-(0x00480fc9: an unused tribe, a fresh start site; not modelled). The engine runs the check after
+(0x00480fc9: an unused tribe, a fresh start site — docs/engine/new-game.md, "Restarts"). The engine runs the check after
 every civilization's turn and at the end of the turn (`eliminateCityless`), lagging the original
 by at most part of a turn; a civilization that never founded a city is left alone, as the
 original never asks about it, except when it has no unit either (INFERRED).

@@ -14,6 +14,13 @@ export function gameFromSave(save: SaveFile, rules: Rules, world: World): Game {
     barbarianActivity: save.parameters.barbarianActivity,
     firstDiscoveredBy: [...save.techs.firstDiscoveredBy],
     pollutionSquares: save.parameters.pollutionSquares,
+    ...(save.options.raw[1] !== undefined && (save.options.raw[1] & 1) !== 0
+      ? { noRestart: true }
+      : {}),
+    tribesPlayed: save.civs.reduce<number[]>((t, c, slot) => {
+      if (slot !== 0 && typeof c.tribeId === 'number') t[c.tribeId] = (t[c.tribeId] ?? 0) + 1;
+      return t;
+    }, []),
     ...(save.scenario
       ? {
           scenario: {

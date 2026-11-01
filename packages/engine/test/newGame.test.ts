@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { decodeText, parseRules } from '@mudbrick/formats';
 import { generateMap } from '../src/mapgen.js';
-import { newGame } from '../src/newGame.js';
+import { newGame, restartCivilization } from '../src/newGame.js';
 import { Rng } from '../src/rng.js';
 import type { EngineRules } from '../src/rules.js';
 import { OCEAN } from '../src/world.js';
@@ -140,5 +140,54 @@ describe.skipIf(!rules)('a new game', () => {
       expect(c.name.length).toBeGreaterThan(0);
     }
     expect(Array.isArray(notes)).toBe(true);
+  });
+});
+
+describe.skipIf(!rules)('a restart', () => {
+  it('seats a new tribe of the same colour with Settlers after a civilization dies', () => {
+    if (!rules) return;
+    const rng = new Rng(11);
+    const r = newGame(rules, rng, {
+      map: {
+        columns: 50,
+        rows: 80,
+        flatEarth: false,
+        landMass: 1,
+        landForm: 0,
+        climate: 0,
+        temperature: 0,
+        age: 1,
+      },
+      difficulty: 2,
+      civCount: 4,
+      humanTribe: 0,
+      leaders,
+      barbarianActivity: 1,
+    });
+    const victim = r.world.civs.find((c) => c.slot !== 0 && c.inPlay && !c.isHuman);
+    expect(victim).toBeDefined();
+    if (!victim) return;
+    const oldTribe = victim.tribe;
+    for (const u of [...r.world.units])
+      if (u.owner === victim.slot) r.world.units.splice(r.world.units.indexOf(u), 1);
+    const tribesPlayed: number[] = [];
+    for (const c of r.world.civs) if (c.tribe !== null) tribesPlayed[c.tribe] = 1;
+    const res = restartCivilization(r.world, rules, rng, victim.slot, leaders, {
+      turn: 60,
+      difficulty: 2,
+      noRestart: false,
+      isHuman: (s) => r.world.civs.find((c) => c.slot === s)?.isHuman ?? false,
+      humanTribe: 0,
+      knownBy: () => 0,
+      firstDiscoveredBy: Array<number>(100).fill(0),
+      tribesPlayed,
+    });
+    expect(res.restarted).toBe(true);
+    expect(victim.inPlay).toBe(true);
+    expect(victim.tribe).not.toBe(oldTribe);
+    expect(leaders[victim.tribe ?? -1]?.color).toBe(victim.slot);
+    const settlers = r.world.units.filter((u) => u.owner === victim.slot && u.type === 0);
+    expect(settlers.length).toBe(2); // after turn 20 with no human in sight: two Settlers
+    expect(victim.hadCity).toBe(false);
   });
 });

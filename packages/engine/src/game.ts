@@ -96,6 +96,7 @@ import { aiMoveUnits, type AiUnitEvent } from './aiUnits.js';
 import { releaseCitySite } from './fertility.js';
 import { civilizationScore, retirementStage, type ScoreBreakdown } from './score.js';
 import { advanceValue } from './aiResearch.js';
+import { restartCivilization, type NewGameLeader } from './newGame.js';
 import { inEnemyZoc } from './movement.js';
 import { payUpkeep, type UpkeepEvent } from './upkeep.js';
 import { CITY_CENTRE_INDEX, type City, type Civ, type World, type Production } from './world.js';
@@ -124,6 +125,10 @@ export interface GameState {
   turnsOfPeace?: number;
   /** Civilizations destroyed so far (header +25, INFERRED), for the conquest score bonus. */
   destroyedCivilizations?: number;
+  /** Options byte 1 bit 0: "don't restart if eliminated". */
+  noRestart?: boolean;
+  /** Times each tribe (leader index) has played, for restarts. */
+  tribesPlayed?: number[];
   /** The game has ended: who won and how; 'retirement' is the year 2020 (the best score wins). */
   gameOver?: { winner: number; reason: 'spaceship' | 'conquest' | 'retirement' };
 }
@@ -655,6 +660,7 @@ export class Game {
         : {}),
       ...(this.state.researchDearer ? { researchDearer: true } : {}),
       ...(this.state.researchCheaper ? { researchCheaper: true } : {}),
+      ...(this.state.noRestart ? { noRestart: true } : {}),
       isHuman: (s) => this.civ(s).isHuman,
       massThrust: this.rules.cosmic.massThrustParadigm ?? 75,
       knowsFusion: (s) => this.knows(s, 32),
@@ -898,8 +904,35 @@ export class Game {
           slot: civ.slot,
         },
       });
+      if (!civ.isHuman) out.push(...this.restart(civ.slot));
     }
     return out;
+  }
+
+  /** A new civilization in a destroyed computer player's slot (newGame.ts restartCivilization). */
+  restart(slot: number): TurnEvent[] {
+    const leaders = (this.rules.leaders ?? []).filter(
+      (l): l is NewGameLeader =>
+        l.index !== undefined && l.color !== undefined && l.plural !== undefined,
+    );
+    if (leaders.length === 0) return [];
+    const humanTribe = this.world.civs.find((c) => c.isHuman)?.tribe ?? -1;
+    this.state.tribesPlayed ??= [];
+    const r = restartCivilization(this.world, this.rules, this.rng, slot, leaders, {
+      turn: this.state.turn,
+      difficulty: this.state.difficulty,
+      noRestart: this.state.noRestart ?? false,
+      isHuman: (s) => this.world.civs.find((c) => c.slot === s)?.isHuman ?? false,
+      humanTribe,
+      knownBy: (a) => {
+        let m = 0;
+        for (const c of this.world.civs) if (c.slot !== 0 && c.knownAdvances[a]) m |= 1 << c.slot;
+        return m;
+      },
+      firstDiscoveredBy: this.state.firstDiscoveredBy,
+      tribesPlayed: this.state.tribesPlayed,
+    });
+    return r.notes.map((text) => ({ slot, event: { kind: 'spaceship' as const, text, slot } }));
   }
 
   /** Spaceship arrivals, dead civilizations and the end of the game (the yearly routine's tail). */

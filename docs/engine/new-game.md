@@ -53,3 +53,19 @@ researchable advance in place of the chooser).
 
 The multiplayer branches, scenario start locations, the first-turn popups, and the exact
 `rand()` stream (the C runtime's generator is not reproduced).
+
+## Restarts (VERIFIED, 0x00480fc9 after turn 0)
+
+The civilization-creation routine serves again when a computer player is destroyed, unless
+options byte 1 bit 0 ("don't restart if eliminated") is set or the turn is past
+`350 − 35 × difficulty`. The record is reset; a tribe of the slot's colour that has not played
+this game is chosen (any of the colour failing that; with none the slot stays empty); gender,
+names, rates and attitudes are set as at the start; of the advances a human knows, each whose
+first discoverer is not a human or that more than two civilizations know is granted with
+probability `difficulty / (difficulty + 1)`; a start site is sought with the turn's relaxations —
+only cities count for the distance, the land mass must have room less `turn / 16`, after turn 200
+no city of anyone on it, and no city's territory; then barbarian units within eight squares are
+disbanded, Settlers placed on the site, a second Settlers after turn 20 when no human has seen
+the square — with a Phalanx (unit type 3) after turn 40 when it can be built — and the 21 squares
+around are revealed. `newGame.ts` `restartCivilization`, run by the game right after the
+destruction; the save's option and the tribes already played come through `gameFromSave`.
