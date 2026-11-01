@@ -447,3 +447,7 @@ choosers and the combat evaluator remain to be read.
   from a random start, else any of the three.
 - **The warned-off flag** (0x0046732a) clears on the unit's turn in four unless it was warned in the
   turn just gone.
+
+- **Settlers joining cities (VERIFIED 0x004f44cc).** With no work to do, a settler with a home city on
+  a land mass holding more cities than an eighth of its rated squares joins a city it stands in
+  when under size 10, or goes to the nearest own city on the land mass that is.

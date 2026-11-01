@@ -7,6 +7,7 @@
  * cases — where a settler founds, how many defenders a city keeps, what caravans do — are
  * interim approximations until the objective and plan machinery is ported.
  */
+import { landmassStats } from './aiStrategy.js';
 import { addGoal, addObjective, removeGoals, type CivStrategy } from './aiStrategy.js';
 import { resolveAttack } from './attack.js';
 import { captureCity } from './conquest.js';
@@ -1228,6 +1229,28 @@ function settlersAct(
   }
   if (verdict.kind === 'step') {
     if (stepToward(world, rules, unit, verdict.target, ctx)) return true;
+  }
+  // VERIFIED 0x004f44cc: with no work, a settler on a land mass that has more cities than an
+  // eighth of its rated squares goes home to swell a city under 10.
+  const land = (world.landmass[world.index(unit.position.x, unit.position.y)] ?? 0) & 63;
+  const crowded =
+    (landmassStats(world, rules).rated[land] ?? 0) >> 3 < (ctx.strategy?.citiesOn[land] ?? 0);
+  if (rules.units[unit.type]?.role === 5 && crowded && unit.homeCity !== null && nearestOwn) {
+    if (nearestOwn.size < 10) {
+      if (ownDist === 0) {
+        nearestOwn.size += 1;
+        world.units.splice(world.units.indexOf(unit), 1);
+        return false;
+      }
+      if (
+        ((world.landmass[world.index(nearestOwn.position.x, nearestOwn.position.y)] ?? 0) & 63) ===
+        land
+      ) {
+        unit.order = ORDER.goTo;
+        unit.gotoTarget = { x: nearestOwn.position.x, y: nearestOwn.position.y };
+        return true;
+      }
+    }
   }
   const c = chooseDirection(world, rules, unit, ctx);
   if (!c || c.attack) {

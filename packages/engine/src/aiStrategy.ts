@@ -518,10 +518,9 @@ function assignObjectives(
           ctx.mainHuman !== null && world.isSeen(u.position.x, u.position.y, ctx.mainHuman);
         const fortress = world.hasFlag(u.position.x, u.position.y, SquareFlag.Fortress);
         if (!obsoleteKnown || seenByHuman || (!fortress && (!cityHere || stack.length !== 1))) {
-          // Disband into the nearest city's production box for half the cost.
-          const near = nearestCityAny(world, u.position);
-          if (near && near.city.owner === slot)
-            near.city.shieldsStored += Math.trunc((type.costRows * rules.cosmic.shieldBoxRows) / 2);
+          // VERIFIED 0x004ed2dd: only a city on the square gets the half cost.
+          if (cityHere)
+            cityHere.shieldsStored += Math.trunc((type.costRows * rules.cosmic.shieldBoxRows) / 2);
           world.units.splice(i, 1);
           events.push({ kind: 'ai-strategy', text: `${type.name} disbanded as obsolete` });
           continue;
@@ -540,6 +539,7 @@ function assignObjectives(
             text: `${type.name} upgraded to ${rules.units[successor]?.name ?? '?'}`,
           });
           u.type = successor;
+          u.veteran = false;
         }
       }
     }
