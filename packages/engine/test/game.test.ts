@@ -529,3 +529,20 @@ describe('computer sales (0x00474edb)', () => {
     expect(civ.treasury).toBeGreaterThan(before);
   });
 });
+
+describe('late catch-up for computers (0x004b3b24)', () => {
+  it('only from turn 200, at difficulty 2 or above, with a human strongest', () => {
+    const { world, game } = setup();
+    game.state.turn = 150;
+    game.state.difficulty = 3;
+    expect(game.rowsRelief()).toBe(0);
+    game.state.turn = 220;
+    const human = world.civs.find((c) => c.slot === 1);
+    if (!human) throw new Error('no civ');
+    human.isHuman = true;
+    human.advancesCount = 90;
+    expect(game.rowsRelief()).toBe(2);
+    game.state.difficulty = 1;
+    expect(game.rowsRelief()).toBe(0);
+  });
+});

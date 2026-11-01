@@ -6,7 +6,7 @@
  * AI choices are the caller's business. Decisions the original asks the player for (caravan
  * commodity, ghost-town confirmation) are taken from `ProductionChoices`.
  */
-import { boxRows } from './city.js';
+import { boxRows, distance } from './city.js';
 import { removeCity } from './fertility.js';
 import type { Rng } from './rng.js';
 import {
@@ -18,7 +18,7 @@ import {
   IMPROVEMENT,
   type EngineRules,
 } from './rules.js';
-import type { City, Production, Unit, World } from './world.js';
+import type { City, Point, Production, Unit, World } from './world.js';
 
 export const FIRST_WONDER = 39;
 export const SPACESHIP_PARTS = [35, 36, 37] as const;
@@ -30,6 +30,8 @@ export interface ProductionContext {
   government: number;
   isHuman: boolean;
   difficulty: number;
+  /** No peace or cease-fire with this civilization. */
+  atWarWith?: (slot: number) => boolean;
   /** Simplified combat OFF (options bit 4). */
   realisticCombat: boolean;
   cityCount: number;
@@ -254,7 +256,8 @@ export function processProduction(
   if (city.shieldsStored < c) return events;
 
   if (t.role === ROLE_SETTLE && city.size === 1) {
-    if (ctx.cityCount === 1) {
+    // VERIFIED 0x004b7e74: on the easiest level a size 1 city never gives up its last citizen.
+    if (ctx.cityCount === 1 || ctx.difficulty === 0) {
       events.push({ kind: 'waiting', reason: 'last-city-settlers' });
       return events;
     }
@@ -283,6 +286,9 @@ export function processProduction(
     gotoSteps: 0,
   };
   world.units.push(unit);
+
+  if (t.role === ROLE_DIPLOMACY && !ctx.isHuman)
+    placeAgent(world, rng, unit, ctx.difficulty, ctx.atWarWith);
 
   if (t.role === ROLE_TRADE) {
     if (ctx.isHuman) {
@@ -352,4 +358,62 @@ export function changeProduction(
 /** Convenience: the shield rows the production code uses for this owner. */
 export function shieldRowsFor(rules: EngineRules, isHuman: boolean, difficulty: number): number {
   return boxRows(rules, { isHuman, difficulty }, true);
+}
+
+/**
+ * A computer's new agent may start with the army (0x004b7e74): from among enemy cities (no peace or
+ * cease-fire) it finds the one whose nearest own land unit, on the same land mass, stands closest
+ * to three squares away. Within 3 of that mark, `rand % 10 <= difficulty` puts the agent on that
+ * unit's square: the harder the level, the more often agents arrive already at the front.
+ */
+function placeAgent(
+  world: World,
+  rng: Rng,
+  agent: Unit,
+  difficulty: number,
+  hostile?: (slot: number) => boolean,
+): void {
+  if (!hostile) return;
+  let best = 0x7fff;
+  let ties = 0;
+  let spot: Point | null = null;
+  const land = (p: Point) => world.landmass[world.index(p.x, p.y)];
+  for (const c of world.cities) {
+    if (c.owner === agent.owner || !hostile(c.owner)) continue;
+    let near: Unit | null = null;
+    let least = 1 << 30;
+    for (const u of world.units) {
+      if (u.owner !== agent.owner || u === agent) continue;
+      const d = distance(world, c.position, u.position);
+      if (d < least) {
+        least = d;
+        near = u;
+      }
+    }
+    if (!near) continue;
+    let d = Math.abs(least - 3);
+    if (c.techStolen === true && d < 4) d = 3;
+    if (d > best) continue;
+    if (d === best) {
+      let skip: boolean;
+      if (ties < 1) {
+        skip = false;
+        ties += 1;
+      } else {
+        ties += 2;
+        skip = rng.nextInt(ties) !== 0;
+      }
+      if (skip) continue;
+    }
+    if (!world.isLand(near.position.x, near.position.y)) continue;
+    if (land(c.position) !== land(near.position)) continue;
+    if (best > d) {
+      ties = 1;
+      best = d;
+    }
+    spot = near.position;
+  }
+  if (spot && best < 4 && rng.nextInt(10) <= difficulty) {
+    agent.position = { x: spot.x, y: spot.y };
+  }
 }

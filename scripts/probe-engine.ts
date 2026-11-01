@@ -69,7 +69,7 @@ const r = newGame(rules, rng, {
   leaders: parsed.leaders,
   barbarianActivity: 1,
 });
-for (const c of r.world.civs) c.isHuman = false;
+// The human stays, idle. Removing it changes computer behaviour: unit totals rose by half.
 const game = new Game(r.world, rules, rng, r.state);
 let t = 0;
 for (const target of turns) {

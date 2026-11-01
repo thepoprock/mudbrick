@@ -14,7 +14,7 @@ import { captureCity } from './conquest.js';
 import { distance, gridDistance } from './city.js';
 import { combatOdds, hitPoints, maxHitPoints } from './combat.js';
 import { chooseDefender } from './defender.js';
-import { attitude, hasTreaty, TREATY } from './diplomacy.js';
+import { adjustAttitude, attitude, hasTreaty, treatiesOf, TREATY } from './diplomacy.js';
 import { landValue } from './fertility.js';
 import { canFoundCity, foundCity } from './founding.js';
 import {
@@ -281,6 +281,25 @@ export function chooseDirection(
   const nearestAnyDist = nearestAny ? distance(world, here, nearestAny.position) : 99;
   const nearestOwn = nearestCity(world, here, (c) => c.owner === me);
   const nearestIsForeign = nearestAny !== null && nearestAny !== nearestOwn;
+  // VERIFIED 0x004f44cc: a treaty partner's unit beside ours in our own country sours relations;
+  // above Prince a stronger human may provoke a computer into planning a break.
+  if (nearestOwn && !nearestIsForeign) {
+    const near = foreignNeighbour(world, here, me);
+    if (near !== null && near !== 0 && hasTreaty(world, me, near, TREATY.peace)) {
+      adjustAttitude(world, me, near, 1);
+      const human = world.civs.find((c) => c.slot === near)?.isHuman === true;
+      if (
+        human &&
+        ctx.difficulty > 2 &&
+        attitude(world, me, near) > 60 &&
+        (ctx.rankOf?.(me) ?? 0) < (ctx.rankOf?.(near) ?? 0) &&
+        ctx.rng.nextInt(4) === 0
+      ) {
+        const civ = world.civs.find((c) => c.slot === me);
+        if (civ) treatiesOf(civ)[near] = (treatiesOf(civ)[near] ?? 0) | TREATY.strain;
+      }
+    }
+  }
   // VERIFIED: exploration terms apply outside foreign zones of control (and, in the original,
   // when the unit has no objective — objectives are not modelled yet).
   const exploring =
@@ -1298,4 +1317,15 @@ function caravanAct(
   }
   sentry(unit);
   return false;
+}
+
+/** The owner of a foreign, non-allied unit beside this square (0x0055629a), or null. */
+function foreignNeighbour(world: World, p: Point, me: number): number | null {
+  for (const n of world.neighbours(p.x, p.y)) {
+    if (!n) continue;
+    const owner = world.unitsAt(n.x, n.y)[0]?.owner;
+    if (owner !== undefined && owner !== me && !hasTreaty(world, me, owner, TREATY.alliance))
+      return owner;
+  }
+  return null;
 }

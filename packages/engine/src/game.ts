@@ -1010,6 +1010,29 @@ export class Game {
 
   private wonderTold = new Set<string>();
 
+  /**
+   * A deliberate catch-up (0x004b3b24): from turn 200 at difficulty 2 or above, while a human is
+   * the strongest, computers' shield boxes shrink by up to 2 rows. The Manhattan Project with
+   * Rocketry among the computers, or Apollo with Space Flight, takes rows back unless humans
+   * lack the advances too.
+   */
+  rowsRelief(): number {
+    if (this.state.turn < 200 || this.state.difficulty < 2) return 0;
+    const humans = this.world.civs.filter((c) => c.isHuman && c.slot !== 0);
+    if (!humans.some((c) => this.powerRank(c.slot) === 7)) return 0;
+    const human = (a: number) => humans.some((c) => c.knownAdvances[a] === true);
+    const other = (a: number) =>
+      this.world.civs.some((c) => !c.isHuman && c.knownAdvances[a] === true);
+    let k = 2;
+    if (this.wonderCity(IMPROVEMENT.manhattanProject) !== null && other(73)) {
+      k = !human(73) || !human(58) ? 0 : 1;
+    }
+    if (this.wonderCity(IMPROVEMENT.apolloProgram) !== null && other(76)) {
+      k -= human(76) ? 1 : 2;
+    }
+    return Math.max(0, Math.min(2, k));
+  }
+
   /** A civilization's military strength, summed in the strategy pass (0x005d132e). */
   private civStrength(slot: number): number {
     return this.civ(slot).strategy?.strengthSum ?? 0;
@@ -1175,6 +1198,7 @@ export class Game {
     const slot = city.owner;
     const isCapital = city.improvements[IMPROVEMENT.palace] === true;
     return {
+      rowsRelief: this.rowsRelief(),
       government: civ.government,
       difficulty: this.state.difficulty,
       isHuman: civ.isHuman,
@@ -1221,6 +1245,7 @@ export class Game {
       wonderCity: (i) => this.wonderCity(i),
       canBuildSpaceship: this.wonderCity(IMPROVEMENT.apolloProgram) !== null && !hasLaunched(civ),
       nextShipKind: (s, kind) => aiNextPartKind(this.world, this.civ(s), kind, this.shipContext()),
+      atWarWith: (o) => !hasTreaty(this.world, civ.slot, o, TREATY.ceaseFire | TREATY.peace),
       humanReadyForWonder: (w) =>
         this.world.cities.some((c) => {
           if (!this.civ(c.owner).isHuman) return false;
@@ -1240,7 +1265,7 @@ export class Game {
       },
       shieldRows: boxRows(
         this.rules,
-        { isHuman: civ.isHuman, difficulty: this.state.difficulty },
+        { isHuman: civ.isHuman, difficulty: this.state.difficulty, rowsRelief: this.rowsRelief() },
         true,
       ),
     };
@@ -1351,6 +1376,14 @@ export class Game {
       push(e);
       if (e.kind === 'capitalization') civ.treasury += e.gold;
       if (e.kind === 'wonder-effect') this.wonderEffect(civ, e.effect);
+      if (
+        e.kind === 'built-unit' &&
+        (this.rules.units[e.unit.type]?.attack ?? 0) > 98 &&
+        this.world.units.filter((u) => u.owner === civ.slot && u.type === e.unit.type).length === 1
+      ) {
+        // VERIFIED 0x004b7e74: a first nuclear weapon opens everyone's door again.
+        for (const o of this.world.civs) lastWarTurnsOf(o)[civ.slot] = -1;
+      }
       if (e.kind === 'palace-moved' && !civ.isHuman)
         this.tellHumans(`The ${civ.name} capital moved to ${city.name}.`); // MOVECAPITAL
       if (e.kind === 'ghost-town') return out;
@@ -1466,7 +1499,11 @@ export class Game {
         ownsWonder: (i) => this.ownsWonder(slot, i),
         shieldRows: boxRows(
           this.rules,
-          { isHuman: civ.isHuman, difficulty: this.state.difficulty },
+          {
+            isHuman: civ.isHuman,
+            difficulty: this.state.difficulty,
+            rowsRelief: this.rowsRelief(),
+          },
           true,
         ),
       })) {

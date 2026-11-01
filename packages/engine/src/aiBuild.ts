@@ -619,7 +619,15 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
   const hereLm = lmOf(city);
   const sameWork = (c: City) =>
     c.production.kind === city.production.kind && c.production.index === city.production.index;
-  const shieldRows = boxRows(rules, { isHuman: civ.isHuman, difficulty: f.difficulty }, true);
+  const shieldRows = boxRows(
+    rules,
+    {
+      isHuman: civ.isHuman,
+      difficulty: f.difficulty,
+      ...(env.ctx.rowsRelief ? { rowsRelief: env.ctx.rowsRelief } : {}),
+    },
+    true,
+  );
   let othersBuildingWonders = 0;
   const buildersOf = new Array<number>(28).fill(0);
   let betterOnSameWork = 0;
@@ -660,6 +668,20 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
   if (wonderAllowed) {
     for (let w = 39; w < 67; w++) {
       if (!env.canBuildImprovement(w) || env.wonderCity(w) !== null) continue;
+      // VERIFIED 0x00474edb: on the two easiest levels the computer starts no wonder before a
+      // human has its advance, nor races a human already building it; and anyone holding
+      // Rocketry alone leaves wonders other than the Manhattan Project for later.
+      const humanKnows = (a: number) => world.civs.some((c) => c.isHuman && c.knownAdvances[a]);
+      const preq = advanceIndex(rules.improvements[w]?.preq);
+      if (f.difficulty < 2 && preq !== null && !humanKnows(preq)) continue;
+      if (w !== IMPROVEMENT.manhattanProject) {
+        const racing = world.cities.some((c) => {
+          const human = world.civs.find((o) => o.slot === c.owner)?.isHuman === true;
+          return human && c.production.kind === 'improvement' && c.production.index === w;
+        });
+        if (f.difficulty < 2 && racing) continue;
+        if (knows(73) && !humanKnows(73)) continue;
+      }
       let n = Math.max(1, wondersOwned + wondersHere + 8 - Math.trunc(civ.treasury / 200));
       // VERIFIED 0x00474edb: wonders of this era already held count against another, more so past
       // the human who has fewest; behind the main human, less.

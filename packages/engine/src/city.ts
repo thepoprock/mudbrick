@@ -20,6 +20,8 @@ import { CITY_CENTRE_INDEX, OCEAN, SquareFlag, type City, type Unit, type World 
 
 /** Facts about the owning civilization and the game that the city rules need. */
 export interface CityContext {
+  /** Rows off a computer's shield box when a human leads late on (0x004b3b24). */
+  rowsRelief?: number;
   government: number;
   difficulty: number;
   isHuman: boolean;
@@ -66,7 +68,7 @@ export function settlersFood(rules: EngineRules, government: number): number {
 /** Rows per food-box step: @COSMIC[3] for humans, a difficulty ladder for the AI (0x004b3924). */
 export function boxRows(
   rules: EngineRules,
-  ctx: { isHuman: boolean; difficulty: number },
+  ctx: { isHuman: boolean; difficulty: number; rowsRelief?: number },
   shields: boolean,
 ): number {
   const base = shields ? rules.cosmic.shieldBoxRows : rules.cosmic.foodBoxRows;
@@ -74,6 +76,7 @@ export function boxRows(
   let k = 13 - ctx.difficulty;
   if (ctx.difficulty < 3) k += 1;
   if (ctx.difficulty === 0) k += 1;
+  if (shields) k -= ctx.rowsRelief ?? 0;
   if (base !== 10) {
     k = Math.floor((base * k) / 10);
     if (k & 1) k += 1;

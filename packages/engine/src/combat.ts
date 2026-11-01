@@ -282,6 +282,18 @@ function prepareSides(
       tag(attack, 'Great Wall vs barbarians', 0.5);
     }
   }
+  if (attacker.owner !== 0) {
+    // VERIFIED 0x0052d472: the easy levels favour the human outright.
+    const difficulty = ctx.difficulty ?? 2;
+    if (difficulty < 2 && ctx.defenderIsHuman) {
+      a >>= 1;
+      tag(attack, 'easy level, attacking a human', 0.5);
+    }
+    if (difficulty === 0 && world.civs.find((c) => c.slot === attacker.owner)?.isHuman) {
+      a <<= 1;
+      tag(attack, 'easiest level, human attacking', 2);
+    }
+  }
   if (defender.owner === 0) {
     // VERIFIED 0x0052d472: a Legion only while no human knows advance 39.
     const humanKnows = world.civs.some((c) => c.isHuman && c.knownAdvances[39] === true);
