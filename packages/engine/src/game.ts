@@ -79,6 +79,7 @@ import {
   anarchyTurn,
   cityGovernmentScores,
   civGovernmentScores,
+  governmentScoresOf,
   resetGovernmentScores,
   type GovernmentEvent,
   startRevolution,
@@ -522,24 +523,35 @@ export class Game {
     })) {
       push(e);
     }
-    // Government preference scores (0x004bc513): the cities' share.
+    // Government preference scores: the city turn's one scoring pass (the original's
+    // 0x005b8648 switch around its recompute). The yields, waste, trade corruption and trade
+    // split feed the scores as they run; then the city's own share (0x004bc513).
     if (this.world.cities.includes(city)) {
-      const tt = totals();
       const leader = this.rules.leaders?.[civ.tribe ?? -1];
-      const settlersFood =
-        civ.government <= GOVERNMENT.monarchy
-          ? this.rules.cosmic.settlersFoodEarlyGovt
-          : this.rules.cosmic.settlersFoodLateGovt;
+      const sctx: CityContext = {
+        ...ctx,
+        governmentScores: governmentScoresOf(civ),
+        civilize: leader?.civilize ?? 0,
+      };
+      const raw = rawYields(this.world, this.rules, city, sctx);
+      const support = unitSupport(this.world, this.rules, city, sctx, homed());
+      const shields = shieldTotals(this.rules, city, sctx, raw.shields, support.shields);
+      const ownNet = raw.trade - corruption(this.rules, city, ctx, raw.trade, false);
+      tradeSplit(
+        this.rules,
+        city,
+        sctx,
+        raw.trade + routeIncomeTotal(this.world, this.rules, city, ownNet),
+      );
       cityGovernmentScores(
         this.rules,
         civ,
         city,
         {
-          foodProduced: tt.raw.food,
-          foodEaten:
-            city.size * this.rules.cosmic.foodPerCitizen + settlers().length * settlersFood,
-          unitsSupported: homed().length,
-          unitsAway: tt.support.abroad,
+          shieldsProduced: shields.produced,
+          shieldSupport: support.shields,
+          unitsSupported: support.supported,
+          unitsAway: support.abroad,
         },
         (i) => this.ownsWonder(slot, i),
         { attack: leader?.attack ?? 0, civilize: leader?.civilize ?? 0 },

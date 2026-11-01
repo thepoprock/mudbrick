@@ -95,14 +95,33 @@ city on a defend-plan land mass with units in it and no enemy adjacent), and mak
 and Democracy need their advance (54, 15, 31, 71, 21 in the shipped rules) or the Statue of
 Liberty; Fundamentalism also needs the rules to allow it.
 
-**Scores (7 × i16 at +980, VERIFIED):** reset at the start of the civilization's turn. Each city
-adds (0x004bc513): a food shortfall × 5 and its unit support beyond Monarchy's free units (up to
-the city size) to score 0, the "current state"; every government loses the support it would have
-to pay (Despotism beyond the city size, Monarchy and Communism beyond their free units,
-Fundamentalism beyond its, the Republic and Democracy everything); unless Shakespeare's Theatre
-is here, Democracy loses `(2 − suffrage) × (attack personality + units away + 1)` and the
-Republic `(attack personality + units away) × (1 − suffrage)`, each times `7 − civilize` (5 with
-a Marketplace, −1 with a Bank, −1 with a Temple and a Cathedral or Michelangelo's), where
+**Scores (7 × i16 at +980, VERIFIED):** reset at the start of the civilization's turn and fed
+during each city's turn by one scoring pass — the switch at 0x005b8648 is set around the city
+turn's recompute (also while founding and capturing), and while it is set three routines add to
+the scores as they run:
+
+- the square yield (0x004b4102) takes a point from Despotism for every worked square making
+  more than 2 of anything (not while celebrating) and gives the Republic and Democracy a point
+  for every worked square with trade;
+- corruption (0x004b530c, its fourth argument: the waste call and the trade call that includes
+  the routes) takes from Despotism, Monarchy and the Republic what each would lose at the city's
+  distance from the capital (16 at most for waste; a human's difficulty added below Monarchy),
+  and from Communism its cosmic palace distance at the current government's factor
+  (0x004b52bb: 4, +1 past Anarchy, Despotism, Monarchy and Fundamentalism) — no courthouse
+  halving, nothing against Fundamentalism or Democracy;
+- the trade split (0x004b5c68) gives Fundamentalism half the luxuries, takes
+  `(civilize + 3) / 4` of the science, and adds `(Marketplace + Bank + Stock Exchange + 2) ×
+tithe / 2`.
+
+Then the city's own share (0x004bc513): a shield shortfall (support beyond what the city makes
+after waste) × 5 and its unit support beyond Monarchy's free units (up to the city size) to
+score 0, the "current state"; every government loses the support it would have to pay
+(Despotism beyond the city size, Monarchy and Communism beyond their free units,
+Fundamentalism beyond its, the Republic and Democracy everything), counting homed units of
+roles 0–5; unless Shakespeare's Theatre is here, Democracy loses
+`(2 − suffrage) × (attack personality + units away + 1)` and the Republic
+`(attack personality + units away) × (1 − suffrage)`, each times `7 − civilize` (5 with a
+Marketplace, −1 with a Bank, −1 with a Temple and a Cathedral or Michelangelo's), where
 suffrage means Women's Suffrage or a Police Station. The civilization turn (0x00467c61) then
 adds twice score 1 to score 0, and for a computer player: Democracy gains for every diplomat and
 spy the leading human fields when the human is a Fundamentalist and the player could be a
@@ -110,6 +129,13 @@ Democracy (the +0x1c count is INFERRED 0), +10 when poorer than the human; both 
 Democracy drop to 0 for an aggressive player behind the human in advances, are cut to three
 quarters for timid personalities, halved or zeroed by the advance gap rule, halved after a
 spaceship launch at Emperor and above, and zeroed under bloodlust with no science.
+
+Not ported (INFERRED, bit meaning unknown; the bit is clear in an ordinary game): when options
+byte 8 bit 0 is set, the picker sets Democracy to −2 and the Republic to −1 for a computer
+player 7 or 9 advances behind the human, and the support routine (0x004ba99a) vetoes both with
+−999 when a human leads in advances. Also open: the same support routine disbands, every eighth
+turn per unit, the farthest land unit of a computer player's rioting city under the Republic or
+Democracy.
 
 **The pick (0x0051278c):** every eighth turn (`(turn + slot) & 7 == 0`, from the strategic
 layer) and after a sneak attack by a senate government (ceiling 5, or 4 two times in three) the

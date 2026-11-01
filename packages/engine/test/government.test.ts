@@ -83,13 +83,13 @@ describe('governments', () => {
       rules,
       c,
       city(6),
-      { foodProduced: 10, foodEaten: 12, unitsSupported: 5, unitsAway: 2 },
+      { shieldsProduced: 10, shieldSupport: 12, unitsSupported: 5, unitsAway: 2 },
       () => false,
       { attack: 1, civilize: 0 },
       false,
     );
     const s = governmentScoresOf(c);
-    expect(s[0]).toBe(2 * 5 + 2); // food shortfall × 5, support beyond Monarchy's free units
+    expect(s[0]).toBe(2 * 5 + 2); // shield shortfall × 5, support beyond Monarchy's free units
     expect(s[1]).toBe(0); // Despotism supports up to the city size
     expect(s[2]).toBe(-2); // Monarchy: 5 − 3
     expect(s[4]).toBe(0); // Fundamentalism: 10 free

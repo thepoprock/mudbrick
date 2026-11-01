@@ -483,3 +483,35 @@ describe('support, growth and boxes (verified)', () => {
     expect(processGrowth(rules, tiny, ctx(), []).destroyed).toBe(true);
   });
 });
+
+describe('government scoring pass (verified)', () => {
+  it('yields, corruption and the trade split feed the scores while the switch is on', () => {
+    const w = grassWorld();
+    const c = city(w, { worked: (1 << CITY_CENTRE_INDEX) | 1 });
+    const scores = new Int16Array(7);
+    const sctx = ctx({
+      government: GOVERNMENT.despotism,
+      governmentScores: scores,
+      civilize: 1,
+      distanceToCapital: 10,
+    });
+    // Centre food 3 costs Despotism a point; the centre's one trade gives the Republic and
+    // Democracy a point each; the plain neighbour makes nothing above 2 and no trade.
+    rawYields(w, rules, c, sctx);
+    expect(scores[1]).toBe(-1);
+    expect(scores[5]).toBe(1);
+    expect(scores[6]).toBe(1);
+    scores.fill(0);
+    // 20 trade ten squares from the capital, a human at difficulty 2: Despotism pays at
+    // distance 12 and factor 5 (7), Monarchy at 10 and 6 (5), the Republic at 10 and 8 (3),
+    // Communism its palace distance at Despotism's factor; nothing against the rest.
+    corruption(rules, c, sctx, 20, false, true);
+    const communism = 0 - Math.trunc((rules.cosmic.communismPalaceDistance * 20 * 3) / (5 * 20));
+    expect(Array.from(scores)).toEqual([0, -7, -5, communism, 0, -3, 0]);
+    scores.fill(0);
+    // Fundamentalism's terms on 20 uncorrupted trade at rates 5/3: luxuries 4 → +2, science
+    // 10 → −(1 + 3) × 10 / 4 = −10, no buildings so no tithe.
+    tradeSplit(rules, c, ctx({ governmentScores: scores, civilize: 1, distanceToCapital: 0 }), 20);
+    expect(scores[4]).toBe(2 - 10);
+  });
+});

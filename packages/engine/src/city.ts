@@ -39,6 +39,14 @@ export interface CityContext {
   doubleProduction?: boolean;
   /** Options word bit 4 (simplified combat off) — unused here, kept for parity. */
   damageMatters?: boolean;
+  /**
+   * Set only for the city turn's one scoring pass (the original's 0x005b8648 switch around its
+   * recompute): the civilization's seven government preference scores, which the yield,
+   * corruption and trade-split routines feed as they run. docs/engine/diplomacy.md.
+   */
+  governmentScores?: Int16Array;
+  /** The leader's civilize trait, for Fundamentalism's science term in the scoring pass. */
+  civilize?: number;
 }
 
 export type YieldKind = 0 | 1 | 2; // food, shields, trade
@@ -144,8 +152,18 @@ export function squareYield(
     if (city.improvements[IMPROVEMENT.kingRichards]) v += 1;
     if (rail || (isCentre && ctx.knows(ADVANCE.railroad))) v = halfMore(v);
   }
-  if (v > 2 && !city.celebrating && ctx.government < GOVERNMENT.monarchy) v -= 1;
+  const s = ctx.governmentScores;
+  if (v > 2 && !city.celebrating) {
+    // VERIFIED (0x004b4102): a point Despotism would lose counts against it in the scoring pass.
+    if (s) s[1] = (s[1] ?? 0) - 1;
+    if (ctx.government < GOVERNMENT.monarchy) v -= 1;
+  }
   if (v !== 0 && kind === TRADE) {
+    // VERIFIED: a square the Republic and Democracy would add a point to counts for both.
+    if (s) {
+      s[5] = (s[5] ?? 0) + 1;
+      s[6] = (s[6] ?? 0) + 1;
+    }
     const threshold = city.celebrating ? GOVERNMENT.monarchy : GOVERNMENT.republic;
     if (ctx.government >= threshold) v += 1;
   }
@@ -180,20 +198,63 @@ export function rawYields(world: World, rules: EngineRules, city: City, ctx: Cit
   return y;
 }
 
-/** Corruption of `amount` trade (or shields when `forWaste`) — 0x004b530c. */
+/** The corruption factor of government g (0x004b52bb): 4, +1 past Anarchy, +1 past Despotism,
+ * +1 past Monarchy, +1 past Fundamentalism. */
+export function corruptionFactor(g: number): number {
+  return 4 + (g > 0 ? 1 : 0) + (g > 1 ? 1 : 0) + (g > 2 ? 1 : 0) + (g > 4 ? 1 : 0);
+}
+
+/**
+ * VERIFIED (0x004b530c with its fourth argument set: the waste call and the trade call that
+ * includes the routes): what each government would lose to corruption counts against it.
+ * Communism's share uses the cosmic palace distance at the current government's factor;
+ * Fundamentalism is skipped; Despotism, Monarchy and the Republic use the distance to the
+ * capital (16 at most for waste, raised by the difficulty for a human below Monarchy) — no
+ * courthouse halving and no cap at the amount.
+ */
+function scoreCorruption(
+  rules: EngineRules,
+  city: City,
+  ctx: CityContext,
+  amount: number,
+  forWaste: boolean,
+): void {
+  const s = ctx.governmentScores;
+  if (!s) return;
+  const bump = city.celebrating ? 1 : 0;
+  const current = ctx.government + bump;
+  let base = ctx.distanceToCapital;
+  if (forWaste && base > 16) base = 16;
+  s[3] =
+    (s[3] ?? 0) -
+    Math.trunc(
+      (rules.cosmic.communismPalaceDistance * amount * 3) / (corruptionFactor(current) * 20),
+    );
+  for (const g of [1, 2, 5]) {
+    const gg = g + bump;
+    let d = base;
+    if (gg < 2 && d !== 0 && ctx.isHuman) d = Math.min(32, Math.max(0, d + ctx.difficulty));
+    s[g] = (s[g] ?? 0) - Math.trunc((amount * d * 3) / (corruptionFactor(gg) * 20));
+  }
+}
+
+/** Corruption of `amount` trade (or shields when `forWaste`) — 0x004b530c. `scoring` is the
+ * original's fourth argument: in the scoring pass this call also feeds the government scores. */
 export function corruption(
   rules: EngineRules,
   city: City,
   ctx: CityContext,
   amount: number,
   forWaste: boolean,
+  scoring = false,
 ): number {
   if (amount <= 0) return 0;
+  if (scoring) scoreCorruption(rules, city, ctx, amount, forWaste);
   if (ctx.government === GOVERNMENT.democracy || ctx.government === GOVERNMENT.fundamentalism)
     return 0;
   let g = ctx.government;
   if (city.celebrating) g += 1;
-  const factor = 4 + (g > 0 ? 1 : 0) + (g > 1 ? 1 : 0) + (g > 2 ? 1 : 0) + (g > 4 ? 1 : 0);
+  const factor = corruptionFactor(g);
   let dist: number;
   if (ctx.government === GOVERNMENT.communism) {
     dist = rules.cosmic.communismPalaceDistance;
@@ -251,7 +312,7 @@ export function shieldTotals(
   if (p > f) p = f;
   let produced = base + ((base * p) >> 2) + ((base * f) >> 2);
   let waste = Math.floor(
-    ((3 - ctx.connectedToCapital) * corruption(rules, city, ctx, produced - support, true)) /
+    ((3 - ctx.connectedToCapital) * corruption(rules, city, ctx, produced - support, true, true)) /
       3 /
       ((ctx.government >> 1) + 1),
   );
@@ -283,7 +344,7 @@ export function tradeSplit(
   ctx: CityContext,
   trade: number,
 ): TradeSplit {
-  const corrupt = corruption(rules, city, ctx, trade, false);
+  const corrupt = corruption(rules, city, ctx, trade, false, true);
   const net = trade - corrupt;
   let sci = ctx.scienceRate;
   if (
@@ -296,6 +357,13 @@ export function tradeSplit(
   let lux = clamp(Math.floor(((10 - (ctx.scienceRate + ctx.taxRate)) * net + 4) / 10), 0, net);
   let science = clamp(Math.floor((sci * net + 4) / 10), 0, net - lux);
   let tax = net - (science + lux);
+  // VERIFIED (0x004b5c68): in the scoring pass Fundamentalism gains half the luxuries and
+  // loses (civilize + 3) / 4 of the science, before the computer moves its luxuries over.
+  const s = ctx.governmentScores;
+  if (s) {
+    s[4] = (s[4] ?? 0) + Math.trunc(lux / 2);
+    s[4] = (s[4] ?? 0) - Math.trunc((((ctx.civilize ?? 0) + 3) * science) / 4);
+  }
   if (!ctx.isHuman && ctx.government === GOVERNMENT.fundamentalism) {
     science += lux;
     lux = 0;
@@ -314,6 +382,8 @@ export function tradeSplit(
     (imp[IMPROVEMENT.stockExchange] ? 1 : 0);
   lux += (market * lux) >> 1;
   tax += (market * tax) >> 1;
+  // VERIFIED: and (market buildings + 2) × the tithe / 2, whatever the government is.
+  if (s) s[4] = (s[4] ?? 0) + (((market + 2) * contentValueOfBuildings(city, ctx)) >> 1);
   const labs =
     (imp[IMPROVEMENT.library] ? 1 : 0) +
     (imp[IMPROVEMENT.university] ? 1 : 0) +
@@ -485,7 +555,7 @@ export function unitSupport(
   city: City,
   ctx: CityContext,
   units: Unit[],
-): { shields: number; settlers: number; abroad: number; inCity: number } {
+): { shields: number; settlers: number; abroad: number; inCity: number; supported: number } {
   let count = 0;
   let shields = 0;
   let settlers = 0;
@@ -534,7 +604,7 @@ export function unitSupport(
       }
     }
   }
-  return { shields, settlers, abroad, inCity };
+  return { shields, settlers, abroad, inCity, supported: count };
 }
 
 /** Distance in squares as the original measures it: max(|dx|/2 … ) — the standard isometric metric. */

@@ -36,6 +36,7 @@ Coming next: menus (Menu.txt), `EVNT` scenario events, the images stored inside 
 
 - [engine/map-generation.md](engine/map-generation.md) — the random map maker, pass by pass
 - [engine/new-game.md](engine/new-game.md) — civilization birth, start sites, start balancing
+- [engine/calibration.md](engine/calibration.md) — measuring the engine against the original running under Wine
 - [engine/spaceship.md](engine/spaceship.md) — parts, limits, evaluation, launch, arrival, the end of the game
 - [engine/espionage.md](engine/espionage.md) — diplomats and spies: missions, the agent's fate, incidents, bribes
 - [engine/rules-trade.md](engine/rules-trade.md) — caravans, trade routes, their bonus and income

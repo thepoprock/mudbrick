@@ -56,16 +56,18 @@ export function resetGovernmentScores(civ: Civ): void {
 }
 
 export interface CityGovernmentFacts {
-  foodProduced: number;
-  foodEaten: number;
-  /** Units the city supports (INFERRED: the original's per-city support count). */
+  /** Shields the city makes after waste (VERIFIED: the original compares these, not food). */
+  shieldsProduced: number;
+  /** Shields its units cost. */
+  shieldSupport: number;
+  /** Units the city supports (VERIFIED: units of roles 0–5 homed here). */
   unitsSupported: number;
   /** Military units away from home that cause unhappiness. */
   unitsAway: number;
 }
 
 /**
- * Each city adds to the scores (0x004bc513): a food shortfall and support beyond Monarchy's
+ * Each city adds to the scores (0x004bc513): a shield shortfall and support beyond Monarchy's
  * free units count against the current state (score 0); each government loses the support it
  * would have to pay; Republic and Democracy lose war weariness scaled by the civilization's
  * civilize personality and the city's happiness buildings.
@@ -80,8 +82,8 @@ export function cityGovernmentScores(
   shakespearesHere: boolean,
 ): void {
   const s = governmentScoresOf(civ);
-  if (facts.foodProduced < facts.foodEaten)
-    s[0] = (s[0] ?? 0) + (facts.foodEaten - facts.foodProduced) * 5;
+  if (facts.shieldsProduced < facts.shieldSupport)
+    s[0] = (s[0] ?? 0) + (facts.shieldSupport - facts.shieldsProduced) * 5;
   s[0] =
     (s[0] ?? 0) +
     Math.max(0, Math.min(city.size, facts.unitsSupported - rules.cosmic.monarchyFreeUnits));
