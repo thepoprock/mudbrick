@@ -241,7 +241,7 @@ clamp unhappy to size; the excess is remembered and re-applied as buildings make
 
 Then in order, each step recorded for the city screen:
 
-1. Luxuries: every 2 luxuries make one citizen one step happier (content → happy, unhappy → content).
+1. Luxuries (VERIFIED 0x004b6359 with the normalisation 0x004b5aa3): the happy count is set outright to half the luxuries; the normalisation then clamps both counts to the city size and, while happy + unhappy exceed the workers, turns one happy and one unhappy into content (an unhappy beyond the size is dropped first). So luxuries never calm an unhappy citizen directly: two luxuries make a content citizen happy, and only a happy citizen paired with an unhappy one makes two content. Checked against the original's Civil War scenario at Deity (Washington: 3 happy, 2 unhappy).
 2. Colosseum (14): −3 unhappy, −4 with Electronics. Cathedral (11) or Michelangelo's (49) once
    Monotheism is known: −3 unhappy, −1 of that without Theology, −1 with Communism (the advance).
    Temple (4): −1 with Ceremonial Burial, −1 more with Mysticism, doubled by the Oracle (44).

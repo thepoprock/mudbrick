@@ -480,16 +480,12 @@ export function mood(rules: EngineRules, city: City, ctx: CityContext, inputs: M
     }
   };
 
-  // Stage 0: luxuries — two per step, unhappy → content first, then content → happy.
-  let steps = inputs.luxuries >> 1;
-  while (steps > 0 && unhappy > 0) {
-    unhappy -= 1;
-    steps -= 1;
-  }
-  while (steps > 0 && happy + unhappy < workers) {
-    happy += 1;
-    steps -= 1;
-  }
+  // Stage 0 (VERIFIED 0x004b6359, 0x004b5aa3): the base is normalised, then the happy count is
+  // set outright to half the luxuries, and the normalisation pairs a happy with an unhappy
+  // citizen into two content ones while the faces outnumber the workers. (Checked against
+  // the original's Civil War scenario at Deity: Washington 3 happy, 2 unhappy.)
+  clampAll();
+  happy = inputs.luxuries >> 1;
   clampAll();
 
   // Stage 1: buildings.

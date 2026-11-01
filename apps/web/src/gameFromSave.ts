@@ -14,6 +14,8 @@ export function gameFromSave(save: SaveFile, rules: Rules, world: World): Game {
     barbarianActivity: save.parameters.barbarianActivity,
     firstDiscoveredBy: [...save.techs.firstDiscoveredBy],
     pollutionSquares: save.parameters.pollutionSquares,
+    calendarLockTurn: save.parameters.calendarLockTurn,
+    turnsOfPeace: save.parameters.turnsOfPeace,
     ...(save.options.raw[1] !== undefined && (save.options.raw[1] & 1) !== 0
       ? { noRestart: true }
       : {}),
@@ -29,6 +31,8 @@ export function gameFromSave(save: SaveFile, rules: Rules, world: World): Game {
           scenario: {
             techParadigm: save.scenario.techParadigm,
             fixedCost: save.scenario.yearsPerTurn !== 0,
+            yearsPerTurn: save.scenario.yearsPerTurn,
+            startingYear: save.scenario.startingYear,
             endTurn: save.scenario.maxTurns,
             objectiveVictory: save.scenario.objectiveVictory,
             countWondersAsObjectives: save.scenario.countWondersAsObjectives,

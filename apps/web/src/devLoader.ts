@@ -38,7 +38,8 @@ export function installDevLoader(container: HTMLElement, hooks: DevLoaderHooks):
         if (!res.ok || (res.headers.get('content-type') ?? '').includes('text/html')) {
           throw new Error(`${file} not found under dev-game`);
         }
-        hooks.onGame(file.split('/').pop() ?? file, new Uint8Array(await res.arrayBuffer()));
+        // The path inside the folder is kept so a scenario's EVENTS.TXT can be found beside it.
+        hooks.onGame(file, new Uint8Array(await res.arrayBuffer()));
       })
       .catch((err: unknown) => hooks.onError(file, err));
   };

@@ -347,20 +347,52 @@ describe('trade split (verified)', () => {
 describe('happiness (verified)', () => {
   const w = grassWorld();
   const inputs = { luxuries: 0, militaryInCity: 0, militaryAbroad: 0, noMilitaryUnhappiness: true };
+  it("reproduces the original's Civil War capital at Deity: 4 happy, 2 unhappy", () => {
+    // Washington in the shipped scenario: size 8 with two entertainers, Temple, Cathedral and
+    // the Palace, 12 luxuries, Democracy with one aggressive unit abroad; the original's
+    // attitude advisor and the file's stored counts both say 4 happy, 2 unhappy.
+    const c = city(w, { size: 8 });
+    c.specialists.entertainers = 2;
+    c.improvements[IMPROVEMENT.temple] = true;
+    c.improvements[IMPROVEMENT.cathedral] = true;
+    c.improvements[IMPROVEMENT.palace] = true;
+    const deity = ctx({
+      difficulty: 5,
+      cityCount: 29,
+      government: GOVERNMENT.democracy,
+      knows: (a) =>
+        a === ADVANCE.ceremonialBurial || a === ADVANCE.mysticism || a === ADVANCE.monotheism,
+    });
+    expect(
+      mood(rules, c, deity, {
+        luxuries: 12,
+        militaryInCity: 1,
+        militaryAbroad: 1,
+        noMilitaryUnhappiness: false,
+      }),
+    ).toEqual({ happy: 4, content: 0, unhappy: 2 });
+  });
   it('uses the content base, luxuries, temples and martial law', () => {
     const c = city(w, { size: 6 });
     // Prince (difficulty 2): content base 5 → unhappy = 5 − 3 = 2, plus empire size term 0 for 5 cities
     const human = ctx({ difficulty: 2, cityCount: 5 });
     expect(mood(rules, c, human, inputs)).toEqual({ happy: 0, content: 4, unhappy: 2 });
+    // Luxuries set the happy count outright (two each); the unhappy stay until the faces
+    // outnumber the workers, when a happy and an unhappy pair off into content.
     expect(mood(rules, c, human, { ...inputs, luxuries: 4 })).toEqual({
-      happy: 0,
-      content: 6,
-      unhappy: 0,
+      happy: 2,
+      content: 2,
+      unhappy: 2,
     });
     expect(mood(rules, c, human, { ...inputs, luxuries: 6 })).toEqual({
-      happy: 1,
-      content: 5,
-      unhappy: 0,
+      happy: 3,
+      content: 1,
+      unhappy: 2,
+    });
+    expect(mood(rules, c, human, { ...inputs, luxuries: 14 })).toEqual({
+      happy: 5,
+      content: 0,
+      unhappy: 1,
     });
     c.improvements[IMPROVEMENT.temple] = true;
     expect(

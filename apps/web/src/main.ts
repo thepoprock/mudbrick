@@ -19,7 +19,7 @@ import {
 } from '@mudbrick/formats';
 import { installDevLoader } from './devLoader.js';
 import { gameFromSave } from './gameFromSave.js';
-import { loadGameFolder, type GameFolder } from './gameFiles.js';
+import { loadGameFolder, type GameFolder, withScenarioFolder } from './gameFiles.js';
 import { drawMap, hitTest } from './mapRenderer.js';
 import { PlaySession } from './play.js';
 import { downloadBytes, saveFromGame } from './saveFromGame.js';
@@ -141,13 +141,20 @@ function applyFolder(f: GameFolder): void {
     }),
   );
   const sheets = Object.keys(f.sheets).join(', ');
-  statusLine.textContent = `rules loaded (${f.rules.units.length} unit types); sheets: ${sheets || 'none'}`;
+  statusLine.textContent = `rules loaded (${f.rules.units.length} unit types); sheets: ${sheets || 'none'}${f.prefix ? ` — from ${f.prefix}` : ''}`;
   if (save) world = worldFromSave(save, f.rules);
   session = undefined;
   redraw();
 }
 
-function applyGame(name: string, bytes: Uint8Array): void {
+/** The folder (upper case, trailing slash) a picked file sits in, from the folder listing or its own path. */
+function folderOf(name: string, f: GameFolder): string {
+  const upper = name.toUpperCase();
+  const hit = f.paths.find((p) => p === upper || p.endsWith('/' + upper)) ?? upper;
+  return hit.includes('/') ? hit.slice(0, hit.lastIndexOf('/') + 1) : '';
+}
+
+async function applyGame(name: string, bytes: Uint8Array): Promise<void> {
   sourceName = name;
   session = undefined;
   if (name.toLowerCase().endsWith('.json')) {
@@ -192,6 +199,12 @@ function applyGame(name: string, bytes: Uint8Array): void {
     save = parseSave(bytes);
     saveBytes = bytes;
     map = save.map;
+    // A scenario's own folder supplies its RULES.TXT and sheets (VERIFIED: the original reads
+    // them from there when present, else from the game folder).
+    if (folder) {
+      const dir = folderOf(name, folder);
+      if (dir !== folder.prefix) applyFolder(await withScenarioFolder(folder, dir));
+    }
     world = folder ? worldFromSave(save, folder.rules) : undefined;
   }
   redraw();
@@ -267,12 +280,9 @@ async function attachScenarioEvents(
     // The save's own EVNT block (VERIFIED: the loader skips EVENTS.TXT when a save brought events).
     lines.push(`${game.state.scenarioEvents.length} scenario events restored from the save.`);
   } else {
-    const upper = name.toUpperCase();
-    const hit = gameFolder.paths.find((p) => p === upper || p.endsWith('/' + upper));
-    if (hit === undefined) return [];
-    const dir = hit.includes('/') ? hit.slice(0, hit.lastIndexOf('/') + 1) : '';
-    const eventsPath = gameFolder.paths.find((p) => p === dir + 'EVENTS.TXT');
-    if (eventsPath === undefined) return [];
+    // The picked file's folder: from the folder listing when the file was picked by name alone
+    // (the player path), else from the path itself (the dev loader keeps it).
+    const eventsPath = folderOf(name, gameFolder) + 'EVENTS.TXT';
     const blob = await gameFolder.file(eventsPath);
     if (!blob) return [];
     const text = decodeText(new Uint8Array(await blob.arrayBuffer()));
@@ -380,7 +390,9 @@ canvas.addEventListener('click', (e) => {
 if (import.meta.env.DEV) {
   installDevLoader(byId<HTMLSpanElement>('dev'), {
     onFolder: applyFolder,
-    onGame: applyGame,
+    onGame: (n, b) => {
+      void applyGame(n, b).catch((err: unknown) => showError(n, err));
+    },
     onError: showError,
   });
 }

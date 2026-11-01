@@ -42,6 +42,8 @@ export interface GameFolder {
   file: (name: string) => Promise<Blob | undefined>;
   /** Every file the folder holds, as upper-case paths relative to it (empty for the dev path). */
   paths: string[];
+  /** The scenario folder (upper case, trailing slash) whose files took precedence, '' for none (VERIFIED: the original reads RULES.TXT and the sheets from the scenario's folder when present, else the game's). */
+  prefix: string;
 }
 
 /** Abstracts "a folder of files" over FileList and fetch. */
@@ -110,14 +112,21 @@ function anchorFor(img: ImageData, r: sprites.Rect, colour: sprites.Rgb): Anchor
   return { x: ax < 0 ? r.w / 2 : ax, y: ay < 0 ? r.h / 2 : ay };
 }
 
-async function loadFrom(source: FileSource, paths: string[] = []): Promise<GameFolder> {
-  const rulesFile = await source('RULES.TXT');
+async function loadFrom(
+  source: FileSource,
+  paths: string[] = [],
+  prefix = '',
+): Promise<GameFolder> {
+  const lookup: FileSource = prefix
+    ? async (name) => (await source(prefix + name)) ?? source(name)
+    : source;
+  const rulesFile = await lookup('RULES.TXT');
   if (!rulesFile) throw new Error('RULES.TXT not found: choose the folder that contains it');
   const rules = parseRules(decodeText(new Uint8Array(await rulesFile.arrayBuffer())));
 
   const sheets: Partial<Record<SheetName, Sheet>> = {};
   for (const name of SHEETS) {
-    const f = await source(`${name}.GIF`);
+    const f = await lookup(`${name}.GIF`);
     if (f) sheets[name] = await loadSheet(f, SHEET_KEYS[name]);
   }
 
@@ -151,7 +160,16 @@ async function loadFrom(source: FileSource, paths: string[] = []): Promise<GameF
       citySize.push(sizeRow);
     }
   }
-  return { rules, sheets, unitFlag, cityFlag, citySize, file: source, paths };
+  return { rules, sheets, unitFlag, cityFlag, citySize, file: source, paths, prefix };
+}
+
+/**
+ * The same folder with a scenario sub-folder's files taking precedence (its RULES.TXT, sheets);
+ * the folder itself when the prefix already matches.
+ */
+export function withScenarioFolder(folder: GameFolder, prefix: string): Promise<GameFolder> {
+  if (prefix === folder.prefix) return Promise.resolve(folder);
+  return loadFrom(folder.file, folder.paths, prefix);
 }
 
 /** Player path: the FileList of an `<input type="file" webkitdirectory>`. */

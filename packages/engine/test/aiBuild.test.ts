@@ -112,7 +112,6 @@ function civ(over: Partial<Civ> = {}): Civ {
     government: GOVERNMENT.monarchy,
     treasury: 100,
     isHuman: false,
-    slot: 1,
     inPlay: true,
     scienceStored: 0,
     researching: null,

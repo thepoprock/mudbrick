@@ -49,9 +49,15 @@ moves one year per turn. Turn 0 and turn 1 are both the start year; there is no 
 | Emperor, Deity     | −4000 ×60 @50 · −1000 ×40 @25 · 0 ×75 @20 · 1500 ×25 @10 · 1750 ×50 @2 · 1850 ×50 @1   |
 
 A scenario with its own years-per-turn uses `starting year + |years per turn| × turn − 1`. The
-header word at offset 32 (−1 normally) names a turn from which the calendar advances one year per
+header word at file offset 8 (−1 normally) names a turn from which the calendar advances one year per
 turn. The engine's `gameYear` implements this; the year is recomputed from the turn, as the
 original does at the start of each turn (0x00467591).
+
+Printing (VERIFIED 0x00465428): "N BC" / "N AD" normally; when a scenario's years-per-turn is
+negative the value counts months — the month name is `value % 12` (LABELS.TXT entries 420–431,
+counted from the end for a negative value) and the year `value / 12`, so the Civil War's 22338
+reads "July 1861". `calendar.ts` has `gameYear` and `formatYear`; the game's `yearOf` and
+`yearTextOf` apply the state's options.
 
 ## Reputation recovery (VERIFIED, 0x00467591)
 

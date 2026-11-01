@@ -51,7 +51,7 @@ import { beginUnitsTurn, type UnitTurnEvent } from './turnStart.js';
 import { cityPollution, meltdownRoll, pollutionRoll, type PollutionEvent } from './pollution.js';
 import { aiChooseProduction } from './aiBuild.js';
 import { runStrategy, type StrategyEvent } from './aiStrategy.js';
-import { gameYear } from './calendar.js';
+import { gameYear, formatYear, type CalendarOptions } from './calendar.js';
 import { routeIncomeTotal, type TradeContext, routeModifier } from './trade.js';
 import type { EspionageContext } from './espionage.js';
 import {
@@ -140,6 +140,8 @@ export interface GameState {
   noRestart?: boolean;
   /** Options byte 0 bit 7: bloodlust (no space race; the game ends by conquest). */
   bloodlust?: boolean;
+  /** Save file offset 8: from this turn on the calendar advances one year per turn (−1 / unset: never). */
+  calendarLockTurn?: number;
   /** Times each tribe (leader index) has played, for restarts. */
   tribesPlayed?: number[];
   /** The scenario's events (events.txt, parsed) and their mutable state. */
@@ -155,6 +157,9 @@ export interface GameState {
 export interface ScenarioState {
   techParadigm: number;
   fixedCost: boolean;
+  /** The scenario calendar (0x0046520c): `startingYear + |yearsPerTurn| × turn − 1` when both are set. */
+  yearsPerTurn?: number;
+  startingYear?: number;
   /** The scenario's last turn (+88); the game ends on it, with a warning five turns before. */
   endTurn?: number;
   /** Scenario flag bit 1: victory by objectives; bit 2: wonders count as objectives. */
@@ -199,6 +204,29 @@ export type TurnEvent =
 
 /** Advances that end the AI's science: Fusion Power, The Laser, and the spaceship parts' prerequisites. */
 export const AI_SPACE_ADVANCES = [32, 41] as const;
+
+/** The calendar options a game's state implies (research options, scenario calendar, calendar lock). */
+export function calendarOptionsOf(state: GameState): CalendarOptions {
+  const sc = state.scenario;
+  return {
+    researchDearer: state.researchDearer ?? false,
+    researchCheaper: state.researchCheaper ?? false,
+    ...(sc && sc.yearsPerTurn !== undefined && sc.startingYear !== undefined
+      ? { scenario: { yearsPerTurn: sc.yearsPerTurn, startingYear: sc.startingYear } }
+      : {}),
+    ...(state.calendarLockTurn !== undefined ? { lockTurn: state.calendarLockTurn } : {}),
+  };
+}
+
+/** The year shown for the game's turn (0x0046520c); months × 12 in a scenario counting months. */
+export function yearOf(state: GameState): number {
+  return gameYear(state.turn, state.difficulty, calendarOptionsOf(state));
+}
+
+/** The year as the original prints it, "July 1861" in a scenario counting months. */
+export function yearTextOf(state: GameState): string {
+  return formatYear(yearOf(state), calendarOptionsOf(state));
+}
 
 export class Game {
   private nextUnitId: number;
@@ -778,7 +806,7 @@ export class Game {
       isHuman: (s) => this.civ(s).isHuman,
       massThrust: this.rules.cosmic.massThrustParadigm ?? 75,
       knowsFusion: (s) => this.knows(s, 32),
-      year: gameYear(this.state.turn, this.state.difficulty),
+      year: yearOf(this.state),
       ...(this.state.scenario?.objectiveVictory && this.state.scenario.objectives
         ? {
             scenario: {
@@ -1072,7 +1100,7 @@ export class Game {
   private endOfYear(): TurnEvent[] {
     const out: TurnEvent[] = [];
     if (this.state.gameOver) return out;
-    const year = gameYear(this.state.turn, this.state.difficulty);
+    const year = yearOf(this.state);
     const shipEvents: SpaceshipEvent[] = [];
     const winner = checkArrivals(this.world, year, shipEvents);
     for (const e of shipEvents) out.push({ slot: e.slot, event: e });
@@ -1098,11 +1126,7 @@ export class Game {
     // end turn (warned five turns before) is not modelled yet.
     if (!this.state.gameOver) {
       const scenarioEnd = this.state.scenario?.endTurn ?? 0;
-      const stage = retirementStage(
-        gameYear(this.state.turn, this.state.difficulty),
-        this.state.turn,
-        scenarioEnd,
-      );
+      const stage = retirementStage(yearOf(this.state), this.state.turn, scenarioEnd);
       if (stage === 'warn') {
         for (const civ of this.world.civs) {
           if (civ.slot === 0 || !civ.inPlay || !civ.isHuman) continue;
@@ -1148,7 +1172,7 @@ export class Game {
   shipContext(): SpaceshipContext {
     return {
       turn: this.state.turn,
-      year: gameYear(this.state.turn, this.state.difficulty),
+      year: yearOf(this.state),
       difficulty: this.state.difficulty,
       massThrust: this.rules.cosmic.massThrustParadigm ?? 75,
       isHuman: (s) => this.world.civs.find((c) => c.slot === s)?.isHuman ?? false,
@@ -1169,7 +1193,7 @@ export class Game {
     return {
       rng: this.rng,
       turn: this.state.turn,
-      year: gameYear(this.state.turn, this.state.difficulty),
+      year: yearOf(this.state),
       difficulty: this.state.difficulty,
       activity: this.state.barbarianActivity ?? 0,
       onUnitKilled: (t, a, d) => this.unitKilled(t, a, d),

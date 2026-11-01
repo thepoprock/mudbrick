@@ -3,7 +3,7 @@
  * state (docs/formats/save-format.md, "Writing"). Fields the engine does not model keep the
  * original's values for records that existed when the game was loaded.
  */
-import { gameYear, IMPROVEMENT, SquareFlag, type Game } from '@mudbrick/engine';
+import { IMPROVEMENT, SquareFlag, type Game, yearOf } from '@mudbrick/engine';
 import {
   writeSave,
   type CityWrite,
@@ -150,7 +150,8 @@ export function saveFromGame(original: Uint8Array, parsed: SaveFile, game: Game)
   return writeSave(original, parsed, {
     events,
     turn: state.turn,
-    year: gameYear(state.turn, state.difficulty),
+    year: yearOf(state),
+    ...(state.turnsOfPeace !== undefined ? { turnsOfPeace: state.turnsOfPeace } : {}),
     ...(state.pollutionSquares !== undefined ? { pollutionSquares: state.pollutionSquares } : {}),
     firstDiscoveredBy: state.firstDiscoveredBy,
     knownByMask: Array.from({ length: 100 }, (_, a) =>

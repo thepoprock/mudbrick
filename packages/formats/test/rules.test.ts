@@ -1,3 +1,4 @@
+import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { FIRST_WONDER_INDEX, parseRules, UnitDomain, UnitRole } from '../src/rules.js';
 import { decodeText } from '../src/text.js';
@@ -49,7 +50,8 @@ describe('parseRules (inline fixture)', () => {
 
   it('reads cosmic constants by position', () => {
     expect(r.cosmic.roadMoveMultiplier).toBe(1);
-    expect(r.cosmic.fundamentalismMaxScienceRate).toBe(22);
+    // The fixture says 22; the original clamps this constant to 0–10 (0x00410603).
+    expect(r.cosmic.fundamentalismMaxScienceRate).toBe(10);
   });
 
   it('resolves advance prerequisites through abbreviations', () => {
@@ -135,5 +137,38 @@ describe.skipIf(!hasGameFiles)('parseRules (shipped RULES.TXT)', () => {
     expect(r?.warnings.filter((w) => w.startsWith('@LEADERS'))).toHaveLength(2);
     expect(r?.warnings.filter((w) => w.startsWith('@ENDWONDER'))).toHaveLength(1);
     expect(r?.warnings.filter((w) => w.startsWith('@UNITS'))).toHaveLength(1);
+  });
+});
+
+describe('leniency of the original loader', () => {
+  it('reads a short @COSMIC, a non-number and an unknown prerequisite with warnings', () => {
+    const short = MINI.replace(cosmic, cosmic.split('\n').slice(0, 21).join('\n'));
+    const r = parseRules(short);
+    expect(r.warnings.some((w) => w.includes('@COSMIC'))).toBe(true);
+    const odd = MINI.replace('4      ; constant 3', '5      ; constant 3');
+    expect(parseRules(odd).cosmic.foodBoxRows).toBe(6); // 5 is made even
+    const bad = MINI.replace('Building 1, 1, 0, nil,', 'Building 1, Stones, 0, nil,');
+    const rb = parseRules(bad);
+    expect(rb.improvements[1]?.costRows).toBe(0);
+    expect(rb.warnings.some((w) => w.includes('number expected'))).toBe(true);
+    const unknown = MINI.replace('Building 1, 1, 0, nil,', 'Building 1, 1, 0, Zzz,');
+    const ru = parseRules(unknown);
+    expect(ru.improvements[1]?.preq).toEqual({ kind: 'never' });
+    expect(ru.warnings.some((w) => w.includes('unknown advance'))).toBe(true);
+  });
+
+  const dir = process.env.ORIGINAL_GAME_DIR;
+  it.skipIf(!dir)('parses every scenario RULES.TXT shipped with the game', () => {
+    if (!dir) return;
+    const scen = `${dir}/SCENARIO`;
+    let n = 0;
+    for (const sub of readdirSync(scen)) {
+      const file = readdirSync(`${scen}/${sub}`).find((f) => f.toLowerCase() === 'rules.txt');
+      if (!file) continue;
+      const rules = parseRules(decodeText(new Uint8Array(readFileSync(`${scen}/${sub}/${file}`))));
+      expect(rules.units.length).toBeGreaterThan(0);
+      n += 1;
+    }
+    expect(n).toBeGreaterThan(15);
   });
 });

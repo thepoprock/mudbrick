@@ -19,7 +19,6 @@ import {
   fortify,
   foundCity,
   fullMoves,
-  gameYear,
   gotoStep,
   hutAt,
   joinCity,
@@ -66,6 +65,8 @@ import {
   launchShip,
   PART_NAMES,
   type SpaceshipEvent,
+  yearOf,
+  yearTextOf,
 } from '@mudbrick/engine';
 import { ADVANCE, IMPROVEMENT } from '@mudbrick/engine';
 import { sprites } from '@mudbrick/formats';
@@ -510,7 +511,7 @@ export class PlaySession {
     const civ = this.civ;
     const out = enterHut(this.world, this.rules, this.game.rng, civ, unit, {
       turn: this.game.state.turn,
-      year: gameYear(this.game.state.turn, this.game.state.difficulty),
+      year: yearOf(this.game.state),
       difficulty: this.game.state.difficulty,
       barbarianActivity: 1,
       knownByAnyone: (a) => this.world.civs.some((c) => c.knownAdvances[a]),
@@ -736,8 +737,7 @@ export class PlaySession {
   }
 
   yearText(): string {
-    const y = gameYear(this.game.state.turn, this.game.state.difficulty);
-    return y < 0 ? `${-y} BC` : `${y} AD`;
+    return yearTextOf(this.game.state);
   }
 
   centreOn(p: Point): void {
@@ -1020,7 +1020,7 @@ export class PlaySession {
         true,
         this.rules.cosmic.massThrustParadigm ?? 75,
         this.game.knows(this.humanSlot, 32),
-        gameYear(this.game.state.turn, this.game.state.difficulty),
+        yearOf(this.game.state),
         true,
       );
       text.textContent += `\nSpaceship: ${PART_NAMES.map((n, i) => `${ship.parts[i] ?? 0} ${n}`).join(', ')} · success ${ev.success} % · flight ${(ev.flightTenths / 10).toFixed(1)} years · ${hasLaunched(civ) ? `launched ${ship.launchYear}, arrives ${ship.arrival}` : `would arrive ${ev.arrivalYear}`}`;

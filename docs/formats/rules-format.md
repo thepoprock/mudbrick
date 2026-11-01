@@ -87,3 +87,22 @@ Base: `name, movecost, defense, food, shields, trade, irrigate, irr_bonus, irr_t
 - Optional repeating triples override the ruler title under a given government id.
 
 ## @CARAVAN — 16 trade commodities, index = commodity id. @ORDERS — 11 unit orders with hotkey. @DIFFICULTY — 6 levels (Chieftain…Deity). @ATTITUDES — 9 diplomatic attitudes (Worshipful…Enraged).
+
+## How tolerant the original's loader is (VERIFIED)
+
+- **Where the file comes from** (0x00415127, and 0x00438216 for the sheets): with a scenario
+  open, RULES.TXT and each GIF sheet are read from the scenario's folder when it has them, else
+  from the game folder. The web app does the same once a scenario file is opened.
+- **Numbers** (0x0047c824 → an `atoi`): a field that does not start with an integer reads as 0.
+  `parseRules` does the same and records a warning.
+- **Prerequisite codes** (0x00487c00): `no` → −2 (cannot be acquired), `nil` → −1 (none), a
+  code matching an advance's abbreviation → its index, anything else → −3 with a message — a
+  prerequisite nothing can satisfy, which `parseRules` records as `never` with a warning.
+- **@COSMIC** (0x00410603): exactly 22 lines are read and each is clamped — road multiplier
+  1–10, trireme loss 1–100, food per citizen 0–10, food box rows 4–20 (made even), shield box
+  rows 4–20, settlers' food 0–10 twice, unhappiness size 4–12, riot factor 10–100, Aqueduct and
+  Sewer sizes 4–50, tech paradigm 3–10, transform base 5–100, free support 0–8 three times,
+  base turns 1–20, Communism palace distance 0–100, Fundamentalism penalty 0–100 and maximum
+  rate 4–100, mass/thrust 25–200, the last 0–10. A short list reads what follows (0 here).
+- **@CIVILIZE** (0x00410929): up to 100 rows until a blank or `;` line; the rest are named
+  "Advance n" with values 3/0 and prerequisites `no`.

@@ -62,6 +62,9 @@ export interface GameParameters {
   humanSlots: boolean[];
   globalWarmingCount: number;
   pollutionSquares: number;
+  /** File offset 8 (i16): from this turn on the calendar advances one year per turn; −1 none (VERIFIED 0x0046520c). */
+  calendarLockTurn: number;
+  /** File offset 32 (i16): turns of peace, ×3 (at most 100) in the score after turn 200 (VERIFIED 0x0047c9e0). */
   turnsOfPeace: number;
   unitCount: number;
   cityCount: number;
@@ -496,7 +499,8 @@ export function parseSave(bytes: Uint8Array): SaveFile {
     humanSlots: r.bits8(P + 23),
     globalWarmingCount: r.u8(P + 27),
     pollutionSquares: r.u16(P + 30),
-    turnsOfPeace: r.u8(P + 32),
+    calendarLockTurn: r.i16(P + 8),
+    turnsOfPeace: r.i16(P + 32),
     unitCount: r.u16(P + 34),
     cityCount: r.u16(P + 36),
     firstAirUnitBuilt: r.bit(P, 1),
@@ -667,7 +671,10 @@ export function parseSave(bytes: Uint8Array): SaveFile {
     const improvements: boolean[] = [false];
     for (let idx = 1; idx <= 34; idx++) improvements.push(r.bit(o + 52 + (idx >> 3), idx & 7));
     const prod = r.i8(o + 57);
-    const worked = (r.u8(o + 48) << 13) | (r.u8(o + 49) << 5) | (r.u8(o + 50) >> 3);
+    // VERIFIED: bytes 48–51 are the executable's little-endian dword at +0x30 — bits 0–19 the
+    // radius squares in radius order, bit 20 the centre, bits 26–31 the specialist count. (The
+    // original's City Status in the Civil War scenario matches this reading for all 24 cities.)
+    const worked = (r.u8(o + 48) | (r.u8(o + 49) << 8) | (r.u8(o + 50) << 16)) & 0x1fffff;
     return {
       id,
       position: r.point(o),

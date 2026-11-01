@@ -94,3 +94,34 @@ export function gameYear(turn: number, difficulty: number, opts: CalendarOptions
 export function yearLabel(year: number): string {
   return year < 0 ? `${-year} BC` : `${year} AD`;
 }
+
+/** Month names for a scenario counting in months (LABELS.TXT entries 420–431; English here). */
+export const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+/**
+ * The year as the original prints it (VERIFIED 0x00465428): "N BC" / "N AD" normally; when a
+ * scenario's years-per-turn is negative the value counts months — the month is `year % 12`
+ * (counted from the end for a negative value) and the year `year / 12`, both truncated.
+ */
+export function formatYear(year: number, opts: CalendarOptions = {}): string {
+  const sc = opts.scenario;
+  if (sc && sc.yearsPerTurn < 0) {
+    const m = year % 12;
+    const month = year < 1 ? MONTH_NAMES[(11 + m) % 12] : MONTH_NAMES[m];
+    return `${month ?? ''} ${Math.abs(Math.trunc(year / 12))}`;
+  }
+  return year < 0 ? `${-year} BC` : `${year} AD`;
+}

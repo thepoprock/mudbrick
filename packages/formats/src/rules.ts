@@ -8,7 +8,51 @@
  * Row ORDER is the identity of every table: the original executable addresses advances,
  * improvements, units and terrain by index. Parsers must never reorder rows.
  */
-import { fields, num, splitSections, stripComment, type Section } from './text.js';
+import { fields, num as numStrict, splitSections, stripComment, type Section } from './text.js';
+
+/** Warnings of the parse under way (the lenient number reader appends to them). */
+let currentWarnings: string[] = [];
+
+/**
+ * A number as the original reads it (0x0047c824 → an atoi): a field that does not start with
+ * an integer reads as 0, with a warning.
+ */
+function num(field: string): number {
+  try {
+    return numStrict(field);
+  } catch {
+    currentWarnings.push(
+      `number expected, got "${field.trim()}" (read as 0, as the original does)`,
+    );
+    return 0;
+  }
+}
+
+/** The @COSMIC clamps of the original's reader (0x00410603), in file order. */
+const COSMIC_RANGES: [number, number][] = [
+  [1, 10],
+  [1, 100],
+  [0, 10],
+  [4, 20],
+  [4, 20],
+  [0, 10],
+  [0, 10],
+  [4, 12],
+  [10, 100],
+  [4, 50],
+  [4, 50],
+  [3, 10],
+  [5, 100],
+  [0, 8],
+  [0, 8],
+  [0, 8],
+  [1, 20],
+  [0, 100],
+  [0, 100],
+  [4, 100],
+  [25, 200],
+  [0, 10],
+];
 
 /** The 22 "Cosmic Principles" engine constants, in file order. */
 export interface CosmicConstants {
@@ -311,15 +355,26 @@ function pick<T>(items: T[], i: number): T {
 
 export function parseRules(text: string): Rules {
   const warnings: string[] = [];
+  currentWarnings = warnings;
   const sections = new Map(splitSections(text).map((s) => [s.name, s]));
 
   // @COSMIC — one integer per line, identified by position.
+  // VERIFIED (0x00410603): the original reads exactly this many lines and clamps each; a short
+  // list reads whatever follows (0 here), food box rows are made even.
   const cosmicRows = dataRows(need(sections, 'COSMIC'));
   if (cosmicRows.length !== COSMIC_KEYS.length) {
-    throw new Error(`@COSMIC: expected ${COSMIC_KEYS.length} values, found ${cosmicRows.length}`);
+    warnings.push(
+      `@COSMIC: expected ${COSMIC_KEYS.length} values, found ${cosmicRows.length}; missing ones read as 0 and are clamped, extra ones are ignored`,
+    );
   }
   const cosmic = Object.fromEntries(
-    cosmicRows.map((r, i) => [COSMIC_KEYS[i], num(r.body)]),
+    COSMIC_KEYS.map((k, i) => {
+      const row = cosmicRows[i];
+      const [lo, hi] = COSMIC_RANGES[i] ?? [0, 1000];
+      let v = Math.max(lo, Math.min(hi, row ? num(row.body) : 0));
+      if (i === 3 && (v & 1) !== 0) v += 1;
+      return [k, v];
+    }),
   ) as unknown as CosmicConstants;
 
   // @CIVILIZE — build the abbreviation table first so prerequisites can be resolved.
@@ -336,7 +391,13 @@ export function parseRules(text: string): Rules {
     if (t === 'nil') return { kind: 'none' };
     if (t === 'no') return { kind: 'never' };
     const index = abbrevIndex.get(t);
-    if (index === undefined) throw new Error(`${where}: unknown advance "${t}"`);
+    if (index === undefined) {
+      // VERIFIED (0x00487c00): an unknown code becomes −3 with a message; nothing can satisfy it.
+      warnings.push(
+        `${where}: unknown advance "${t}" (treated as a prerequisite nothing can meet)`,
+      );
+      return { kind: 'never' };
+    }
     return { kind: 'advance', index };
   };
   const advances: Advance[] = advRows.map((r, index) => {

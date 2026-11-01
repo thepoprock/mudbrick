@@ -127,6 +127,8 @@ export interface CivWrite {
 }
 
 export interface SavePatch {
+  /** Header offset 32: turns of peace. */
+  turnsOfPeace?: number;
   /** Scenario events: omit to keep the file's `EVNT` block, null to drop it, records to replace it. */
   events?: SaveEventRecord[] | null;
   turn?: number;
@@ -291,6 +293,7 @@ export function writeSave(original: Uint8Array, save: SaveFile, patch: SavePatch
   if (patch.turn !== undefined) w.u16(P + 4, patch.turn);
   if (patch.year !== undefined) w.i16(P + 6, patch.year);
   if (patch.pollutionSquares !== undefined) w.u16(P + 30, patch.pollutionSquares);
+  if (patch.turnsOfPeace !== undefined) w.i16(P + 32, patch.turnsOfPeace);
 
   // Techs.
   if (patch.firstDiscoveredBy) {
@@ -442,12 +445,13 @@ export function writeSave(original: Uint8Array, save: SaveFile, patch: SavePatch
     w.u16(b + 26, c.foodStored);
     w.u16(b + 28, c.shieldsStored);
     w.str(b + 32, 16, c.name);
+    // The worked squares are the low 21 bits of the little-endian dword at 48 (bits 21–25 kept).
     const m = c.workedMask & 0x1fffff;
-    w.u8(b + 48, (m >> 13) & 0xff);
-    w.u8(b + 49, (m >> 5) & 0xff);
-    w.u8(b + 50, (m & 0x1f) << 3);
+    w.u8(b + 48, m & 0xff);
+    w.u8(b + 49, (m >> 8) & 0xff);
+    w.u8(b + 50, ((out[b + 50] ?? 0) & 0xe0) | ((m >> 16) & 0x1f));
     const specialistCount = c.specialists.filter((s) => s !== 0).length;
-    w.u8(b + 51, (specialistCount & 0x3f) << 2);
+    w.u8(b + 51, ((out[b + 51] ?? 0) & 0x03) | ((specialistCount & 0x3f) << 2));
     for (let idx = 1; idx <= 38; idx++)
       w.bit(b + 52 + (idx >> 3), idx & 7, c.improvements[idx] === true);
     w.u8(b + 57, c.production.kind === 'unit' ? c.production.index : -c.production.index & 0xff);
