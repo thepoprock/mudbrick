@@ -1598,12 +1598,11 @@ export class Game {
   /** A human's answer to a barbarian ransom demand; unset means refuse (INFERRED default). */
   payRansom?: (city: City, amount: number) => boolean;
 
-  /** The barbarians' turn: unit upkeep as for anyone, then the barbarian move chooser. */
+  /** The barbarians' turn: unit upkeep and cities as for anyone, then the barbarian move chooser. */
   private processBarbarians(): TurnEvent[] {
     const out: TurnEvent[] = [];
     const barbarians = this.world.civs.find((c) => c.slot === 0);
     if (!barbarians) return out;
-    if (!this.world.units.some((u) => u.owner === 0)) return out;
     for (const e of beginUnitsTurn(this.world, this.rules, this.rng, barbarians, {
       knows: () => false,
       nuclearPower: false,
@@ -1613,6 +1612,14 @@ export class Game {
     })) {
       out.push({ slot: 0, event: e });
     }
+    // VERIFIED 0x0046b55e: the round's loop starts at slot 0, which is in play in every save read,
+    // so a city the barbarians hold takes a city turn like anyone's (0x00467c61).
+    const cities = this.citiesOf(0);
+    for (let i = cities.length - 1; i >= 0; i--) {
+      const city = cities[i];
+      if (city && this.world.cities.includes(city)) out.push(...this.processCity(city));
+    }
+    if (!this.world.units.some((u) => u.owner === 0)) return out;
     for (const e of barbarianMoves(this.world, this.rules, barbarians, this.barbarianContext()))
       out.push({ slot: 0, event: e });
     return out;

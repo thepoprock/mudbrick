@@ -111,7 +111,9 @@ original never asks about it, except when it has no unit either (INFERRED).
 
 ## Order within a round (VERIFIED 0x0046b55e)
 
-Barbarians move first as slot 0, then slots 1 to 7 in order. A human moves in its own slot, after
+Barbarians move first as slot 0, and a city they hold takes a city turn like any other (VERIFIED
+0x0046b55e, 0x00467c61; no save read holds a barbarian city, so its results are not compared).
+Then slots 1 to 7 follow in order. A human moves in its own slot, after
 its cities are processed, so it sees what earlier slots did this turn and later slots answer in
 the same turn. Hot seat is this loop with several humans, each with its own view and a handover
 message (HOTSEATTURN). `Game.playUntilHuman` runs it; `Game.endTurn` plays a round straight through.

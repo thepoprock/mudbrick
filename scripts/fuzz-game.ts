@@ -67,6 +67,15 @@ const problems = new Map<string, number>();
 function problem(text: string): void {
   problems.set(text, (problems.get(text) ?? 0) + 1);
 }
+const recomputed = new Map<number, { size: number; turn: number }>();
+{
+  const ensureWorkers = game.ensureWorkers.bind(game);
+  game.ensureWorkers = (city, ...rest) => {
+    ensureWorkers(city, ...rest);
+    recomputed.set(city.id, { size: city.size, turn: game.state.turn });
+  };
+}
+
 function check(): void {
   const w = game.world;
   const seen = new Set<string>();
@@ -82,10 +91,13 @@ function check(): void {
       problem('negative specialists');
     let workers = 0;
     for (let i = 0; i < 20; i++) if (c.worked & (1 << i)) workers += 1;
-    // A city that loses a citizen to an attack sorts its workers out at its next recompute, so one
-    // spare is expected until then.
-    if (workers + sp.entertainers + sp.taxCollectors + sp.scientists > c.size + 2)
-      problem('too many citizens placed');
+    // The original lowers a city's size in battle and leaves its citizens where they stand until
+    // the next recompute (0x0052d472, 0x00528720). So what is exact is this: no more citizens than
+    // the city's size at its last recompute, and a recompute every round.
+    const placed = workers + sp.entertainers + sp.taxCollectors + sp.scientists;
+    const last = recomputed.get(c.id);
+    if (last && placed > last.size) problem('too many citizens placed');
+    if (last && game.state.turn - last.turn > 1) problem('a city missed its recompute');
     if (c.production.kind === 'unit' && !rules.units[c.production.index])
       problem('bad unit production');
     if (c.production.kind === 'improvement' && !rules.improvements[c.production.index])
