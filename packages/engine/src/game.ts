@@ -872,6 +872,20 @@ export class Game {
       this.world.peaceBroken = false;
     }
     if (this.state.turn > 199) this.state.turnsOfPeace = (this.state.turnsOfPeace ?? 0) + 1;
+    // VERIFIED (0x00467591): every 12 × (difficulty + 1) turns a civilization's reputation
+    // recovers a point when the turn is also a multiple of 24 × (difficulty + 1) or it holds
+    // the Eiffel Tower, provided the reputation is above 1 (any, with the Tower) and not zero.
+    // (The original then caps every civilization's +0x48 counter toward a human at the new
+    // reputation — a field the engine does not model.)
+    const steps = this.state.difficulty + 1;
+    if (this.state.turn % (12 * steps) === 0) {
+      for (const civ of this.world.civs) {
+        const eiffel = this.ownsWonder(civ.slot, IMPROVEMENT.eiffelTower);
+        const rep = civ.reputation ?? 0;
+        if ((this.state.turn % (24 * steps) === 0 || eiffel) && (rep > 1 || eiffel) && rep !== 0)
+          civ.reputation = rep - 1;
+      }
+    }
     out.push(...this.endOfYear());
     return out;
   }

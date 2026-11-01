@@ -53,6 +53,14 @@ header word at offset 32 (−1 normally) names a turn from which the calendar ad
 turn. The engine's `gameYear` implements this; the year is recomputed from the turn, as the
 original does at the start of each turn (0x00467591).
 
+## Reputation recovery (VERIFIED, 0x00467591)
+
+Every `12 × (difficulty + 1)` turns, each civilization's reputation (civilization record +30, 0
+= spotless) falls by one when the turn is also a multiple of `24 × (difficulty + 1)` or the
+civilization holds the Eiffel Tower, provided it is above 1 (any value with the Tower) and not
+zero. When a human's reputation falls, the original also caps every civilization's +0x48 counter
+toward that human at the new value — a field the engine does not model.
+
 ## The end of the game and the score (VERIFIED, 0x0046b0fa and 0x0047c9e0)
 
 The year limit runs with the calendar: in the year 2000 the players are told to plan their
