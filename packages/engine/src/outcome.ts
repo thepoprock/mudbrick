@@ -12,6 +12,7 @@ import {
   shieldTotals,
   unitSupport,
   type CityContext,
+  gridDistance,
 } from './city.js';
 import { FUTURE_TECHNOLOGY } from './research.js';
 import { advanceIndex, GOVERNMENT, type EngineRules, DOMAIN_GROUND } from './rules.js';
@@ -130,7 +131,7 @@ export function disbandForShortage(
       world.cityAt(u.position.x, u.position.y) !== undefined ||
       (world.hasFlag(u.position.x, u.position.y, SquareFlag.Fortress) &&
         world.cities.some(
-          (c) => c.owner === city.owner && distance(world, c.position, u.position) < 4,
+          (c) => c.owner === city.owner && gridDistance(world, c.position, u.position) < 4,
         ));
     candidates.sort((a, b) => {
       const sa = safe(a) ? 1 : 0;
@@ -180,7 +181,7 @@ export function disbandForDisorder(
     if (
       world.hasFlag(u.position.x, u.position.y, SquareFlag.Fortress) &&
       world.cities.some(
-        (c) => c.owner === city.owner && distance(world, c.position, u.position) < 4,
+        (c) => c.owner === city.owner && gridDistance(world, c.position, u.position) < 4,
       )
     )
       continue;

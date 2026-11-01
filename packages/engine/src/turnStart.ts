@@ -4,7 +4,7 @@
  * INFERRED: counted at turn start instead of at the last move), and the continuation of standing
  * orders (VERIFIED dispatch 0x004984a8; the go-to step is an INFERRED greedy simplification).
  */
-import { distance } from './city.js';
+import { gridDistance } from './city.js';
 import { maxHitPoints } from './combat.js';
 import { checkMove, endUnitMove, fullMoves, tryMove, type MovementContext } from './movement.js';
 import { gotoDirection } from './pathfinding.js';
@@ -38,7 +38,7 @@ function nearestOwnCity(world: World, unit: Unit): { city: City; dist: number } 
   for (const c of world.cities) {
     if (c.owner !== unit.owner) continue;
     if (world.landmass[world.index(c.position.x, c.position.y)] !== mass) continue;
-    const d = distance(world, unit.position, c.position);
+    const d = gridDistance(world, unit.position, c.position);
     if (!best || d < best.dist) best = { city: c, dist: d };
   }
   return best;
@@ -158,13 +158,13 @@ export function gotoStep(
         if (v.ok && !v.boards) best = { x, y };
       }
     }
-    let bestDist = distance(world, unit.position, target);
+    let bestDist = gridDistance(world, unit.position, target);
     if (!best) {
       for (const n of world.neighbours(unit.position.x, unit.position.y)) {
         if (!n) continue;
         const v = checkMove(world, rules, unit, n, ctx);
         if (!v.ok || v.boards) continue;
-        const d = distance(world, n, target);
+        const d = gridDistance(world, n, target);
         if (d < bestDist) {
           bestDist = d;
           best = n;

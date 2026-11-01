@@ -119,3 +119,12 @@ citizens whose squares an enemy had entered.
 Open: from the third turn the engine's Pittsburgh falls into disorder (its Engineers complete,
 the city shrinks and its entertainer goes back to work, luxuries drop); the original has not
 been played forward under the same moves yet, so the later turns are unchecked.
+
+## Conformance against stored city figures (`scripts/conform-cities.ts`)
+
+Every city record holds the figures the original last computed, so a save checks the engine
+without screenshots and without AI moves interfering: food, shields, net trade, tax, science,
+happy and unhappy. On August 1861 of the Civil War all 29 Federal cities match on all seven. On
+19 saves of two long Roman games net trade rose from about half to nearly all after the distance
+fix, and five saves match completely. Tax and science gaps in computer cities are partly rates
+changed after the cities were computed; the unhappy gap is open.

@@ -594,7 +594,7 @@ export function unitSupport(
         const inFortressNearHome =
           world.hasFlag(u.position.x, u.position.y, SquareFlag.Fortress) &&
           world.cities.some(
-            (c) => c.owner === city.owner && distance(world, c.position, u.position) < 4,
+            (c) => c.owner === city.owner && gridDistance(world, c.position, u.position) < 4,
           );
         if (!inFortressNearHome) abroad += 1;
       }
@@ -610,9 +610,22 @@ export function distance(
   b: { x: number; y: number },
 ): number {
   let dx = Math.abs(a.x - b.x);
-  if (!world.flatEarth) dx = Math.min(dx, world.widthX2 - dx);
+  if (!world.flatEarth && dx > world.widthX2 >> 1) dx = world.widthX2 - dx;
   const dy = Math.abs(a.y - b.y);
-  return Math.max((dx + dy) >> 1, dy, dx >> 1);
+  // VERIFIED 0x0055083d → 0x005507b6, the measure the capital distance uses.
+  const mid = (dx + dy) >> 1;
+  return dy < dx ? dx - ((mid - dy + 1) >> 1) : dy - ((mid - dx + 1) >> 1);
+}
+
+/** The original's second measure (VERIFIED 0x005506d0): half the coordinate sum, wrapped in x. */
+export function gridDistance(
+  world: World,
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+): number {
+  let dx = Math.abs(a.x - b.x);
+  if (!world.flatEarth && dx > world.widthX2 >> 1) dx = world.widthX2 - dx;
+  return (dx + Math.abs(a.y - b.y)) >> 1;
 }
 
 export interface GrowthOutcome {

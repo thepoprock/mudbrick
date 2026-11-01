@@ -8,7 +8,7 @@
  * docs/engine/rules-trade.md.
  */
 import { adjustAttitude, hasTreaty, TREATY } from './diplomacy.js';
-import { distance } from './city.js';
+import { distance, gridDistance } from './city.js';
 import { gotoDirection } from './pathfinding.js';
 import { DOMAIN_GROUND, IMPROVEMENT, type EngineRules } from './rules.js';
 import {
@@ -71,7 +71,7 @@ export function routeModifier(
   b: City,
 ): number {
   if (landmassOf(world, a.position) !== landmassOf(world, b.position)) return 0;
-  if (distance(world, a.position, b.position) >= 23) return 0;
+  if (gridDistance(world, a.position, b.position) >= 23) return 0;
   const groundType = rules.units.findIndex((t) => t.domain === DOMAIN_GROUND && t.move > 0);
   if (groundType < 0) return 0;
   const walker: Unit = {

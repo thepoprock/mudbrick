@@ -3,6 +3,8 @@ import {
   assignWorkers,
   boxRows,
   corruption,
+  gridDistance,
+  distance,
   foodBox,
   growthBlocker,
   mood,
@@ -665,5 +667,28 @@ describe('worker placement (verified)', () => {
       isHuman: true,
     });
     expect(c.worked).toBe(keep);
+  });
+});
+
+describe('the two distance measures (0x0055083d, 0x005506d0)', () => {
+  const w = new World({ columns: 20, rows: 30, flatEarth: true });
+  const from = { x: 10, y: 10 };
+  it('the main measure charges long straight lines more than diagonals', () => {
+    expect(distance(w, from, { x: 11, y: 11 })).toBe(1); // one diagonal step
+    expect(distance(w, from, { x: 12, y: 10 })).toBe(1); // one step along the row
+    expect(distance(w, from, { x: 14, y: 10 })).toBe(3);
+    expect(distance(w, from, { x: 30, y: 10 })).toBe(15);
+    expect(distance(w, from, { x: 10, y: 30 })).toBe(15);
+    expect(distance(w, from, { x: 20, y: 20 })).toBe(10);
+  });
+  it('the grid measure is half the coordinate sum', () => {
+    expect(gridDistance(w, from, { x: 14, y: 10 })).toBe(2);
+    expect(gridDistance(w, from, { x: 30, y: 10 })).toBe(10);
+    expect(gridDistance(w, from, { x: 20, y: 20 })).toBe(10);
+  });
+  it('both wrap in x on a round world', () => {
+    const round = new World({ columns: 20, rows: 30, flatEarth: false });
+    expect(gridDistance(round, { x: 0, y: 10 }, { x: 38, y: 10 })).toBe(1);
+    expect(distance(round, { x: 0, y: 10 }, { x: 38, y: 10 })).toBe(1);
   });
 });

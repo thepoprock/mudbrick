@@ -3,7 +3,7 @@
  * "Air units"): the fuel budget, returning to base, missiles, fighters and bombers. The engine
  * version keeps the documented tests; where the notes leave a detail open it is marked INFERRED.
  */
-import { distance } from './city.js';
+import { gridDistance } from './city.js';
 import { attackStrength, defenceStrength } from './combat.js';
 import { fullMoves, movesLeft } from './movement.js';
 import { orderGoTo, sentry } from './orders.js';
@@ -52,7 +52,7 @@ function nearestOwnCity(world: World, unit: Unit): { city: City; dist: number } 
   let best: { city: City; dist: number } | null = null;
   for (const c of world.cities) {
     if (c.owner !== unit.owner) continue;
-    const d = distance(world, unit.position, c.position);
+    const d = gridDistance(world, unit.position, c.position);
     if (!best || d < best.dist) best = { city: c, dist: d };
   }
   return best;
@@ -111,7 +111,7 @@ export function airDecision(
     for (const e of enemies) {
       const et = rules.units[e.type];
       if (!et || et.domain === DOMAIN_AIR) continue;
-      const d = distance(world, unit.position, e.position);
+      const d = gridDistance(world, unit.position, e.position);
       if (d * 3 > budget) continue;
       const stack = world.unitsAt(e.position.x, e.position.y);
       const sheltered =
@@ -125,7 +125,7 @@ export function airDecision(
         if (
           emptyNeighbours(world, e.position).length < 8 &&
           world.units.some(
-            (u) => u.owner === unit.owner && distance(world, u.position, e.position) === 1,
+            (u) => u.owner === unit.owner && gridDistance(world, u.position, e.position) === 1,
           )
         )
           worth *= 2;
@@ -141,7 +141,7 @@ export function airDecision(
     if (best) {
       const pads = emptyNeighbours(world, best.position);
       const pad = pads.sort(
-        (a, b) => distance(world, unit.position, a) - distance(world, unit.position, b),
+        (a, b) => gridDistance(world, unit.position, a) - gridDistance(world, unit.position, b),
       )[0];
       if (pad) return { kind: 'attack', target: best.position, tag: 'M' };
     }
@@ -155,7 +155,7 @@ export function airDecision(
     for (const e of enemies) {
       const et = rules.units[e.type];
       if (!et) continue;
-      const d = distance(world, unit.position, e.position);
+      const d = gridDistance(world, unit.position, e.position);
       let score: number;
       if (et.domain === DOMAIN_AIR) {
         score = 2 * d;
@@ -184,13 +184,13 @@ export function airDecision(
       }
     }
     if (best) {
-      const d = distance(world, unit.position, best.position);
-      const homeAfter = home ? distance(world, best.position, home.city.position) * 3 : 9999;
+      const d = gridDistance(world, unit.position, best.position);
+      const homeAfter = home ? gridDistance(world, best.position, home.city.position) * 3 : 9999;
       if (d <= 1 && (homeAfter <= budget - 3 || homeCost > budget))
         return { kind: 'attack', target: best.position, tag: 'A' };
       for (const p of emptyNeighbours(world, best.position)) {
-        const there = distance(world, unit.position, p) * 3;
-        const back = home ? distance(world, p, home.city.position) * 3 : 9999;
+        const there = gridDistance(world, unit.position, p) * 3;
+        const back = home ? gridDistance(world, p, home.city.position) * 3 : 9999;
         if (there + back <= budget) return { kind: 'goto', target: p, tag: 'A' };
       }
       if (home) {
@@ -199,8 +199,8 @@ export function airDecision(
         for (const c of world.cities) {
           const ok = c.owner === unit.owner || (ctx.isHuman(c.owner) && ctx.isAlly(c.owner));
           if (!ok) continue;
-          if (distance(world, unit.position, c.position) * 3 > budget) continue;
-          const dd = distance(world, c.position, best.position);
+          if (gridDistance(world, unit.position, c.position) * 3 > budget) continue;
+          const dd = gridDistance(world, c.position, best.position);
           if (dd < nd) {
             nd = dd;
             near = c;
@@ -219,7 +219,7 @@ export function airDecision(
     let bestScore = -1;
     for (const c of world.cities) {
       if (c.owner === unit.owner || !ctx.atWar(c.owner) || !ctx.canAttack(c.owner)) continue;
-      const d = distance(world, unit.position, c.position);
+      const d = gridDistance(world, unit.position, c.position);
       if (d * 3 > budget) continue;
       const units = world.unitsAt(c.position.x, c.position.y).length;
       if (units === 0) continue;
@@ -237,7 +237,7 @@ export function airDecision(
       }
     }
     if (best) {
-      if (distance(world, unit.position, best.position) <= 1)
+      if (gridDistance(world, unit.position, best.position) <= 1)
         return { kind: 'attack', target: best.position, tag: 'B' };
       return { kind: 'goto', target: best.position, tag: 'B' };
     }

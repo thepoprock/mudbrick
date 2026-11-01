@@ -13,7 +13,7 @@
  * test is "both squares have a river", and the search is a plain shortest-path search rather
  * than the original's ring buffer.
  */
-import { distance } from './city.js';
+import { gridDistance } from './city.js';
 import { DOMAIN_AIR, DOMAIN_GROUND, DOMAIN_SEA, type EngineRules } from './rules.js';
 import {
   NEIGHBOUR_OFFSETS,
@@ -249,7 +249,7 @@ export function gotoDirection(
     if (c === 0 || c >= hereCost) continue;
     if (!passable(world, rules, unit, b, n, goalIndex)) continue;
     const total = c + stepCost(world, rules, unit, b, hereIndex, n);
-    const d = distance(world, goal, world.position(n));
+    const d = gridDistance(world, goal, world.position(n));
     if (total < bestTotal || (total === bestTotal && d < bestDist)) {
       bestTotal = total;
       bestDist = d;

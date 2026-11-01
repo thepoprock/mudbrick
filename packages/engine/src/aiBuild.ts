@@ -7,7 +7,7 @@
  */
 import { hasTreaty, treaty, TREATY } from './diplomacy.js';
 import { hasLaunched, hasStarted } from './spaceship.js';
-import { boxRows, distance, type CityContext } from './city.js';
+import { boxRows, type CityContext, gridDistance } from './city.js';
 import { canBuildUnit } from './founding.js';
 import type { Production } from './world.js';
 import {
@@ -489,7 +489,10 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
   let distanceToCapital = 32;
   for (const c of myCities) {
     if (c.improvements[IMPROVEMENT.palace])
-      distanceToCapital = Math.min(distanceToCapital, distance(world, city.position, c.position));
+      distanceToCapital = Math.min(
+        distanceToCapital,
+        gridDistance(world, city.position, c.position),
+      );
   }
   const shakespeares = env.wonderCity(IMPROVEMENT.shakespeares) === city.id;
 

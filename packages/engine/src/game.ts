@@ -20,6 +20,7 @@ import {
   type CityContext,
   corruption,
   assignWorkers,
+  gridDistance,
 } from './city.js';
 import {
   applyCityMood,
@@ -1428,7 +1429,7 @@ export class Game {
           const nearest = this.world.cities
             .filter((c) => c.owner === city.owner && c !== city)
             .reduce(
-              (best, c) => Math.min(best, distance(this.world, city.position, c.position)),
+              (best, c) => Math.min(best, gridDistance(this.world, city.position, c.position)),
               9999,
             );
           const warWithoutCitiesHere =

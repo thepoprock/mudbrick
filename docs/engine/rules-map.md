@@ -51,3 +51,15 @@ shield = (−(a + x)) & 2 == 0
 
 Half of all grassland squares carry the shield, in diagonal stripes two squares wide. The AI's
 city-site rating (0x0040291f) counts it as +2 and penalises a grassland site without one.
+
+## The two distance measures (VERIFIED 0x0055083d, 0x005506d0)
+
+The original measures distance in two ways, with `dx` wrapped on a round world, in the doubled
+map coordinates. The main one (`distance`, used for the capital distance behind corruption, for
+nearest-city searches, for caravan payments and for most of the unit AI) takes the larger and
+smaller of `dx` and `dy` and gives `large − ((⌊(dx + dy) / 2⌋ − small + 1) >> 1)`, so a long straight
+line costs half as much again as a diagonal. The grid one (`gridDistance`, used by the unit
+support and fortress checks, road links and the go-to search, the air AI and fuel) is
+`⌊(dx + dy) / 2⌋`. Call sites were sorted by which routine they came from; those in routines
+using both (the unit handler 0x004f44cc, 0x004ba99a) were sorted where the decompile was read, and
+the rest stay on the main measure — INFERRED.

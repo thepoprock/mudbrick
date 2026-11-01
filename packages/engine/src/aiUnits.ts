@@ -10,7 +10,7 @@
 import { addGoal, removeGoals, type CivStrategy } from './aiStrategy.js';
 import { resolveAttack } from './attack.js';
 import { captureCity } from './conquest.js';
-import { distance } from './city.js';
+import { distance, gridDistance } from './city.js';
 import { combatOdds, hitPoints, maxHitPoints } from './combat.js';
 import { chooseDefender } from './defender.js';
 import { landValue } from './fertility.js';
@@ -519,14 +519,14 @@ function stepToward(
       }
     }
   }
-  let bestD = distance(world, unit.position, target);
+  let bestD = gridDistance(world, unit.position, target);
   for (let dir = 0; best === null && dir < 8; dir++) {
     const n = neighbour(world, unit.position, dir);
     if (!n) continue;
     const v = checkMove(world, rules, unit, n, ctx);
     if (!v.ok || v.boards) continue;
     if (world.unitsAt(n.x, n.y).some((u) => u.owner !== unit.owner)) continue;
-    const d = distance(world, n, target);
+    const d = gridDistance(world, n, target);
     if (d < bestD) {
       bestD = d;
       best = n;

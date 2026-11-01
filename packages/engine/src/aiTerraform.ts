@@ -8,7 +8,7 @@
  * around its home city. VERIFIED unless marked INFERRED. docs/engine/ai-units.md ("Workers").
  */
 import { addGoal, addObjective, objectiveAt, removeGoals, type CivStrategy } from './aiStrategy.js';
-import { distance } from './city.js';
+import { distance, gridDistance } from './city.js';
 import { hasTreaty, TREATY } from './diplomacy.js';
 import { gotoDirection } from './pathfinding.js';
 import { DOMAIN_GROUND, IMPROVEMENT, type EngineRules } from './rules.js';
@@ -101,7 +101,7 @@ export function roadLinkTask(
         other.owner === city.owner ||
         (pass === 1 && hasTreaty(world, city.owner, other.owner, TREATY.peace | TREATY.alliance));
       if (!friendly) continue;
-      if (distance(world, other.position, city.position) >= 23) continue;
+      if (gridDistance(world, other.position, city.position) >= 23) continue;
       const hit: { p: Point | null } = { p: null };
       walkPath(world, rules, city.owner, city.position, other.position, (p) => {
         if (world.cityAt(p.x, p.y)) return true;

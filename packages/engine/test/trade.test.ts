@@ -155,11 +155,12 @@ describe('trade routes', () => {
     const u = caravan(w, 22, 2, 1, 0, 9); // Silk
     const events: TradeEvent[] = [];
     const bonus = establishTradeRoute(w, rules, u, target, ctx(), events);
-    // distance 10: (10 + 10) × 20 / 24 = 16; early game ×2 = 32 (silk only counts when demanded)
-    expect(bonus).toBe(32);
+    // 20 columns away is 15 by the original's measure: (10 + 10) × 25 / 24 = 20; early game ×2 =
+    // 40 (silk only counts when demanded)
+    expect(bonus).toBe(40);
     const c1 = w.civs.find((c) => c.slot === 1);
-    expect(c1?.treasury).toBe(132);
-    expect(c1?.scienceStored).toBe(32);
+    expect(c1?.treasury).toBe(140);
+    expect(c1?.scienceStored).toBe(40);
     expect(w.units).toHaveLength(0);
     expect(home.tradeRoutes).toEqual([{ partner: 1, food: false, commodity: 9 }]);
     expect(target.tradeRoutes[0]?.partner).toBe(0);
@@ -179,7 +180,7 @@ describe('trade routes', () => {
     target.demanded = Int8Array.from([13, 2, 4]); // Gold is wanted
     const u = caravan(w, 22, 2, 1, 0, 13);
     const bonus = establishTradeRoute(w, rules, u, target, ctx({ turn: 250 }), []);
-    expect(bonus).toBe(16 * 2 + 16); // base 16 doubled plus the gold bonus (= base)
+    expect(bonus).toBe(20 * 2 + 20); // base 20 doubled plus the gold bonus (= base)
   });
 
   it('a road between the cities raises the income and a food route feeds the partner', () => {

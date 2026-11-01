@@ -692,7 +692,9 @@ export function parseSave(bytes: Uint8Array): SaveFile {
     const dir = r.u8(o + 11);
     return {
       id,
-      position: x === 0xffff ? null : { x, y: r.u16(o + 2) },
+      // VERIFIED: a removed unit is parked off the map at (owner × 4 + 4) × −25 on both axes
+      // (0x005548ce, called when a unit is deleted), so any negative x is an empty slot.
+      position: x >= 0x8000 ? null : { x, y: r.u16(o + 2) },
       hasMoved: r.bit(o + 4, 6),
       veteran: r.bit(o + 5, 5),
       waiting: r.bit(o + 5, 6),
