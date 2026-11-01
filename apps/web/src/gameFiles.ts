@@ -160,10 +160,14 @@ function artLoader(lookup: FileSource) {
         if (!g) return URL.createObjectURL(blob);
         g.drawImage(image, 0, 0);
         const px = g.getImageData(0, 0, image.width, image.height);
-        // The corner colour marks transparency in these pictures.
-        const [r, gn, b] = [px.data[0], px.data[1], px.data[2]];
-        for (let i = 0; i < px.data.length; i += 4)
-          if (px.data[i] === r && px.data[i + 1] === gn && px.data[i + 2] === b) px.data[i + 3] = 0;
+        // Corners and the two keying colours mark transparency in these pictures.
+        const d = px.data;
+        const key = (i: number) => (d[i] ?? 0) * 65536 + (d[i + 1] ?? 0) * 256 + (d[i + 2] ?? 0);
+        const last = d.length - 4;
+        const right = (image.width - 1) * 4;
+        const left = (image.height - 1) * image.width * 4;
+        const clear = new Set([key(0), key(right), key(left), key(last), 0x00ffff, 0xff00ff]);
+        for (let i = 0; i < d.length; i += 4) if (clear.has(key(i))) d[i + 3] = 0;
         g.putImageData(px, 0, 0);
         return canvas.toDataURL('image/png');
       });

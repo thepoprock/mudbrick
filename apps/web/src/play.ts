@@ -184,6 +184,12 @@ export class PlaySession {
     this.log(`You lead the ${this.civ.name}. Arrow keys or the number pad move the selected unit.`);
     this.selectNext();
     this.refresh();
+    if (!this.selected) {
+      const home =
+        this.world.cities.find((c) => c.owner === humanSlot) ??
+        this.world.units.find((u) => u.owner === humanSlot);
+      if (home) this.centreOn(home.position);
+    }
   }
 
   get world() {
@@ -1101,6 +1107,10 @@ export class PlaySession {
       opt.disabled = !bound;
       menu?.append(opt);
     }
+    bar.style.position = 'sticky';
+    bar.style.top = '0';
+    bar.style.left = '0';
+    bar.style.zIndex = '20';
     this.el.canvas.parentElement?.prepend(bar);
   }
 
