@@ -24,6 +24,7 @@ import {
 } from './city.js';
 import {
   applyCityMood,
+  disbandForDisorder,
   disbandForShortage,
   researchableAdvances,
   type CityEvent,
@@ -464,6 +465,12 @@ export class Game {
       }
     }
     for (const e of disbandForShortage(this.world, this.rules, city, ctx, t.raw.shields)) push(e);
+    for (const e of disbandForDisorder(this.world, this.rules, city, {
+      turn: this.state.turn,
+      isHuman: civ.isHuman,
+      government: civ.government,
+    }))
+      push(e);
     t = totals();
     city.lastHappy = t.mood.happy;
     city.lastUnhappy = t.mood.unhappy;

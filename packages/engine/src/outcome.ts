@@ -14,7 +14,7 @@ import {
   type CityContext,
 } from './city.js';
 import { FUTURE_TECHNOLOGY } from './research.js';
-import { advanceIndex, GOVERNMENT, type EngineRules } from './rules.js';
+import { advanceIndex, GOVERNMENT, type EngineRules, DOMAIN_GROUND } from './rules.js';
 import { SquareFlag, type City, type Civ, type Unit, type World } from './world.js';
 
 export type CityEvent =
@@ -25,7 +25,8 @@ export type CityEvent =
   | { kind: 'celebration-start' }
   | { kind: 'celebration-end' }
   | { kind: 'rapture-growth' }
-  | { kind: 'disbanded-for-shortage'; unit: Unit; shieldsRefunded: number };
+  | { kind: 'disbanded-for-shortage'; unit: Unit; shieldsRefunded: number }
+  | { kind: 'disbanded-for-disorder'; unit: Unit };
 
 export interface MoodOutcomeInputs {
   happy: number;
@@ -143,6 +144,50 @@ export function disbandForShortage(
     }
     events.push({ kind: 'disbanded-for-shortage', unit: victim, shieldsRefunded: refund });
   }
+}
+
+/**
+ * VERIFIED (0x004ba99a, the branch beside the shortage): a computer player's city in disorder
+ * under the Republic or Democracy, when `(turn + index) & 7 == 0` for one of its supported units,
+ * disbands its farthest supported land unit of the first five roles that stands outside every
+ * city and not in a fortress within three squares of an own city — and the disorder flag goes
+ * with it, so at most one unit a turn. (The veto of both senate governments when a human leads
+ * in advances, under options byte 8 bit 0, is not modelled.)
+ */
+export function disbandForDisorder(
+  world: World,
+  rules: EngineRules,
+  city: City,
+  ctx: { turn: number; isHuman: boolean; government: number },
+): CityEvent[] {
+  if (ctx.isHuman || ctx.government < GOVERNMENT.republic || !city.inDisorder) return [];
+  const homed = world.units.filter(
+    (u) => u.homeCity === city.id && (rules.units[u.type]?.role ?? 9) <= 5,
+  );
+  if (!homed.some((u) => ((ctx.turn + u.id) & 7) === 0)) return [];
+  let victim: Unit | null = null;
+  let farthest = 0;
+  for (const u of homed) {
+    const type = rules.units[u.type];
+    if (!type || type.role > 4 || type.domain !== DOMAIN_GROUND) continue;
+    if (world.cityAt(u.position.x, u.position.y)) continue;
+    if (
+      world.hasFlag(u.position.x, u.position.y, SquareFlag.Fortress) &&
+      world.cities.some(
+        (c) => c.owner === city.owner && distance(world, c.position, u.position) < 4,
+      )
+    )
+      continue;
+    const d = distance(world, city.position, u.position);
+    if (d > farthest) {
+      farthest = d;
+      victim = u;
+    }
+  }
+  if (!victim) return [];
+  world.units.splice(world.units.indexOf(victim), 1);
+  city.inDisorder = false;
+  return [{ kind: 'disbanded-for-disorder', unit: victim }];
 }
 
 /** Advances a civilization may research now: unknown, reachable, prerequisites known. */

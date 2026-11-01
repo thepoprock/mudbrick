@@ -13,6 +13,7 @@ import {
   unitSupport,
   type CityContext,
 } from '../src/city.js';
+import { disbandForDisorder } from '../src/outcome.js';
 import { GOVERNMENT, IMPROVEMENT, ADVANCE, type EngineRules } from '../src/rules.js';
 import { CITY_CENTRE_INDEX, SquareFlag, World, type City, type Unit } from '../src/world.js';
 
@@ -513,5 +514,47 @@ describe('government scoring pass (verified)', () => {
     // 10 → −(1 + 3) × 10 / 4 = −10, no buildings so no tithe.
     tradeSplit(rules, c, ctx({ governmentScores: scores, civilize: 1, distanceToCapital: 0 }), 20);
     expect(scores[4]).toBe(2 - 10);
+  });
+});
+
+describe('disorder under a senate (verified)', () => {
+  const soldier = (id: number, x: number, y: number): Unit => ({
+    id,
+    position: { x, y },
+    owner: 1,
+    type: 1,
+    veteran: false,
+    hitPointsLost: 0,
+    movesSpent: 0,
+    fortified: false,
+    homeCity: 0,
+    order: null,
+    workCounter: 0,
+    gotoTarget: null,
+    lastDirection: null,
+    gotoSteps: 0,
+  });
+  it('a computer city in disorder disbands its farthest land unit outside cities on its turn', () => {
+    const w = grassWorld();
+    const c = city(w, { inDisorder: true });
+    const near = soldier(0, 12, 10);
+    const far = soldier(8, 14, 14);
+    const inTown = soldier(16, 10, 10);
+    for (const u of [near, far, inTown]) w.units.push(u);
+    const ctx = { turn: 40, isHuman: false, government: GOVERNMENT.republic };
+    // Unit 0 at turn 40: (40 + 0) & 7 = 0 — the cycle fires; the farthest unit outside goes.
+    const ev = disbandForDisorder(w, rules, c, ctx);
+    expect(ev.map((e) => e.kind)).toEqual(['disbanded-for-disorder']);
+    expect(w.units.includes(far)).toBe(false);
+    expect(c.inDisorder).toBe(false);
+    // Order restored: nothing more; a human or a monarchy never does this.
+    expect(disbandForDisorder(w, rules, c, ctx)).toEqual([]);
+    c.inDisorder = true;
+    expect(disbandForDisorder(w, rules, c, { ...ctx, isHuman: true })).toEqual([]);
+    expect(disbandForDisorder(w, rules, c, { ...ctx, government: GOVERNMENT.monarchy })).toEqual(
+      [],
+    );
+    // Off the cycle (turn 41: 41 & 7, 57 & 7 are not 0) nothing happens either.
+    expect(disbandForDisorder(w, rules, c, { ...ctx, turn: 41 })).toEqual([]);
   });
 });

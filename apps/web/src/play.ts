@@ -697,6 +697,8 @@ export class PlaySession {
         return `Nuclear meltdown in ${cityName}! The Nuclear Plant is destroyed.`;
       case 'disbanded-for-shortage':
         return `${cityName} cannot support ${this.unitName(ev.unit)}; it is disbanded.`;
+      case 'disbanded-for-disorder':
+        return `${cityName} in disorder disbands ${this.unitName(ev.unit)}.`;
       default:
         return null;
     }

@@ -117,8 +117,13 @@ The routine's result, `happy − unhappy`, is what the civilization turn inspect
   disbands one supported unit — the one farthest from the city, preferring units not sitting in
   a city or a nearby fortress — and shows the SUPPORT dialog. A unit disbanded inside a city adds
   `cost × K₂ / 2` shields to that city's production box (the 50 % disband rule).
-- Under Republic or Democracy a city in disorder may also lose a unit this way on an 8-turn
-  cycle (AI only).
+- **Disorder under a senate** (VERIFIED, the branch beside the shortage): a computer player's
+  city in disorder under the Republic or Democracy, when `(turn + unit index) & 7 == 0` for one
+  of its supported units, disbands its farthest supported land unit of roles 0–4 that stands
+  outside every city and not in a fortress within three squares of an own city, and the
+  disorder flag is cleared with it (so one unit a turn at most; `outcome.ts`
+  `disbandForDisorder`). With options byte 8 bit 0 set and a human ahead in advances the
+  routine instead vetoes both senate governments (−999) — not modelled.
 
 ## Square yields (VERIFIED, 0x004b4102)
 
