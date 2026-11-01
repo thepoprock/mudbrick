@@ -192,4 +192,39 @@ describe('transports', () => {
     const d2 = transportDecision(w, rules, ship, ctx);
     expect(d2).toMatchObject({ kind: 'goto', target: { x: 28, y: 12 }, tag: '3' });
   });
+
+  it('a loaded ship at sea makes for an own city on a defend land mass, else its other cities', () => {
+    const w = islands();
+    const near = city(w, 0, 8, 12);
+    const far = city(w, 1, 28, 12);
+    const s = emptyStrategy();
+    s.plans[1] = 5;
+    s.plans[2] = 1;
+    s.citiesOn[1] = 1;
+    s.citiesOn[2] = 1;
+    const ship = unit(w, 2, 24, 12);
+    unit(w, 0, 24, 12); // Warriors aboard
+    const ctx = {
+      turn: 10,
+      rng: new Rng(3),
+      strategy: s,
+      canAttack: () => false,
+      atWar: () => false,
+      isAlly: () => false,
+      isHuman: () => false,
+      cityTrade: (c: City) => c.lastTrade ?? 0,
+    };
+    expect(transportDecision(w, rules, ship, ctx)).toMatchObject({
+      kind: 'goto',
+      target: far.position,
+      tag: 'A',
+    });
+    s.plans[2] = 5;
+    // No defend land mass now: the nearest own city over 7 away.
+    expect(transportDecision(w, rules, ship, ctx)).toMatchObject({
+      kind: 'goto',
+      target: near.position,
+      tag: '5',
+    });
+  });
 });

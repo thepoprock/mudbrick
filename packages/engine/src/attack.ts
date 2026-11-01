@@ -19,7 +19,7 @@ import { chooseDefender } from './defender.js';
 import { NUCLEAR_ATTACK, nuclearStrike, type Blast } from './nuclear.js';
 import { removeCity } from './fertility.js';
 import type { Rng } from './rng.js';
-import { DOMAIN_GROUND, IMPROVEMENT, type EngineRules } from './rules.js';
+import { DOMAIN_GROUND, DOMAIN_SEA, IMPROVEMENT, type EngineRules } from './rules.js';
 import {
   OCEAN,
   SquareFlag,
@@ -100,6 +100,13 @@ export function resolveAttack(
   if (!defender) return { kind: 'no-defender' };
   const result = resolveCombat(world, rules, rng, attacker, defender, combatCtx);
   applyCombat(rules, result, attacker, defender);
+  // VERIFIED 0x0052d472: a Coastal Fortress that doubled the defence against a ship is now known.
+  if (
+    city?.improvements[IMPROVEMENT.coastalFortress] === true &&
+    aType.domain === DOMAIN_SEA &&
+    rules.units[defender.type]?.domain !== DOMAIN_SEA
+  )
+    city.coastalFortressKnown = true;
 
   // VERIFIED 0x0052d472: every caller of the mover asks for this (0x00539099 with mode 3).
   attacker.movesSpent += rules.cosmic.roadMoveMultiplier;

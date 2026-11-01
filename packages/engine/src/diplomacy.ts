@@ -182,7 +182,7 @@ export interface DiplomacyContext {
   advancesOf: (slot: number) => number;
   /** The leader's attack personality (RULES @LEADERS). */
   attackPersonality: (slot: number) => number;
-  /** The original's per-civilization "control" byte: 7 for a human, the difficulty otherwise (INFERRED). */
+  /** Power rank, 7 for the strongest (0x005da842, `Game.powerRank`). */
   control: (slot: number) => number;
   /** Per-land-mass tallies from the strategic layer (combat units, attack, cities). */
   tallies: (

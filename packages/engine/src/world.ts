@@ -176,6 +176,8 @@ export interface City {
   shieldsStored: number;
   /** Bit i = square CITY_RADIUS_OFFSETS[i] is worked (the centre, bit 20, always is). */
   worked: number;
+  /** A ship has met this city's Coastal Fortress (city flag bit 27); ships then avoid it. */
+  coastalFortressKnown?: boolean;
   specialists: Specialists;
   production: Production;
   inDisorder: boolean;
@@ -245,6 +247,8 @@ export interface Unit {
   gotoTarget: Point | null;
   /** 0–7 clockwise from north-east, or null. */
   lastDirection: number | null;
+  /** Which eighth of the cities a transport looks at next (unit byte +0x0d). */
+  cityStep?: number;
   /** Go-to steps taken toward the current target (the original asks to give up past 47). */
   gotoSteps: number;
   /** Moved this turn (the original's flag bit 6); such a unit does not heal next turn. */

@@ -345,6 +345,8 @@ export interface ForeignStrengthEnv {
   /** The main human's slot (null without one). */
   mainHuman?: number | null;
   isHumanSlot?: (slot: number) => boolean;
+  /** Power rank, 7 for the strongest (0x005da842). */
+  rankOf?: (slot: number) => number;
   /** Active units of a type a civilization has (the civilization record's per-type counts). */
   unitCount?: (slot: number, type: number) => number;
   atWar?: (a: number, b: number) => boolean;
@@ -824,7 +826,7 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
         // mass (`onContinent`).
         const civOf = (s: number) => world.civs.find((c) => c.slot === s);
         const isHumanSlot = (s: number) => civOf(s)?.isHuman ?? false;
-        const control = (s: number) => (isHumanSlot(s) ? 7 : f.difficulty);
+        const control = (s: number) => env.foreign?.rankOf?.(s) ?? 0;
         let pressure = f.spaceRacePressure === true;
         if (pressure) {
           const p36 = advanceIndex(rules.improvements[36]?.preq);

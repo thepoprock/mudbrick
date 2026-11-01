@@ -242,6 +242,18 @@ describe('Game turn loop', () => {
     expect(hard.slice(1).every((a) => (a - 1) % 3 !== 0)).toBe(true);
   });
 
+  it('power rank belongs to the strongest civilization, human or not', () => {
+    const { world, game } = setup();
+    const human = world.civs[0];
+    const rival = world.civs[1];
+    if (!human || !rival) throw new Error('no civs');
+    human.isHuman = true;
+    human.treasury = 0;
+    rival.treasury = 30000;
+    expect(game.powerRank(rival.slot)).toBe(7);
+    expect(game.powerRank(human.slot)).toBeLessThan(7);
+  });
+
   it('the go-to counter adds one a step and fifteen more for turning back', () => {
     expect(longMoveCount(0, false)).toBe(1);
     expect(longMoveCount(1, true)).toBe(17);

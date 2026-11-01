@@ -7,16 +7,20 @@
  * the port and sail; loaded, they head for an enemy city they may attack, an own coastal city
  * short of units, or any enemy city by trade and distance, and unload where the cargo's land is
  * wanted; without a destination they ferry to a foreign city, a random other land mass, or
- * wander. The scoring details are INFERRED simplifications where noted. Warships use the
- * direction chooser like ground units.
+ * wander. Where a loaded ship goes is the original's chain, `loadedDestination`; the test for
+ * unloading and the ferry scores in port are INFERRED simplifications where noted. Warships use
+ * the direction chooser like ground units.
  */
-import { addObjective, type CivStrategy } from './aiStrategy.js';
+import { addObjective, objectiveAt, type CivStrategy } from './aiStrategy.js';
 import { distance } from './city.js';
+import { hasTreaty, TREATY } from './diplomacy.js';
+import { CITY_SPACING_OFFSETS } from './fertility.js';
 import { orderGoTo, sentry } from './orders.js';
 import { DOMAIN_GROUND, type EngineRules } from './rules.js';
 import { NEIGHBOUR_OFFSETS, OCEAN, type City, type Point, type Unit, type World } from './world.js';
 
 const ROLE_TRANSPORT = 4;
+const PLAN_DEFEND = 1;
 const PLAN_FULL = 4;
 
 /** Units a land mass should hold for its cities (0x004f266b): the first five count 3, the next five 2, the next five 1. */
@@ -56,6 +60,8 @@ export interface ShipContext {
   atWar: (slot: number) => boolean;
   isAlly: (slot: number) => boolean;
   isHuman: (slot: number) => boolean;
+  /** The civilization ranked first (0x005da851). */
+  leader?: number;
   cityTrade: (city: City) => number;
 }
 
@@ -143,58 +149,7 @@ export function transportDecision(
     }
     if (ship.order !== null && ship.gotoTarget)
       return { kind: 'goto', target: ship.gotoTarget, tag: 'keep' };
-    // A: the nearest enemy city we may attack, on another land mass.
-    let best: City | null = null;
-    let bestD = 9999;
-    for (const c of world.cities) {
-      if (c.owner === ship.owner || !ctx.canAttack(c.owner) || !ctx.atWar(c.owner)) continue;
-      if (landmassAt(world, c.position) === lmHere && !atSea) continue;
-      const d = distance(world, here, c.position);
-      if (d < bestD) {
-        bestD = d;
-        best = c;
-      }
-    }
-    if (best)
-      return {
-        kind: 'goto',
-        target: shoreNear(world, best.position, here) ?? best.position,
-        tag: 'A',
-      };
-    // 4: the nearest own coastal city on another land mass short of units.
-    const ports = portsWantingUnits(world, ship, ctx);
-    let port: City | null = null;
-    bestD = 9999;
-    for (const c of ports) {
-      const d = distance(world, here, c.position);
-      if (d < bestD) {
-        bestD = d;
-        port = c;
-      }
-    }
-    if (port) return { kind: 'goto', target: port.position, tag: '4' };
-    // T: any enemy city by trade × distance / 8 (INFERRED: the lowest wins).
-    let score = 1e9;
-    for (const c of world.cities) {
-      if (c.owner === ship.owner || !ctx.atWar(c.owner)) continue;
-      const v = Math.trunc((ctx.cityTrade(c) * distance(world, here, c.position)) / 8);
-      if (v < score) {
-        score = v;
-        best = c;
-      }
-    }
-    if (best)
-      return {
-        kind: 'goto',
-        target: shoreNear(world, best.position, here) ?? best.position,
-        tag: 'T',
-      };
-    // Settlers aboard and nowhere wanted: a land mass with no own city (tag V).
-    if (stack.some((u) => rules.units[u.type]?.role === 5)) {
-      const v = otherLandmass(world, ship, ctx);
-      if (v) return { kind: 'goto', target: v, tag: 'V' };
-    }
-    return { kind: 'hold' };
+    return loadedDestination(world, rules, ship, stack, ctx);
   }
 
   // In port with room: a destination for units gathered here (tag 3).
@@ -262,6 +217,244 @@ export function transportDecision(
     if (home) return { kind: 'goto', target: home.position, tag: 'home' };
   }
   return { kind: 'chooser' };
+}
+
+/** Which land masses touch which oceans (the original's table 0x005ead57, read by 0x00559951). */
+const shores = new WeakMap<World, Set<number>>();
+
+function landTouchesOcean(world: World, land: number, ocean: number): boolean {
+  let table = shores.get(world);
+  if (!table) {
+    table = new Set<number>();
+    for (let i = 0; i < world.area; i++) {
+      if ((world.terrain[i] ?? OCEAN) !== OCEAN) continue;
+      const p = world.position(i);
+      const o = landmassAt(world, p);
+      for (const n of world.neighbours(p.x, p.y)) {
+        if (n && world.terrainAt(n.x, n.y) !== OCEAN) table.add(landmassAt(world, n) * 64 + o);
+      }
+    }
+    shores.set(world, table);
+  }
+  return table.has(land * 64 + ocean);
+}
+
+function oceansBeside(world: World, c: City): number[] {
+  const out: number[] = [];
+  for (const n of world.neighbours(c.position.x, c.position.y)) {
+    if (n && world.terrainAt(n.x, n.y) === OCEAN) out.push(landmassAt(world, n));
+  }
+  return out;
+}
+
+/**
+ * Where a loaded transport goes (0x004f44cc), each step only if the last found nothing:
+ * A an own city on a defend land mass, I a human-allied war's undefended city, 4 a foe's land, T a
+ * city for a caravan, 5 an own city elsewhere, V or 6 a land mass with no own city.
+ * In port, reach is by the port's oceans; at sea, by the ocean the ship is on.
+ */
+function loadedDestination(
+  world: World,
+  rules: EngineRules,
+  ship: Unit,
+  stack: Unit[],
+  ctx: ShipContext,
+): ShipDecision {
+  const me = ship.owner;
+  const here = ship.position;
+  const s = ctx.strategy;
+  const atSea = world.terrainAt(here.x, here.y) === OCEAN;
+  const port = world.cityAt(here.x, here.y);
+  const inPort = port !== null && port !== undefined && port.owner === me;
+  const ocean = atSea ? landmassAt(world, here) : -1;
+  const landHere = atSea ? -1 : landmassAt(world, here);
+  const cityReach = (c: City) =>
+    inPort
+      ? oceansBeside(world, port).some((o) => oceansBeside(world, c).includes(o))
+      : oceansBeside(world, c).includes(ocean);
+  const landReach = (lm: number) =>
+    inPort
+      ? landmassAt(world, port.position) === lm ||
+        oceansBeside(world, port).some((o) => landTouchesOcean(world, lm, o))
+      : landTouchesOcean(world, lm, ocean);
+  const planOf = (c: City) => s?.plans[landmassAt(world, c.position)] ?? 5;
+  const empty = (c: City) => world.unitsAt(c.position.x, c.position.y).length === 0;
+  const war = (a: number, b: number) => hasTreaty(world, a, b, TREATY.war);
+  const humans = world.civs.filter((c) => c.isHuman && c.slot !== 0);
+  const goTo = (c: City, tag: string): ShipDecision => ({
+    kind: 'goto',
+    target: c.owner === me ? c.position : (shoreNear(world, c.position, here) ?? c.position),
+    tag,
+  });
+  let mask = 0;
+  for (const u of stack) mask |= 1 << (rules.units[u.type]?.role ?? 0);
+  const holds = rules.units[ship.type]?.holds ?? 0;
+
+  let found: City | null = null;
+  if ((mask & 3) !== 0 && holds > 0) {
+    let best = 24;
+    for (const c of world.cities) {
+      if (c.owner !== me || planOf(c) !== PLAN_DEFEND || !cityReach(c)) continue;
+      let d = distance(world, here, c.position);
+      if (empty(c)) d >>= 1;
+      else if (s && objectiveAt(s, c.position, 1)) d -= Math.trunc(d / 3);
+      if (d < best) {
+        best = d;
+        found = c;
+      }
+    }
+    if (found) return goTo(found, 'A');
+  }
+  if ((mask & 3) !== 0) {
+    let best = 999;
+    for (const c of world.cities) {
+      if (c.owner === me || !war(me, c.owner) || !empty(c) || !cityReach(c)) continue;
+      let d = distance(world, here, c.position);
+      if (humans.some((h) => hasTreaty(world, me, h.slot, TREATY.alliance) && war(h.slot, c.owner)))
+        d >>= 1;
+      if (c.coastalFortressKnown) d <<= 1;
+      if (d < best) {
+        best = d;
+        found = c;
+        ship.cityStep = world.cities.indexOf(c) & 7;
+      }
+    }
+    if (found) return goTo(found, 'I');
+  }
+  let ally = -1;
+  for (let o = 0; o < 8; o++) {
+    if (hasTreaty(world, me, o, TREATY.alliance) && (ctx.isHuman(o) || ally < 0)) ally = o;
+  }
+  if ((mask & 1) !== 0 || (mask & 0x20) === 0) {
+    let best = 999;
+    // Only one city in eight is looked at, a different eighth as ship.cityStep moves.
+    for (let i = (ship.cityStep ?? ctx.turn) & 7; i < world.cities.length; i += 8) {
+      const c = world.cities[i];
+      if (!c) continue;
+      const o = c.owner;
+      if (o === me || hasTreaty(world, me, o, TREATY.alliance)) continue;
+      if (hasTreaty(world, me, o, TREATY.peace) && !hasTreaty(world, me, o, TREATY.strain))
+        continue;
+      if (ctx.leader !== undefined && ctx.isHuman(ctx.leader) && ctx.leader !== me) continue;
+      const lm = landmassAt(world, c.position);
+      if (lm === landHere || !landReach(lm)) continue;
+      let d = distance(world, here, c.position);
+      if (ally > 0 && war(ally, o)) d >>= 1;
+      if (hasTreaty(world, me, o, TREATY.grudge)) d >>= 1;
+      if (war(me, o) && empty(c)) d >>= 1;
+      if (c.coastalFortressKnown) d <<= 1;
+      if (d < best) {
+        best = d;
+        found = c;
+      }
+    }
+    if (found) return goTo(found, '4');
+  }
+  if ((mask & 0x80) !== 0 && holds > 0) {
+    let best = -999;
+    const caravan = stack.find((u) => rules.units[u.type]?.role === 7);
+    const home =
+      world.cities.find((c) => c.id === caravan?.homeCity) ??
+      nearestOwnCity(world, me, here) ??
+      world.cities[0];
+    for (const c of home ? world.cities : []) {
+      const lm = landmassAt(world, c.position);
+      if (lm === landHere || !home) continue;
+      if (c.owner === me ? !cityReach(c) : !landReach(lm)) continue;
+      let v = distance(world, home.position, c.position);
+      if (c.owner === me) v >>= 1;
+      if (war(me, c.owner)) v -= Math.trunc(v / 3);
+      if (hasTreaty(world, me, c.owner, TREATY.alliance)) v += Math.trunc(v / 3);
+      if (ctx.isHuman(c.owner) && ctx.leader === c.owner) v >>= 1;
+      v *= ctx.cityTrade(c);
+      v = Math.trunc(v / ((distance(world, here, c.position) >> 3) + 1));
+      if (v > best) {
+        best = v;
+        found = c;
+      }
+    }
+    if (found) return goTo(found, 'T');
+  }
+  {
+    let best = 999;
+    for (const c of world.cities) {
+      if (c.owner !== me) continue;
+      let d = distance(world, here, c.position);
+      const lm = landmassAt(world, c.position);
+      if (d <= 7 || lm === landHere || planOf(c) === PLAN_FULL || !cityReach(c)) continue;
+      if ((mask & (1 << planOf(c))) === 0) d <<= 1;
+      if (d < best) {
+        best = d;
+        found = c;
+      }
+    }
+    if (found) return goTo(found, '5');
+  }
+  if (holds > 0) {
+    const noOwnCity = (x: number, y: number) => {
+      if (!world.isSquare(x, y) || world.terrainAt(x, y) === OCEAN) return false;
+      const lm = landmassAt(world, { x, y });
+      return lm !== landHere && (s?.citiesOn[lm] ?? 0) === 0 && landReach(lm);
+    };
+    // One random square a turn; the go-to keeps it once chosen.
+    const y = ctx.rng.nextInt(world.rows);
+    const x = ctx.rng.nextInt(world.widthX2 >> 1) * 2 + (y & 1);
+    const lm = world.isSquare(x, y) ? landmassAt(world, { x, y }) : 0;
+    if (lm > 0 && lm < 63 && (world.landmassStats?.rated[lm] ?? 17) > 16 && noOwnCity(x, y))
+      return { kind: 'goto', target: landingSquare(world, ship, { x, y }), tag: 'V' };
+    let walk: Point | null = null;
+    for (let r = 2; r < 24; r++) {
+      const off = NEIGHBOUR_OFFSETS[ctx.rng.nextInt(8)];
+      if (!off) continue;
+      const y = here.y + off.y * r;
+      const x = y >= 0 && y < world.rows ? world.wrapX(here.x + off.x * r, y) : null;
+      if (x === null || y <= 1 || y > world.rows - 3) continue;
+      if (noOwnCity(x, y)) walk = { x, y };
+    }
+    if (walk) return { kind: 'goto', target: landingSquare(world, ship, walk), tag: '6' };
+  }
+  return { kind: 'chooser' };
+}
+
+/**
+ * The ocean square to sail for when landing near a target (0x004ed0e3): the first of the twenty
+ * radius squares on the ship's ocean with land of the target's land mass beside it and no city
+ * there; otherwise the target itself.
+ */
+function landingSquare(world: World, ship: Unit, target: Point): Point {
+  const ocean = landmassAt(world, ship.position);
+  const land = landmassAt(world, target);
+  for (const off of CITY_SPACING_OFFSETS.slice(0, 20)) {
+    const y = target.y + off.y;
+    const x = y >= 0 && y < world.rows ? world.wrapX(target.x + off.x, y) : null;
+    if (x === null || world.terrainAt(x, y) !== OCEAN) continue;
+    if (landmassAt(world, { x, y }) !== ocean) continue;
+    const beside = world
+      .neighbours(x, y)
+      .some(
+        (n) =>
+          n &&
+          world.terrainAt(n.x, n.y) !== OCEAN &&
+          landmassAt(world, n) === land &&
+          !world.cityAt(n.x, n.y),
+      );
+    if (beside) return { x, y };
+  }
+  return target;
+}
+
+function nearestOwnCity(world: World, me: number, from: Point): City | undefined {
+  let best: City | undefined;
+  let bestD = 9999;
+  for (const c of world.cities) {
+    if (c.owner !== me) continue;
+    const d = distance(world, from, c.position);
+    if (d < bestD) {
+      bestD = d;
+      best = c;
+    }
+  }
+  return best;
 }
 
 /** An ocean square next to a land target, nearest to the ship (ships cannot enter foreign cities). */

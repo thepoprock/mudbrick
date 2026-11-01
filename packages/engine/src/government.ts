@@ -123,7 +123,7 @@ export interface CivGovernmentContext {
   knows: (advance: number) => boolean;
   ownsWonder: (improvement: number) => boolean;
   personality: { attack: number; civilize: number };
-  /** The original's per-civilization "control" byte (INFERRED: 7 human, else difficulty). */
+  /** Power rank, 7 for the strongest (0x005da842). */
   control: number;
   advances: number;
   treasury: number;

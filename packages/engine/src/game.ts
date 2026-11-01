@@ -314,6 +314,17 @@ export class Game {
   }
 
   /** Everything negotiation.ts reads of the game. */
+  private rankCache: { turn: number; ranks: number[] } | null = null;
+
+  /** A civilization's power rank, 7 for the strongest (0x005da842, set once a turn, 0x00465607). */
+  powerRank(slot: number): number {
+    if (this.rankCache?.turn !== this.state.turn) {
+      const population = (s: number) => this.citiesOf(s).reduce((n, c) => n + c.size, 0);
+      this.rankCache = { turn: this.state.turn, ranks: powerRanks(this.world, population) };
+    }
+    return this.rankCache.ranks[slot] ?? 0;
+  }
+
   negotiationEnv(): NegotiationEnv {
     const strategy = (s: number) => this.world.civs.find((c) => c.slot === s)?.strategy;
     const ranks = powerRanks(this.world, (s) => this.citiesOf(s).reduce((n, c) => n + c.size, 0));
@@ -563,7 +574,7 @@ export class Game {
       cityCount: (s) => this.citiesOf(s).length,
       advancesOf: (s) => civ(s)?.advancesCount ?? 0,
       attackPersonality: (s) => this.rules.leaders?.[civ(s)?.tribe ?? -1]?.attack ?? 0,
-      control: (s) => (civ(s)?.isHuman ? 7 : this.state.difficulty),
+      control: (s) => this.powerRank(s),
       tallies: (s) => {
         const st = civ(s)?.strategy;
         return st
@@ -1168,7 +1179,7 @@ export class Game {
         knows: (a) => this.knows(slot, a),
         ownsWonder: (i) => this.ownsWonder(slot, i),
         personality: { attack: leader?.attack ?? 0, civilize: leader?.civilize ?? 0 },
-        control: civ.isHuman ? 7 : this.state.difficulty,
+        control: this.powerRank(slot),
         advances: civ.advancesCount,
         treasury: civ.treasury,
         mainHuman: human
@@ -1179,7 +1190,7 @@ export class Game {
               advances: human.advancesCount,
               treasury: human.treasury,
               government: human.government,
-              control: 7,
+              control: this.powerRank(human.slot),
             }
           : null,
         spaceshipLaunched: hasLaunched(civ),
@@ -1271,6 +1282,7 @@ export class Game {
         isAlly: (other) => hasTreaty(this.world, slot, other, TREATY.alliance),
         espionage: this.espionageContext(),
         isHuman: (s) => this.world.civs.find((c) => c.slot === s)?.isHuman ?? false,
+        leader: [1, 2, 3, 4, 5, 6, 7].find((s) => this.powerRank(s) === 7) ?? 0,
         planOf: (s, lm) => this.world.civs.find((c) => c.slot === s)?.strategy?.plans[lm] ?? 5,
         nuclearPower: this.knows(slot, ADVANCE.nuclearPower),
         magellans: this.ownsWonder(slot, IMPROVEMENT.magellans),
@@ -1893,6 +1905,7 @@ export class Game {
       foreign: {
         mainHuman: this.world.civs.find((c) => c.isHuman && c.slot !== 0)?.slot ?? null,
         isHumanSlot: (s) => this.world.civs.find((c) => c.slot === s)?.isHuman ?? false,
+        rankOf: (s) => this.powerRank(s),
         unitCount: (s, type) =>
           this.world.units.reduce((n, u) => (u.owner === s && u.type === type ? n + 1 : n), 0),
         atWar: (x, y) => hasTreaty(this.world, x, y, TREATY.war),

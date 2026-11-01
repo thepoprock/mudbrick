@@ -54,7 +54,7 @@ fourth turn for the pair (`(turn + a + b) & 3 == 0`):
   Great Wall and the United Nations force it on a civilization at war); already at peace → the
   **alliance review**: a common enemy is sought — the leading human (difficulty above
   Chieftain, five cities, turn 200 or later), else for allies any civilization neither is at
-  peace with, else (unless a human faces a computer player of control 4 or more) one both are
+  peace with, else (unless a human faces a computer player of power rank 4 or more) one both are
   at war with and neither outranks; with no candidate, or allies around and no gate, an
   existing alliance is cancelled; otherwise an alliance is signed and each ally joins the war on
   the candidate (0x00510871: never against an ally or a current foe; against a human only six

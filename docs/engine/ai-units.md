@@ -197,11 +197,28 @@ nearest city`, or the best is here and the land mass has no own city yet, or the
   details marked INFERRED in the code (the ferry weights, the unload test), the gathering
   objectives at the port, and the cargo rule of rules-units.md; warships use the direction
   chooser. Aircraft still hold.
-- **Loaded transports with cargo** head for the nearest enemy land with a city we can attack
-  (tag `A`), for a war target with a human we are fighting (tag `I`, scored by distance, halved
-  when another human is also at war with the owner, doubled against a walled city), for the
-  nearest own coastal city short of units on another land mass (tag `4`), for any enemy city scored
-  `trade × distance / 8` (tag `T`), or unload where the cargo's land mass is wanted (tag `5`).
+- **Loaded transports with cargo** without a go-to take the first of these that finds anything
+  (0x004f44cc). Reach is by ocean: in port, a city sharing one of the port's oceans or land touching
+  one; at sea, the ocean the ship is on. "Cargo" is the mask of cargo roles.
+  - `A`, with attackers or defenders aboard: the nearest own city on a defend land mass within 24;
+    an empty one counts half, one with a type 1 objective two thirds.
+  - `I`, same cargo: the nearest undefended city of a civilization we are at war with; half for a
+    war a human ally shares, double for a known Coastal Fortress. It also sets the ship's step.
+  - `4`, unless the cargo is settlers alone: every eighth city from the ship's step, of a
+    non-ally we are not at peace with (or whose peace is strained), on another land mass, and only
+    if the top-ranked civilization is not a human other than us; half for an ally's war, half for
+    a grudge, half for an empty city at war, double for a known Coastal Fortress.
+  - `T`, a caravan aboard: the best city on another land mass by distance from the caravan's home
+    × trade / (distance from here / 8 + 1); half for own cities, −⅓ at war, +⅓ allied, half for a
+    human ranked first.
+  - `5`: the nearest own city over 7 away on another land mass not full, doubled when the cargo has
+    no role matching that land mass's plan.
+  - `V`: one random square of a land mass rated above 16 with no own city, reachable, kept while the
+    go-to runs. `6`: 22 random rays from here for such land, the last hit winning. Both sail for an
+    ocean square beside that land (0x004ed0e3).
+  - Otherwise the direction chooser.
+    In port with room, the ferry scores above are still simplified. The unload test (0x004f44cc,
+    tags `b` and `U`) is INFERRED in the engine.
 - **Pollution and fortresses.** An Engineers unit (role 21) or settler finds the nearest
   pollution within the radius of its city and goes to clean it (tag `p`); on rough terrain
   between two own cities, or at a choke point between oceans, a settler builds a fortress (tag
@@ -269,7 +286,7 @@ stack + 1) / own cost`, ×3 for a city, ×2 for a naval unit attacking a transpo
    time in four, by a ground unit of role 0 on plan 0. At peace or cease-fire a
    unit never attacks; against a treaty partner on plan 0 or beside an own city at Prince and above
    the bribe runs instead (one time in eight, always when a human's city is nearest; only where
-   no human has a unit on the land mass, or the victim is a computer on bad terms with no human).
+   no human has a city on the land mass, or the victim is a computer on bad terms with no human).
 8. **Fatigue.** An attack reached with less than a full move left keeps the score only in a
    city; when the best score came from such an attack the unit waits for next turn.
 

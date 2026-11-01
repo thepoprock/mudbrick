@@ -94,6 +94,8 @@ export interface AiUnitContext extends MovementContext {
   isHuman?: (slot: number) => boolean;
   /** The civilization's continent plan for a land mass (cargo on a "defend" land mass stays home). */
   planOf?: (slot: number, landmass: number) => number;
+  /** The civilization ranked first (0x005da851). */
+  leader?: number;
   /** Scenario event hooks (UNITKILLED, CITYTAKEN). */
   onUnitKilled?: (type: number, attacker: number, defender: number) => void;
   onCityTaken?: (city: string, attacker: number, defender: number) => void;
@@ -185,7 +187,7 @@ function buyUnit(
 /**
  * Does a computer unit buy a lone foreign unit it may not attack (0x004f44cc)? A treaty partner's
  * Diplomat beside one of our cities is left to the other test. Above Prince, an agent, or a unit
- * whose nearest city is its own, on a land mass with no human presence, buys one time in eight,
+ * whose nearest city is its own, on a land mass with no human city, buys one time in eight,
  * or always when a human's city is the nearest.
  */
 function bribeAtPeace(
@@ -230,7 +232,7 @@ function bribeAtPeace(
   let free = !human(them) && humans.some((h) => !hostile(them, h.slot));
   if (!free)
     free = !humans.some((h) =>
-      world.units.some((u) => u.owner === h.slot && landOf(world, u.position) === lm),
+      world.cities.some((c) => c.owner === h.slot && landOf(world, c.position) === lm),
     );
   if (!free) return false;
   return ctx.rng.nextInt(8) === 0 || (nearestAny !== null && human(nearestAny.owner));
@@ -875,6 +877,7 @@ export function aiMoveUnits(
         atWar: ctx.atWar,
         isAlly: ctx.isAlly ?? (() => false),
         isHuman: ctx.isHuman ?? (() => false),
+        ...(ctx.leader !== undefined ? { leader: ctx.leader } : {}),
         cityTrade: (c) => c.lastTrade ?? 0,
       });
       if (!applyShipDecision(unit, d)) continue;
