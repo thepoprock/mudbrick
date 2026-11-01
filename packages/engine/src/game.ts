@@ -861,6 +861,80 @@ export class Game {
     };
   }
 
+  /** A computer sells what its wonders make redundant (0x00474edb), at full price, all at once. */
+  private sellRedundant(city: City, civ: Civ): void {
+    if (civ.isHuman) return;
+    const rows = this.productionContext(city).shieldRows;
+    for (const [wonder, building] of [
+      [0, IMPROVEMENT.granary],
+      [26, IMPROVEMENT.researchLab],
+      [21, IMPROVEMENT.policeStation],
+      [10, IMPROVEMENT.cathedral],
+    ] as const) {
+      if (this.ownsWonder(civ.slot, 39 + wonder) && city.improvements[building]) {
+        city.improvements[building] = false;
+        civ.treasury += (this.rules.improvements[building]?.costRows ?? 0) * rows;
+      }
+    }
+  }
+
+  /**
+   * A computer flies a unit between Airports (0x00474edb): to a city that needs a defender, or
+   * between land masses whose plans differ. War planes near either end may bring it down.
+   */
+  private computerAirlift(city: City, civ: Civ): void {
+    if (civ.isHuman || !city.improvements[IMPROVEMENT.airport] || city.airlifted) return;
+    const massOf = (c: City) =>
+      (this.world.landmass[this.world.index(c.position.x, c.position.y)] ?? 0) & 63;
+    const plans = civ.strategy?.plans;
+    if (!plans) return;
+    const plan = plans[massOf(city)] ?? 0;
+    if (plan === 4 || plan === 5) return;
+    const roleHere = (c: City, role: number) =>
+      this.world
+        .unitsAt(c.position.x, c.position.y)
+        .filter((u) => this.rules.units[u.type]?.role === role);
+    const needy = roleHere(city, 1).length === 0;
+    for (const from of this.citiesOf(civ.slot)) {
+      if (from === city || !from.improvements[IMPROVEMENT.airport] || from.airlifted) continue;
+      const enemyNear = this.world.neighbours(from.position.x, from.position.y).some((n) => {
+        const u = n && this.world.unitsAt(n.x, n.y)[0];
+        return (
+          !!u && u.owner !== civ.slot && !hasTreaty(this.world, civ.slot, u.owner, TREATY.alliance)
+        );
+      });
+      if (enemyNear) continue;
+      const fromPlan = plans[massOf(from)] ?? 0;
+      if (massOf(from) === massOf(city) ? !needy : fromPlan === plan) continue;
+      const stack = this.world.unitsAt(from.position.x, from.position.y);
+      if (plan === 1 && roleHere(from, 1).length < 2) continue;
+      if (stack.length < 3 - (fromPlan === 4 ? 1 : 0)) continue;
+      const unit = stack.find((u) => this.rules.units[u.type]?.role === plan);
+      if (!unit) return;
+      city.airlifted = true;
+      from.airlifted = true;
+      unit.order = null;
+      unit.gotoTarget = null;
+      unit.position = { x: city.position.x, y: city.position.y };
+      for (const f of this.world.units) {
+        const t = this.rules.units[f.type];
+        if (t?.role !== 3 || f.owner === civ.slot || !this.civ(f.owner).isHuman) continue;
+        if (!hasTreaty(this.world, civ.slot, f.owner, TREATY.war)) continue;
+        const reach = t.move;
+        if (
+          reach < gridDistance(this.world, city.position, f.position) &&
+          reach < gridDistance(this.world, from.position, f.position)
+        )
+          continue;
+        if (this.rng.nextInt(f.veteran ? 4 : 6) === 0) {
+          this.world.units.splice(this.world.units.indexOf(unit), 1);
+          break;
+        }
+      }
+      return;
+    }
+  }
+
   /** A civilization's military strength, summed in the strategy pass (0x005d132e). */
   private civStrength(slot: number): number {
     return this.civ(slot).strategy?.strengthSum ?? 0;
@@ -2232,6 +2306,8 @@ export class Game {
     },
   ): void {
     const civ = this.civ(city.owner);
+    this.sellRedundant(city, civ);
+    this.computerAirlift(city, civ);
     const ctx = this.cityContext(city);
     const leader = this.rules.leaders?.[civ.tribe ?? -1];
     const homed = this.world.units.filter((u) => u.homeCity === city.id);

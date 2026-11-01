@@ -439,3 +439,13 @@ masses, or as the first of their type elsewhere. After the score a chosen wonder
 Temple if the city has none; a Palace under way is kept; and a wonder under way that no other city is
 building, in a defended city, is not dropped for anything less. `scripts/compare-builds.ts` measures
 the chooser against the original's saves.
+
+## Computer sales and airlifts (VERIFIED 0x00474edb)
+
+Before it chooses, a computer city sells at full price, with no limit of one a turn, any Granary
+under Pyramids, Research Lab under wonder 26, Police Station under wonder 21, and Cathedral under
+Michelangelo's. A city with an unused Airport, on a land mass not planned 4 or 5, may then pull a unit
+of the land mass's plan role from another Airport with no foreign non-allied unit adjacent: on the
+same land mass only when defenders are absent, otherwise from a land mass with a different plan, and
+from a stack of 3 or more (2 from a plan 4 land mass). Enemy human fighters in reach of either end
+shoot it down one time in six, one in four when veteran.

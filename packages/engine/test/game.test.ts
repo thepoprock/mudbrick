@@ -513,3 +513,19 @@ describe('calls for help (0x0051520a)', () => {
     expect(human.lastWarTurns?.[2]).toBe(-1);
   });
 });
+
+describe('computer sales (0x00474edb)', () => {
+  it('sells what a wonder has made redundant', () => {
+    const { world, city, game } = setup();
+    const civ = world.civs.find((c) => c.slot === 1);
+    if (!civ) throw new Error('no civ');
+    civ.isHuman = false;
+    city.improvements[IMPROVEMENT.granary] = true;
+    city.improvements[39] = true;
+    city.wonderCity = true;
+    const before = civ.treasury;
+    game.aiChooseProduction(city);
+    expect(city.improvements[IMPROVEMENT.granary]).toBe(false);
+    expect(civ.treasury).toBeGreaterThan(before);
+  });
+});
