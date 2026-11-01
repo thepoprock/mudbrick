@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addRoute,
   aiCaravanDestination,
+  commoditySearch,
   establishTradeRoute,
   FOOD_ROUTE,
   helpWonder,
@@ -226,5 +227,22 @@ describe('trade routes', () => {
     city(w, 1, 6, 2, 1, 10); // near, domestic
     const far = city(w, 2, 24, 2, 2, 10); // far, foreign
     expect(aiCaravanDestination(w, u2, () => 50)).toBe(far);
+  });
+});
+
+describe('find commodity', () => {
+  it('lists cities that want it, seen or owned, and own cities that supply it', () => {
+    const w = world();
+    const own = city(w, 0, 2, 2, 1, 10);
+    own.supplied = Int8Array.from([4, 1, 2]);
+    own.demanded = Int8Array.from([5, 6, 7]);
+    const unseen = city(w, 1, 22, 2, 2, 10);
+    unseen.demanded = Int8Array.from([4, 6, 7]);
+    unseen.supplied = Int8Array.from([4, 6, 7]);
+    const r = commoditySearch(w, 1, 4);
+    expect(r.wanted).toEqual([]);
+    expect(r.supplied).toEqual([own]);
+    w.revealSquare(22, 2, 1);
+    expect(commoditySearch(w, 1, 4).wanted).toEqual([unseen]);
   });
 });

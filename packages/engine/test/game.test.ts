@@ -655,6 +655,15 @@ describe('parley between humans', () => {
 });
 
 describe('open games and cheats', () => {
+  it('a lost network player leaves the civilization to the computer and ends the wait', () => {
+    const { game, civ } = setup();
+    civ.isHuman = true;
+    game.state.awaitingMoves = [civ.slot, 9];
+    game.dropHuman(civ.slot);
+    expect(civ.isHuman).toBe(false);
+    expect(game.state.awaitingMoves).toEqual([9]);
+  });
+
   it('lets a new player take over a computer civilization only in an open game', () => {
     const { game, civ } = setup();
     civ.isHuman = false;

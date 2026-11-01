@@ -183,8 +183,13 @@
               <option value="40x50">small 40×50</option>
               <option value="50x80" selected>normal 50×80</option>
               <option value="75x120">large 75×120</option>
+              <option value="custom">custom</option>
             </select></label
           >
+          <label id="ngCustomSize" hidden
+            >columns <input id="ngColumns" type="number" min="20" max="250" value="50" /> rows
+            <input id="ngRows" type="number" min="20" max="250" value="80"
+          /></label>
           <label><input id="ngFlat" type="checkbox" /> flat</label>
           <label
             >Land mass
@@ -253,6 +258,22 @@
             >Tribe
             <select id="ngTribe"></select
           ></label>
+          <details>
+            <summary>Own tribe</summary>
+            <label>Leader <input id="ngLeader" maxlength="23" /></label>
+            <label>Tribe <input id="ngTribeName" maxlength="23" /></label>
+            <label>Adjective <input id="ngAdjective" maxlength="23" /></label>
+            <label
+              >City style
+              <select id="ngStyle">
+                <option value="">as the tribe</option>
+                <option value="0">Bronze Age</option>
+                <option value="1">Classical</option>
+                <option value="2">Far East</option>
+                <option value="3">Medieval</option>
+              </select></label
+            >
+          </details>
           <label
             >Barbarians
             <select id="ngBarb">

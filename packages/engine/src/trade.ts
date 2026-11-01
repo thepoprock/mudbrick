@@ -435,3 +435,20 @@ export function aiCaravanDestination(
 
 export const TRADE_PALACE = IMPROVEMENT.palace;
 export type { Civ as TradeCiv };
+
+/**
+ * The Find Commodity search (VERIFIED 0x0041e494, offered with the advance at index 84, 0x0041e8b7):
+ * cities the civilization owns or has seen that want the commodity, then its own cities that
+ * supply it. A commodity already carried or received reads as negative and is not listed.
+ */
+export function commoditySearch(
+  world: World,
+  slot: number,
+  commodity: number,
+): { wanted: City[]; supplied: City[] } {
+  const seen = (c: City) => c.owner === slot || world.isSeen(c.position.x, c.position.y, slot);
+  return {
+    wanted: world.cities.filter((c) => seen(c) && demandedOf(c).includes(commodity)),
+    supplied: world.cities.filter((c) => c.owner === slot && suppliedOf(c).includes(commodity)),
+  };
+}

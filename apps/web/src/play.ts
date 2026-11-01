@@ -129,10 +129,12 @@ import {
   gridDistance,
   hasTreaty,
   type DiplomacyEvent,
+  commoditySearch,
 } from '@mudbrick/engine';
 import { ADVANCE, IMPROVEMENT } from '@mudbrick/engine';
 import { sprites } from '@mudbrick/formats';
 import { drawCityView } from './cityView.js';
+import { addFameEntry, fameLines, readFame } from './hallOfFame.js';
 import type { GameFolder } from './gameFiles.js';
 import { hitTest, squareOrigin } from './mapRenderer.js';
 import { drawWorld, WORLD_TOP_PAD, type WorldRenderOptions } from './worldRenderer.js';
@@ -222,6 +224,8 @@ export class PlaySession {
   onLock: (() => void) | null = null;
   onRelease: (() => void) | null = null;
   private lockHeld = false;
+  private fameEntered = false;
+  private readonly seatsSeen = new Set<number>();
   private lockAsked = false;
   private tracks: string[] | null = null;
   private lastTrack: string | null = null;
@@ -327,6 +331,47 @@ export class PlaySession {
     this.pendingOrder = null;
     run?.();
     this.holdLockBriefly();
+  }
+
+  /**
+   * Passwords (VERIFIED 0x00474844, 0x004745ba and 0x00474a7b): a civilization with one asks for
+   * it when its player takes over the shared screen. The original scrambles the save block; this
+   * only keeps a friend from reading the next player's map, as there.
+   */
+  private askPassword(slot: number): void {
+    const want = this.game.state.passwords?.[slot];
+    if (!want) return;
+    for (;;) {
+      const typed = window.prompt(`Password for the ${this.game.civ(slot).name}`);
+      if (typed === want) return;
+      if (typed === null && window.confirm('Skip this turn view?')) return;
+    }
+  }
+
+  private setPassword(): void {
+    const slot = this.humanSlot;
+    const old = this.game.state.passwords?.[slot];
+    if (old && window.prompt('Current password') !== old) return;
+    const next = window.prompt('New password (empty for none)');
+    if (next === null) return;
+    (this.game.state.passwords ??= {})[slot] = next;
+  }
+
+  /** Network seats (0x0046db32): a player who was here and has gone turns to the computer. */
+  seatsChanged(seats: number[]): void {
+    for (const s of seats) this.seatsSeen.add(s);
+    if (this.seat === null || this.seat !== Math.min(...seats)) return;
+    const gone = this.world.civs.filter(
+      (c) => c.isHuman && this.seatsSeen.has(c.slot) && !seats.includes(c.slot),
+    );
+    if (gone.length === 0) return;
+    for (const c of gone) {
+      this.seatsSeen.delete(c.slot);
+      this.log(`The ${c.name} have lost their player. The computer takes over.`);
+      this.game.dropHuman(c.slot);
+    }
+    this.onTurnPassed?.(this.game.state.movingHuman ?? this.seat);
+    this.refresh();
   }
 
   /** May this seat change the game now? If not, ask for the lock and do `order` once it comes. */
@@ -1102,6 +1147,7 @@ export class PlaySession {
     }
     this.humanSlot = moving;
     if (this.humanSlot !== before) {
+      this.askPassword(moving);
       this.log(`— The ${this.civ.name} to move —`);
       this.announceSeat();
     }
@@ -1122,6 +1168,7 @@ export class PlaySession {
     if (this.game.state.gameOver) {
       const w = this.world.civs[this.game.state.gameOver.winner];
       this.log(`GAME OVER: the ${w?.name ?? '?'} win by ${this.game.state.gameOver.reason}.`);
+      this.enterHallOfFame();
     }
     this.selected = null;
     this.selectNext();
@@ -1697,6 +1744,14 @@ export class PlaySession {
       if (give.length + take.length === 0) return;
       this.game.offerParley(this.humanSlot, Number(who.value), give, take);
       this.log(`Offer sent to the ${this.game.civ(Number(who.value)).name}.`);
+      this.refresh();
+    });
+    this.talkButton(box, 'End our treaty', () => {
+      const other = Number(who.value);
+      this.closeTalk();
+      if (!this.writable(() => this.game.cancelHumanTreaty(this.humanSlot, other))) return;
+      this.game.cancelHumanTreaty(this.humanSlot, other);
+      this.log(`Treaty with the ${this.game.civ(other).name} ended.`);
       this.refresh();
     });
     this.talkButton(box, 'Cancel', () => this.closeTalk());
@@ -2331,6 +2386,13 @@ export class PlaySession {
       this.muted = !this.muted;
       this.showOptions();
     });
+    this.talkButton(box, 'Hall of Fame', () => {
+      const list = document.createElement('pre');
+      list.textContent = fameLines(readFame()).join('\n');
+      box.append(list);
+    });
+    if (this.world.civs.filter((c) => c.isHuman).length > 1)
+      this.talkButton(box, 'Set password', () => this.setPassword());
     this.talkButton(box, 'Close', () => this.closeTalk());
   }
 
@@ -2355,6 +2417,22 @@ export class PlaySession {
       return;
     }
     if (window.confirm('Really retire?')) this.showPowerGraph(true);
+  }
+
+  /** The score goes in the Hall of Fame once (0x00429bb6, from 0x0046b383 and 0x004af61c). */
+  private enterHallOfFame(): void {
+    if (this.fameEntered) return;
+    this.fameEntered = true;
+    const list = addFameEntry({
+      name: this.civ.leader,
+      tribe: this.civ.name,
+      score: this.game.scoreOf(this.humanSlot).total,
+      difficulty: this.game.state.difficulty,
+      turn: this.game.state.turn,
+      year: this.yearText(),
+      cheated: this.game.state.cheatMode === true,
+    });
+    this.log(fameLines(list).join('\n'));
   }
 
   private showPowerGraph(ending: boolean): void {
@@ -2391,7 +2469,10 @@ export class PlaySession {
     score.textContent = `Your score: ${this.game.scoreOf(this.humanSlot).total}`;
     box.appendChild(score);
     this.talkButton(box, ending ? 'End game' : 'Close', () => {
-      if (ending) this.game.state.gameOver = { winner: this.humanSlot, reason: 'retirement' };
+      if (ending) {
+        this.game.state.gameOver = { winner: this.humanSlot, reason: 'retirement' };
+        this.enterHallOfFame();
+      }
       this.closeTalk();
     });
   }
@@ -2446,6 +2527,33 @@ export class PlaySession {
   }
 
   /** The advisors: one text page each, closed with its button or Escape. */
+  /** Find Commodity on the trade advisor's page (0x0041e8b7 and 0x0041e494). */
+  private commodityFinder(box: HTMLElement): void {
+    const pick = document.createElement('select');
+    this.folder.rules.caravanCommodities.forEach((name, i) => {
+      const o = document.createElement('option');
+      o.value = String(i);
+      o.textContent = name;
+      pick.append(o);
+    });
+    const out = document.createElement('pre');
+    out.style.cssText = 'margin:4px 0;font:12px monospace';
+    const find = () => {
+      const r = commoditySearch(this.world, this.humanSlot, Number(pick.value));
+      const row = (c: City) =>
+        `  ${c.name} (${c.size})${c.owner === this.humanSlot ? '' : `, ${this.game.civ(c.owner).name}`}`;
+      out.textContent = [
+        'Wanted in:',
+        ...r.wanted.map(row),
+        'Supplied by:',
+        ...r.supplied.map(row),
+      ].join('\n');
+    };
+    pick.addEventListener('change', find);
+    box.append('Find commodity ', pick, out);
+    find();
+  }
+
   private showReport(key: string): void {
     const box = this.talkBox();
     box.replaceChildren();
@@ -2457,6 +2565,7 @@ export class PlaySession {
     body.style.cssText = 'margin:8px 0;max-height:60vh;overflow:auto;font:12px monospace';
     body.textContent = page.lines.join('\n');
     box.append(title, body);
+    if (key === 'F5' && this.civ.knownAdvances[84] === true) this.commodityFinder(box);
     if (key === 'F3') {
       for (const r of foreignRows(this.game, this.humanSlot))
         this.talkButton(box, `Send an emissary to the ${r.civ.name}`, () =>

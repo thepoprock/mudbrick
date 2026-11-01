@@ -219,10 +219,32 @@ function selectValue(id: string): number {
   return Number(byId<HTMLSelectElement>(id).value);
 }
 
+/** The custom map box's limits (VERIFIED 0x00413cdb): each side 20 to 250, area 1000 to 10000. */
+function customSize(columns: number, rows: number): [number, number] {
+  let c = Math.min(250, Math.max(20, Math.floor(columns) || 50));
+  let r = Math.min(250, Math.max(20, Math.floor(rows) || 80));
+  while (c * r < 1000) {
+    if (c < 250) c++;
+    else r++;
+  }
+  while (c * r > 10000) {
+    if (c > 20) c--;
+    else r--;
+  }
+  return [c, r];
+}
+
 /** "New game": a random world from the panel's settings, then play as the chosen tribe. */
 function startNewGame(): void {
   if (!folder) return;
-  const [columns, rows] = byId<HTMLSelectElement>('ngSize').value.split('x').map(Number);
+  const size = byId<HTMLSelectElement>('ngSize').value;
+  const [columns, rows] =
+    size === 'custom'
+      ? customSize(
+          Number(byId<HTMLInputElement>('ngColumns').value),
+          Number(byId<HTMLInputElement>('ngRows').value),
+        )
+      : size.split('x').map(Number);
   const seed = (Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0;
   const rng = new Rng(seed);
   const rules = engineRules(folder.rules);
@@ -243,6 +265,14 @@ function startNewGame(): void {
       ? { humanFemale: byId<HTMLSelectElement>('ngGender').value === 'f' }
       : {}),
     humanTribe: selectValue('ngTribe'),
+    customTribe: {
+      leader: byId<HTMLInputElement>('ngLeader').value.trim(),
+      name: byId<HTMLInputElement>('ngTribeName').value.trim(),
+      adjective: byId<HTMLInputElement>('ngAdjective').value.trim(),
+      ...(byId<HTMLSelectElement>('ngStyle').value
+        ? { cityStyle: Number(byId<HTMLSelectElement>('ngStyle').value) }
+        : {}),
+    },
     leaders: folder.rules.leaders,
     barbarianActivity: selectValue('ngBarb'),
     ...(byId<HTMLInputElement>('ngSimple').checked ? { realisticCombat: false } : {}),
@@ -574,6 +604,10 @@ function attachNet(s: PlaySession, seat: number): void {
   };
 }
 
+byId<HTMLSelectElement>('ngSize').addEventListener('change', (e) => {
+  byId('ngCustomSize').hidden = (e.target as HTMLSelectElement).value !== 'custom';
+});
+
 byId<HTMLButtonElement>('netJoin').addEventListener('click', () => {
   const url = byId<HTMLInputElement>('netUrl').value;
   const room = byId<HTMLInputElement>('netRoom').value;
@@ -586,7 +620,10 @@ byId<HTMLButtonElement>('netJoin').addEventListener('click', () => {
       else if (m.moving === seat) restoreFrom(m.text, seat);
       else if (!session) restoreFrom(m.text, seat);
     }
-    if (m.type === 'seats') byId('netStatus').textContent = `seats: ${(m.seats ?? []).join(', ')}`;
+    if (m.type === 'seats') {
+      byId('netStatus').textContent = `seats: ${(m.seats ?? []).join(', ')}`;
+      session?.seatsChanged(m.seats ?? []);
+    }
     if (m.type === 'error') byId('netStatus').textContent = m.message ?? 'error';
     if (m.type === 'chat') session?.log(`Seat ${m.seat}: ${m.text}`);
   });

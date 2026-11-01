@@ -109,6 +109,7 @@ import {
   breakTreaty,
   cancelAlliance,
   canAttack as treatyCanAttack,
+  clearTreaty,
   treatiesOf,
   contactSweep,
   diplomacyTurn,
@@ -218,6 +219,8 @@ export interface GameState {
   killOnRetirement?: boolean;
   /** Cheat mode has been turned on (option bit 0x8000). */
   cheatMode?: boolean;
+  /** Per slot, the password its player set (the original's 256-byte block at 0x005d9794). */
+  passwords?: Record<number, string>;
   /** A new player may take over a computer civilization (Open Game, 0x004e3386). */
   openGame?: boolean;
   /** Treaties offered between humans and not yet answered (parley.ts). */
@@ -2236,6 +2239,28 @@ export class Game {
     civ.isHuman = true;
     if (this.state.simultaneous) (this.state.awaitingMoves ??= []).push(slot);
     return true;
+  }
+
+  /**
+   * A human ends a treaty from the Parley window (VERIFIED 0x004eba04 with 0x0044ddc0): alliance
+   * first, then peace, then cease-fire. Both sides lose it at once, with no reputation cost.
+   */
+  cancelHumanTreaty(from: number, to: number): void {
+    const w = this.world;
+    if (hasTreaty(w, from, to, TREATY.alliance)) clearTreaty(w, from, to, TREATY.alliance);
+    else if (hasTreaty(w, from, to, TREATY.peace))
+      clearTreaty(w, from, to, TREATY.peace | TREATY.alliance);
+    else if (hasTreaty(w, from, to, TREATY.ceaseFire)) clearTreaty(w, from, to, TREATY.ceaseFire);
+  }
+
+  /**
+   * A network player has gone (VERIFIED 0x0046db32): the civilization carries on under the
+   * computer, and a round waiting only on that player closes. Unlike retiring, nothing is removed.
+   */
+  dropHuman(slot: number): TurnEvent[] {
+    const civ = this.world.civs.find((c) => c.slot === slot);
+    if (civ) civ.isHuman = false;
+    return this.state.awaitingMoves?.includes(slot) ? this.finishMoves(slot) : [];
   }
 
   /** One human offers another a treaty (parley.ts). */

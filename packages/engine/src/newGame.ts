@@ -45,6 +45,8 @@ export interface NewGameOptions {
   civCount: number;
   /** The human's tribe (leader index). */
   humanTribe: number;
+  /** A tribe of the player's own (VERIFIED 0x004df9af, the custom tribe and city style boxes). */
+  customTribe?: { leader?: string; name?: string; adjective?: string; cityStyle?: number };
   leaders: NewGameLeader[];
   /** 0 villages only, 1 roving, 2 restless, 3 raging. */
   barbarianActivity: number;
@@ -243,6 +245,13 @@ export function newGame(rules: EngineRules, rng: Rng, opts: NewGameOptions): New
     civ.adjective = leader.adjective;
     civ.leader = female ? leader.femaleName || leader.name : leader.name;
     civ.cityStyle = leader.cityStyle;
+    if (civ.isHuman && opts.customTribe) {
+      const c = opts.customTribe;
+      if (c.leader) civ.leader = c.leader;
+      if (c.name) civ.name = c.name;
+      if (c.adjective) civ.adjective = c.adjective;
+      if (c.cityStyle !== undefined) civ.cityStyle = c.cityStyle;
+    }
     civ.colour = slot;
     civ.government = GOVERNMENT.despotism;
     // Rates: a human keeps the defaults (science 6, tax 4); the computer sets science to
