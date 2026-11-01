@@ -283,3 +283,10 @@ export function anarchyTurn(
       choose: true,
     });
 }
+
+/** The eight Throne Room parts; a new civilization starts with four at level 1 (0x00480fc9). */
+export function throneOf(civ: Civ): number[] {
+  const t = (civ.throne ??= [1, 1, 0, 1, 0, 0, 1, 0]);
+  while (t.length < 8) t.push(0);
+  return t;
+}

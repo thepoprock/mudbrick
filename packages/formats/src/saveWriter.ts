@@ -123,6 +123,7 @@ export interface CivWrite {
   patience?: number;
   talks?: number;
   throne?: number[];
+  throneExtras?: number;
   thronePieces?: number;
   casualties?: number[];
   pardons?: number[];
@@ -342,8 +343,9 @@ export function writeSave(original: Uint8Array, save: SaveFile, patch: SavePatch
     if (c.talks !== undefined) w.u8(b + 31, c.talks);
     if (c.throne) {
       const T0 = b + L.tail + 592 + 17;
-      for (let n = 0; n < 7; n++) w.u8(T0 + n, c.throne[n] ?? 0);
+      for (let n = 0; n < 8; n++) w.u8(T0 + n, c.throne[n] ?? 0);
     }
+    if (c.throneExtras !== undefined) w.u8(b + L.tail + 592 + 25, c.throneExtras);
     if (c.thronePieces !== undefined) w.i16(b + L.tail + 592 + 28, c.thronePieces);
     if (c.casualties) for (let n = 0; n < 62; n++) w.u8(b + 278 + n, c.casualties[n] ?? 0);
     if (c.pardons) for (let n = 0; n < 8; n++) w.u8(b + 72 + n, c.pardons[n] ?? 0);

@@ -150,7 +150,9 @@ export interface CivRecord {
   patience: number;
   /** Record +278 + type: units of the type lost so far. */
   casualties: number[];
-  /** Record X + 17: level 0 to 4 of the seven parts of the Throne Room. */
+  /** Record X + 25: the seven extra Throne Room pieces, a bit each (0x00438ff6). */
+  throneExtras: number;
+  /** Record X + 17: level 0 to 4 of the eight parts of the Throne Room. */
   throne: number[];
   /** Record X + 28: pieces awarded so far (0x0046708f). */
   thronePieces: number;
@@ -630,7 +632,8 @@ export function parseSave(bytes: Uint8Array): SaveFile {
       patience: r.u8(o + 22),
       talks: r.i8(o + 31),
       portrait: r.u8(X + 16),
-      throne: Array.from({ length: 7 }, (_, n) => r.u8(X + 17 + n)),
+      throne: Array.from({ length: 8 }, (_, n) => r.u8(X + 17 + n)),
+      throneExtras: r.u8(X + 25),
       thronePieces: r.i16(X + 28),
       casualties: Array.from({ length: 62 }, (_, n) => r.u8(o + 216 + 62 + n)),
       pardons: Array.from({ length: 8 }, (_, n) => r.i8(o + 72 + n)),

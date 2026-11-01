@@ -92,6 +92,7 @@ import {
 } from './diplomacy.js';
 import {
   aiPickGovernment,
+  throneOf,
   anarchyTurn,
   cityGovernmentScores,
   civGovernmentScores,
@@ -435,7 +436,12 @@ export class Game {
     if (this.scoreOf(slot).total < Math.trunc(sum / 2) + 1) return false;
     civ.thronePieces = next;
     if (next >= 38) return false;
-    return (civ.throne ?? []).length < 7 || (civ.throne ?? []).some((v) => v < 4);
+    // VERIFIED 0x004389e0: only the first seven parts are checked, and the extras.
+    return (
+      throneOf(civ)
+        .slice(0, 7)
+        .some((v) => v < 4) || (~(civ.throneExtras ?? 0) & 0x7f) !== 0
+    );
   }
 
   /** Leonardo's Workshop's sweep over a civilization's units (0x00492c44). */

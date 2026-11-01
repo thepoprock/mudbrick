@@ -102,6 +102,7 @@ import {
   buildPart,
   PART_LIMITS,
   shipOf,
+  throneOf,
   partLimit,
   type Spaceship,
   PART_NAMES,
@@ -140,7 +141,14 @@ const THRONE_ART = [
   166, 204, 306, 217, 175, 1, 1, 640, 296, 1, 1, 640, 303, 1, 1, 640, 300, 1, 1, 640, 298, 177, 1,
   276, 195, 173, 110, 264, 187, 207, 36, 189, 266, 184, 1, 234, 299, 1, 1, 640, 311, 1, 33, 640,
   274, 1, 1, 640, 310, 1, 1, 640, 313, 236, 269, 125, 39, 299, 234, 40, 72, 200, 198, 209, 123, 242,
-  154, 122, 151,
+  154, 122, 151, 1, 1, 640, 480, 1, 1, 640, 480, 1, 1, 640, 480, 1, 1, 640, 480,
+];
+/** The seven extra pieces' rectangles (0x005a9268), pictures 160 to 166. */
+/** Back to front: parts 0 to 7, then 8 + n for extra piece n. */
+const THRONE_LAYERS = [0, 1, 2, 8, 3, 9, 10, 4, 11, 5, 6, 12, 13, 14, 7];
+const THRONE_EXTRA = [
+  1, 311, 640, 43, 78, 14, 449, 240, 1, 235, 640, 67, 209, 142, 192, 155, 148, 251, 312, 70, 32,
+  273, 576, 65, 1, 139, 640, 342,
 ];
 
 type PediaCategory =
@@ -1350,26 +1358,26 @@ export class PlaySession {
       return;
     }
     g.drawImage(await load(base), 0, 0);
-    const levels = this.civ.throne ?? [];
-    for (let part = 0; part < 7; part++) {
-      const level = levels[part] ?? 0;
-      if (level === 0) continue;
-      const url = await this.folder.art('PV.DLL', 105 + part * 5 + level - 1);
-      if (!url) continue;
-      const at = (part * 4 + level - 1) * 4;
-      const [x, y, w, h] = THRONE_ART.slice(at, at + 4);
-      g.drawImage(
-        await load(url),
-        x ?? 0,
-        y ?? 0,
-        w ?? 0,
-        h ?? 0,
-        (x ?? 1) - 1,
-        (y ?? 1) - 1,
-        w ?? 0,
-        h ?? 0,
-      );
-    }
+    const levels = throneOf(this.civ);
+    const extras = levels.every((v) => v >= 4) ? (this.civ.throneExtras ?? 0) : 0;
+    const blit = async (id: number, x: number, y: number, w: number, h: number) => {
+      const url = await this.folder.art('PV.DLL', id);
+      if (url) g.drawImage(await load(url), x, y, w, h, x - 1, y - 1, w, h);
+    };
+    const part = async (n: number) => {
+      const level = levels[n] ?? 0;
+      if (level === 0) return;
+      const at = (n * 4 + level - 1) * 4;
+      const [x = 1, y = 1, w = 0, h = 0] = THRONE_ART.slice(at, at + 4);
+      await blit(105 + n * 5 + level - 1, x, y, w, h);
+    };
+    const extra = async (bit: number) => {
+      if ((extras & (1 << bit)) === 0) return;
+      const [x = 1, y = 1, w = 0, h = 0] = THRONE_EXTRA.slice(bit * 4, bit * 4 + 4);
+      await blit(160 + bit, x, y, w, h);
+    };
+    // The layers of 0x004398f2, back to front.
+    for (const step of THRONE_LAYERS) await (step < 8 ? part(step) : extra(step - 8));
   }
 
   private showThrone(award: boolean): void {
@@ -1388,14 +1396,24 @@ export class PlaySession {
       const text = document.createElement('div');
       text.textContent = 'Your people wish to add to the Throne Room.';
       box.appendChild(text);
-      const levels = (this.civ.throne ??= Array<number>(7).fill(0));
-      levels.forEach((v, part) => {
-        if (v < 4)
-          this.talkButton(box, `Improve part ${part + 1} (level ${v + 1})`, () => {
-            levels[part] = v + 1;
+      const levels = throneOf(this.civ);
+      if (levels.some((v) => v < 4)) {
+        levels.forEach((v, part) => {
+          if (v < 4)
+            this.talkButton(box, `Improve part ${part + 1} (level ${v + 1})`, () => {
+              levels[part] = v + 1;
+              this.showThrone(false);
+            });
+        });
+      } else {
+        for (let bit = 0; bit < 7; bit++) {
+          if (((this.civ.throneExtras ?? 0) & (1 << bit)) !== 0) continue;
+          this.talkButton(box, `Add piece ${bit + 1}`, () => {
+            this.civ.throneExtras = (this.civ.throneExtras ?? 0) | (1 << bit);
             this.showThrone(false);
           });
-      });
+        }
+      }
       return;
     }
     this.talkButton(box, 'Close', done);
@@ -2000,12 +2018,21 @@ export class PlaySession {
       const civ = this.game.civ(d.speaker);
       const img = document.createElement('img');
       img.style.cssText = 'float:left;height:150px;margin:0 10px 6px 0';
+      // The leader sits against the backdrop of their government (mk.dll 200 + government).
+      const stage = document.createElement('div');
+      stage.style.cssText =
+        'height:190px;margin-bottom:6px;background-size:cover;background-position:center';
+      stage.appendChild(img);
+      box.appendChild(stage);
+      img.style.cssText = 'height:190px;display:block;margin:0 auto';
+      void this.folder.art('MK.DLL', 200 + civ.government, true).then((url) => {
+        if (url) stage.style.backgroundImage = `url(${url})`;
+      });
       const index = civ.portrait ?? civ.tribe ?? 0;
       void this.folder.art('MK.DLL', 220 + index).then((url) => {
         if (url) img.src = url;
         else img.remove();
       });
-      box.appendChild(img);
     }
     const text = document.createElement('div');
     text.textContent = message.map(fill).join('\n');

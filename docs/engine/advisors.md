@@ -104,9 +104,12 @@ few at fixed places (walls and others). Unbuilt ones leave a house. Wonders do t
 ## Throne Room (0x004389e0)
 
 A human with a Palace earns a piece when the score reaches `Σ (7 − difficulty) × n / 2 + 1` for
-piece n (0x00467035, 0x0046708f), up to 38. The player raises one of seven parts, each with four
-levels. The room is picture 100 of pv.dll with picture `105 + part × 5 + level − 1` on top, cut by
-the table at 0x005a9068. The extra pieces from flags at +0x3fb (pictures 160 on) are not ported.
+piece n (0x00467035, 0x0046708f), up to 38. The player raises one of eight parts, each with four
+levels; a new civilization starts with parts 0, 1, 3 and 6 at level 1. The room is picture 100 of pv.dll with picture `105 + part × 5 + level − 1` on top, cut by
+the table at 0x005a9068. Once all eight stand at level 4 the awards are seven extra pieces instead (a bit each at record
+X + 25, pictures 160 to 166, table 0x005a9268). The room is drawn back to front in the order of
+0x004398f2, with the extras between the parts. Whether more is due checks only parts 0 to 6 and the
+extras (0x004389e0).
 
 ## Spaceship picture (0x004a224f)
 
@@ -115,3 +118,8 @@ draws rows 0 to 6, then the frame for the structurals built (pictures 400 to 440
 row's rectangle), then rows 31 to 87. A part row appears once its kind's count reaches the row's
 count, from the kind's lit sheet if the structure supports that many (0x0053ddd8), else from its
 dim sheet.
+
+## Negotiation backdrop (0x00471959, 0x00472c45)
+
+The negotiation window is the picture `200 + the other civilization's government` of mk.dll with the
+leader's portrait (`220 + portrait`) on it.

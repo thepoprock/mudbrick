@@ -124,6 +124,8 @@ export interface Civ {
   eiffelApplied?: boolean;
   /** Throne Room: level of each of the seven parts, and pieces awarded so far. */
   throne?: number[];
+  /** The seven extra pieces, a bit each, offered once all eight parts stand at level 4. */
+  throneExtras?: number;
   thronePieces?: number;
   /** Leader picture: the tribe, +21 for a woman; mk.dll picture 220 + this. */
   portrait?: number;
