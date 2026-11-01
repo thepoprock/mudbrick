@@ -46,7 +46,7 @@ import { cityPollution, meltdownRoll, pollutionRoll, type PollutionEvent } from 
 import { aiChooseProduction } from './aiBuild.js';
 import { runStrategy, type StrategyEvent } from './aiStrategy.js';
 import { gameYear } from './calendar.js';
-import { routeIncomeTotal, type TradeContext } from './trade.js';
+import { routeIncomeTotal, type TradeContext, routeModifier } from './trade.js';
 import type { EspionageContext } from './espionage.js';
 import {
   buildPart,
@@ -338,9 +338,27 @@ export class Game {
       knows: (a) => this.knows(slot, a),
       ownsWonder: (i) => this.ownsWonder(slot, i),
       distanceToCapital: isCapital ? 0 : this.distanceToCapital(city),
-      // INFERRED: 1 for the capital, 2 once Railroad is known; 0 elsewhere until 0x00468c65 is read.
-      connectedToCapital: isCapital ? (this.knows(slot, ADVANCE.railroad) ? 2 : 1) : 0,
+      connectedToCapital: this.connectedToCapital(city, isCapital),
     };
+  }
+
+  /**
+   * VERIFIED (0x004b33d7): the capital itself counts 1, 2 once Railroad is known; another city
+   * counts 1 when it and the capital both have an Airport, and on the capital's land mass the
+   * road walk between them (0x00468c65: 0 none, 1 road, 2 railroad) replaces that.
+   */
+  connectedToCapital(city: City, isCapital: boolean): number {
+    const slot = city.owner;
+    if (isCapital) return this.knows(slot, ADVANCE.railroad) ? 2 : 1;
+    const capital = this.world.cities.find(
+      (c) => c !== city && c.owner === slot && c.improvements[IMPROVEMENT.palace] === true,
+    );
+    if (!capital) return 0;
+    let v = 0;
+    if (city.improvements[IMPROVEMENT.airport] && capital.improvements[IMPROVEMENT.airport]) v = 1;
+    const lm = (c: City) => this.world.landmass[this.world.index(c.position.x, c.position.y)];
+    if (lm(city) === lm(capital)) v = routeModifier(this.world, this.rules, slot, city, capital);
+    return v;
   }
 
   productionContext(city: City): ProductionContext {
@@ -532,8 +550,9 @@ export class Game {
       if (e.kind === 'choose-research' && !civ.isHuman) this.aiChooseResearch(civ);
     }
 
-    // 7. Pollution roll and meltdown (the original rolls for human cities here; INFERRED for the AI).
-    if (this.world.cities.includes(city)) {
+    // 7. Pollution roll and meltdown — VERIFIED human cities only: the roll (0x004bb7bb) has one
+    // caller, inside the city turn's human-only branch; computer cities never pollute by it.
+    if (civ.isHuman && this.world.cities.includes(city)) {
       const pctx = {
         knows: (a: number) => this.knows(slot, a),
         advancesCount: civ.advancesCount,
@@ -554,18 +573,22 @@ export class Game {
       if (melt) push(melt);
     }
 
-    // 8. Upkeep (the original does this here for humans; where the AI pays is not yet read — INFERRED same).
-    for (const e of payUpkeep(this.rules, civ, city, {
-      difficulty: this.state.difficulty,
-      ownsWonder: (i) => this.ownsWonder(slot, i),
-      shieldRows: boxRows(
-        this.rules,
-        { isHuman: civ.isHuman, difficulty: this.state.difficulty },
-        true,
-      ),
-    })) {
-      push(e);
-    }
+    // 8. Upkeep — VERIFIED human cities only: the paying routine (0x004bbc98) has one caller,
+    // in the same human-only branch, and the per-improvement cost routine's other callers are
+    // the city screen, the sell dialog and the computer player's budget assessment
+    // (0x0049155b), which only reads. Computer players pay no improvement upkeep.
+    if (civ.isHuman)
+      for (const e of payUpkeep(this.rules, civ, city, {
+        difficulty: this.state.difficulty,
+        ownsWonder: (i) => this.ownsWonder(slot, i),
+        shieldRows: boxRows(
+          this.rules,
+          { isHuman: civ.isHuman, difficulty: this.state.difficulty },
+          true,
+        ),
+      })) {
+        push(e);
+      }
     // Government preference scores: the city turn's one scoring pass (the original's
     // 0x005b8648 switch around its recompute). The yields, waste, trade corruption and trade
     // split feed the scores as they run; then the city's own share (0x004bc513).

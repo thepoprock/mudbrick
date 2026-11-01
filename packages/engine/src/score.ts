@@ -18,7 +18,8 @@ export interface ScoreContext {
   turn: number;
   turnsOfPeace: number;
   pollutionSquares: number;
-  /** The header's +28 word, 0 in an ordinary game (INFERRED: a baseline for scenarios). */
+  /** The header's +28 word: polluted squares inside computer players' city radii, counted by
+   * the square-status pass (0x004b30b1) during the scoring pass — so only the rest is charged. */
   pollutionBaseline?: number;
   barbarianActivity: number;
   /** Header +25 (INFERRED from its use: civilizations destroyed, × 100 in the conquest bonus). */

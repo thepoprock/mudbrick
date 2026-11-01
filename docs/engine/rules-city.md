@@ -20,7 +20,10 @@ INFERRED and labelled.
 7. **Disorder, celebration and revolt** (0x004bafef).
 8. **Science** to the owner's research (0x004bb63d).
 9. Human owner only: the pollution roll (0x004bb7bb) and **upkeep with forced sales**
-   (0x004bbc98). Where the AI pays upkeep is not yet read.
+   (0x004bbc98). VERIFIED by the call graph that computer players never do either: each routine
+   has this one caller, and the per-improvement cost routine's other callers are the city
+   screen, the sell dialog and the computer player's budget assessment (0x0049155b), which only
+   reads. Computer cities neither pollute by the roll nor pay improvement upkeep.
 10. AI worker and pollution task assignment for the city radius (0x004bc284).
 
 The owner's turn (0x00467c61) processes its cities from the last slot to the first, then sets
