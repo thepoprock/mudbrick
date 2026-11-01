@@ -81,6 +81,13 @@ When storage is negative: if a Settlers-role unit (role 5) is supported by the c
 disbanded (FAMINE dialog names the unit); otherwise the city shrinks by one, and a size-1 city is
 destroyed. Storage resets to 0.
 
+## Wonders that have expired (VERIFIED, 0x0043e2b0)
+
+Every wonder test goes through 0x0043e361 or 0x0043e328, and both treat a wonder as absent once
+any of civilizations 1 to 7 knows the advance in @ENDWONDER. This covers the bonuses of the
+Colossus and King Richard's as well as the owner tests. One extra case in 0x0043e361 is not
+explained: wonder 20 also reads as absent when an options bit and a rules byte are both set.
+
 ## Disorder, celebration and gold (VERIFIED, 0x004bafef)
 
 After the totals, with `happy` and `unhappy` counted and the city not barbarian:

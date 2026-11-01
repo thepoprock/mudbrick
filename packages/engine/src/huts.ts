@@ -50,6 +50,8 @@ export const HUT_ADVANCES = {
 export const BARBARIAN_TYPES = { mounted: [15, 19, 21, 9], foot: [5, 7, 11, 8] } as const;
 
 export interface HutContext {
+  /** Run the consequences of an advance just granted (Game.advanceGained). */
+  advanceGained?: (civ: Civ, advance: number) => void;
   turn: number;
   /** Game year (negative = BC). */
   year: number;
@@ -235,6 +237,7 @@ export function enterHut(
         }
         if (!options.includes(pick)) pick = options[0] ?? 0;
         grantAdvance(civ, pick, 'other');
+        ctx.advanceGained?.(civ, pick);
         return { kind: 'scrolls', advance: pick };
       }
       case 5: {

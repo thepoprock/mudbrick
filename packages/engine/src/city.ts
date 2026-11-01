@@ -123,11 +123,13 @@ export function squareYield(
   const road = (flags & (SquareFlag.Road | SquareFlag.Railroad)) !== 0 || isCentre;
   const rail = (flags & SquareFlag.Railroad) !== 0;
   const river = (flags & SquareFlag.River) !== 0;
+  // A wonder in the city counts only while it stands: the owner test sees an expired one as gone.
+  const colossus = city.improvements[IMPROVEMENT.colossus] && ctx.ownsWonder(IMPROVEMENT.colossus);
 
   if (terrain === OCEAN) {
     if (kind === FOOD && city.improvements[IMPROVEMENT.harbour]) v += 1;
     if (kind === SHIELDS && city.improvements[IMPROVEMENT.offshorePlatform]) v += 1;
-    if (kind === TRADE && city.improvements[IMPROVEMENT.colossus]) v += 1;
+    if (kind === TRADE && colossus) v += 1;
   } else if (kind === FOOD) {
     if (irrigated) {
       v += t.irrigateBonus;
@@ -145,11 +147,12 @@ export function squareYield(
   } else {
     if (river) v += 1;
     if (road && (terrain < 3 || v !== 0)) v += 1;
-    if (v !== 0 && city.improvements[IMPROVEMENT.colossus]) v += 1;
+    if (v !== 0 && colossus) v += 1;
   }
 
   if (kind === SHIELDS) {
-    if (city.improvements[IMPROVEMENT.kingRichards]) v += 1;
+    if (city.improvements[IMPROVEMENT.kingRichards] && ctx.ownsWonder(IMPROVEMENT.kingRichards))
+      v += 1;
     if (rail || (isCentre && ctx.knows(ADVANCE.railroad))) v = halfMore(v);
   }
   const s = ctx.governmentScores;

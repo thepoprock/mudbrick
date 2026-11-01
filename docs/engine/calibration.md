@@ -131,3 +131,11 @@ happy and unhappy. On August 1861 of the Civil War all 29 Federal cities match o
 19 saves of two long Roman games net trade rose from about half to nearly all after the distance
 fix, and five saves match completely. Tax and science gaps in computer cities are partly rates
 changed after the cities were computed; the unhappy gap closed once martial law counted every armed unit in the city. Most misses left are single cities; several stored all zeros, which fits cities the original had not recomputed since capture (INFERRED).
+
+Computer players' stored figures predate their rate change. VERIFIED on the Civil War August
+autosave: computed with each civilization's July rates, the 45 cities of the Europeans,
+Kentuckians and Confederates match on tax, science and happy, while computed with the rates in the
+save none match on tax or science. Unhappy matches in 41 of the 45; INFERRED that the other four
+are units that moved after the city turn. So a computer player sets its rates after its cities
+are processed, and a tax or science mismatch in a computer city is expected whenever its rates
+changed. The Indians changed government as well and are left out.

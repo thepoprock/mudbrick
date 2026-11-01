@@ -111,6 +111,7 @@ import {
 } from './events.js';
 import { inEnemyZoc } from './movement.js';
 import { payUpkeep, type UpkeepEvent } from './upkeep.js';
+import { advanceEffects, leonardoUpgrades, type AdvanceEvent } from './advances.js';
 import { CITY_CENTRE_INDEX, type City, type Civ, type World, type Production } from './world.js';
 
 export interface GameState {
@@ -192,6 +193,7 @@ export type CityTurnEvent = CityEvent | ProductionEvent | UpkeepEvent | GrowthNo
 export type TurnEvent =
   | { slot: number; city: number; event: CityTurnEvent }
   | { slot: number; event: ResearchEvent }
+  | { slot: number; event: AdvanceEvent }
   | { slot: number; event: UnitTurnEvent }
   | { slot: number; event: AiUnitEvent }
   | { slot: number; event: StrategyEvent }
@@ -263,7 +265,44 @@ export class Game {
 
   /** The civilization holds the wonder in one of its cities. */
   ownsWonder(slot: number, improvement: number): boolean {
+    if (this.wonderExpired(improvement)) return false;
     return this.world.cities.some((c) => c.owner === slot && c.improvements[improvement]);
+  }
+
+  /** Anyone knows the advance that ends this wonder (VERIFIED, 0x0043e2b0). */
+  wonderExpired(improvement: number): boolean {
+    const a = advanceIndex(this.rules.improvements[improvement]?.expiresWith);
+    if (a === null) return false;
+    return this.world.civs.some((c) => c.slot >= 1 && c.slot <= 7 && c.knownAdvances[a] === true);
+  }
+
+  /** The owner of a standing wonder, or null when it is unbuilt or expired (0x0043e3ef). */
+  wonderOwner(improvement: number): number | null {
+    if (this.wonderExpired(improvement)) return null;
+    return this.world.cities.find((c) => c.improvements[improvement])?.owner ?? null;
+  }
+
+  /** Leonardo's Workshop's sweep over a civilization's units (0x00492c44). */
+  private runLeonardo(civ: Civ): void {
+    for (const e of leonardoUpgrades(this.world, this.rules, civ, (a) => this.knows(civ.slot, a)))
+      this.pendingEvents.push({ slot: civ.slot, event: e });
+  }
+
+  /** The consequences of an advance `civ` has just been given (0x004935e5). */
+  advanceGained(civ: Civ, advance: number): void {
+    const first =
+      advance <= 99 &&
+      this.world.civs.every(
+        (c) => c.slot < 1 || c.slot > 7 || c.slot === civ.slot || c.knownAdvances[advance] !== true,
+      ) &&
+      (this.state.firstDiscoveredBy[advance] ?? 0) === 0;
+    const events = advanceEffects(this.world, this.rules, civ, advance, first, {
+      turn: this.state.turn,
+      firstDiscoveredBy: this.state.firstDiscoveredBy,
+      wonderOwner: (i) => this.wonderOwner(i),
+      knows: (s, a) => this.knows(s, a),
+    });
+    for (const e of events) this.pendingEvents.push({ slot: civ.slot, event: e });
   }
 
   /** City holding a wonder, anywhere in the world. */
@@ -282,6 +321,7 @@ export class Game {
 
   espionageContext(): EspionageContext {
     return {
+      advanceGained: (c, a) => this.advanceGained(c, a),
       turn: this.state.turn,
       difficulty: this.state.difficulty,
       rng: this.rng,
@@ -348,7 +388,10 @@ export class Game {
       },
       grantAdvance: (s, a) => {
         const c = civ(s);
-        if (c && c.knownAdvances[a] !== true) grantAdvance(c, a, 'other');
+        if (c && c.knownAdvances[a] !== true) {
+          grantAdvance(c, a, 'other');
+          this.advanceGained(c, a);
+        }
       },
       spaceshipLaunched: () => false,
       mainHuman: humans[0] ?? null,
@@ -568,6 +611,7 @@ export class Game {
     for (const e of prodEvents) {
       push(e);
       if (e.kind === 'capitalization') civ.treasury += e.gold;
+      if (e.kind === 'wonder-effect' && e.effect === 'leonardo') this.runLeonardo(civ);
       if (e.kind === 'ghost-town') return out;
       if (
         !civ.isHuman &&
@@ -623,12 +667,7 @@ export class Game {
     });
     for (const e of addScience(civ, science, (c) => this.researchCostFor(c))) {
       out.push({ slot, event: e });
-      if (e.kind === 'discovered') {
-        if ((this.state.firstDiscoveredBy[e.advance] ?? 0) === 0)
-          this.state.firstDiscoveredBy[e.advance] = slot;
-        if (e.advance === 60 /* Philosophy */ && this.state.firstDiscoveredBy[60] === slot)
-          civ.freeAdvancePending = true;
-      }
+      if (e.kind === 'discovered') this.advanceGained(civ, e.advance);
       if (e.kind === 'choose-research' && !civ.isHuman) this.aiChooseResearch(civ);
     }
 
@@ -727,6 +766,7 @@ export class Game {
 
   eventContext(): EventContext {
     return {
+      advanceGained: (c, a) => this.advanceGained(c, a),
       turn: this.state.turn,
       rng: this.rng,
       isHuman: (s) => this.world.civs.find((c) => c.slot === s)?.isHuman ?? false,
@@ -779,6 +819,15 @@ export class Game {
 
   /** CITYTAKEN hook for the capture routine. */
   cityTaken(city: string, attacker: number, defender: number): void {
+    // A city that changes hands with Leonardo's Workshop runs it for the new owner (0x004ac56a).
+    const taker = this.world.civs.find((c) => c.slot === attacker);
+    const home = this.world.cities.find((c) => c.name === city && c.owner === attacker);
+    if (
+      taker &&
+      home?.improvements[IMPROVEMENT.leonardos] &&
+      !this.wonderExpired(IMPROVEMENT.leonardos)
+    )
+      this.runLeonardo(taker);
     const ev = this.events();
     if (!ev) return;
     for (const e of ev.cityTaken(city, attacker, defender, this.eventContext()))
@@ -948,6 +997,7 @@ export class Game {
         nextCityName: () => `${civ.adjective} City ${++names}`,
         onUnitKilled: (t, a, d) => this.unitKilled(t, a, d),
         onCityTaken: (c, a, d) => this.cityTaken(c, a, d),
+        advanceGained: (c, a) => this.advanceGained(c, a),
         guerillaWarfareDiscovered: (this.state.firstDiscoveredBy[34] ?? 0) !== 0,
         ...(civ.strategy ? { strategy: civ.strategy } : {}),
         trade: this.tradeContext(),
@@ -1011,7 +1061,9 @@ export class Game {
     }
     for (const civ of this.world.civs) {
       if (civ.slot === 0 || !civ.inPlay) continue;
-      civ.treasury = civ.treasury > 30000 ? 30000 : civ.treasury < 0 ? 0 : civ.treasury;
+      // VERIFIED 0x00469773: a debt past −16384 is taken for an overflow and becomes the maximum.
+      if (civ.treasury > 30000 || civ.treasury < -0x4000) civ.treasury = 30000;
+      if (civ.treasury < 0) civ.treasury = 0;
       out.push(...this.processCivilization(civ.slot));
       out.push(...this.pendingEvents.splice(0));
       out.push(...this.eliminateCityless());
@@ -1480,10 +1532,7 @@ export class Game {
       ownsWonder: (i) => this.ownsWonder(city.owner, i),
       ...(this.buildTrace ? { trace: (n, p) => this.buildTrace?.(city, n, p) } : {}),
       canBuildImprovement: (i) => this.canBuildImprovement(city, i),
-      wonderExpired: (w) => {
-        const e = this.rules.improvements[w]?.expiresWith;
-        return e?.kind === 'advance' && (this.state.firstDiscoveredBy[e.index] ?? 0) !== 0;
-      },
+      wonderExpired: (w) => this.wonderExpired(w),
       nextShipKind: (kind) => aiNextPartKind(this.world, civ, kind, this.shipContext()),
       foreign: {
         mainHuman: this.world.civs.find((c) => c.isHuman && c.slot !== 0)?.slot ?? null,

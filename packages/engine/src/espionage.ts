@@ -35,6 +35,8 @@ export interface EspionageEvent {
 }
 
 export interface EspionageContext {
+  /** Run the consequences of an advance just granted (Game.advanceGained). */
+  advanceGained?: (civ: Civ, advance: number) => void;
   turn: number;
   difficulty: number;
   rng: Rng;
@@ -383,6 +385,7 @@ export function performEspionage(
       }
       if (guarded()) return events;
       grantAdvance(meCiv, adv, 'other');
+      ctx.advanceGained?.(meCiv, adv);
       city.techStolen = true;
       events.push({
         kind: 'espionage',

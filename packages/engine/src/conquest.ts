@@ -26,6 +26,8 @@ export const CONQUEST_ADVANCES = {
 export const GOVERNMENT_ADVANCES = [31, 54, 15, 71, 21] as const;
 
 export interface CaptureContext {
+  /** Run the consequences of an advance just granted (Game.advanceGained). */
+  advanceGained?: (civ: Civ, advance: number) => void;
   /** Scenario events: CITYTAKEN, after the city has changed hands. */
   onCityTaken?: (city: string, attacker: number, defender: number) => void;
   turn: number;
@@ -267,6 +269,7 @@ export function captureCity(
             candidates[0] ?? 0,
           );
         grantAdvance(captor, pick, 'other');
+        ctx.advanceGained?.(captor, pick);
         stolen = pick;
       }
     }

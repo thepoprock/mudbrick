@@ -49,11 +49,40 @@ advance is granted. A civilization with beakers but no target is asked to choose
 - Beakers reset to **zero** when the advance was researched — overflow is lost. An advance gained
   any other way (trade, hut, theft, Darwin's Voyage, Philosophy) keeps the stored beakers.
 - The research target is cleared; humans choose the next one at once (AI picks in its turn).
-- Future Technology (advance 89) raises its own counter; the discoveries count rises for every
-  advance (INFERRED: the add-advance routine 0x004935e5 has not been read).
+- Future Technology (advance 89, or any index above 99) raises its own counter; everything else
+  sets the known bit, records who supplied it and marks the known-by mask. See "Gaining an
+  advance" below.
 - Side effects on discovery that the original shows as popups: fortresses become available with
   Construction, railroads with Railroad, farmland, airlift and paradrop with the advances the
   rules name, and the Philosophy free advance.
+
+## Gaining an advance (VERIFIED, 0x004935e5)
+
+Every source goes through this one routine: research, trade, theft, conquest, huts, events and the
+Great Library. `packages/engine/src/advances.ts` and `grantAdvance` implement it.
+
+1. The research target clears only if it is this advance.
+2. The advance is recorded. On turn 0 the routine stops here, so the advances a civilization
+   starts with never enter its advances count and none of the effects below run. The saves agree:
+   early in a game most civilizations know one or two advances more than their count.
+3. The advances count rises by one, even for an advance already known.
+4. Gunpowder (35) and Mobile Warfare (53) close every Barracks the civilization has. It is paid
+   `Barracks cost rows × shield box rows × cities`, whoever it is; only a human sees the message.
+   If a ruleset disables advance 53, the walk goes down first prerequisites to the nearest
+   enabled advance.
+5. When nobody knew it before: Philosophy (60) sets the free-advance flag whatever the source, the
+   first-discovery table is filled, and a wonder it ends is announced to its human owner.
+6. Leonardo's Workshop, while it stands, sweeps the civilization's units (0x00492c44). Each unit
+   whose obsoleting advance is known becomes the last unit type requiring that advance with the
+   same role and at least its holds, and loses veteran status. A defensive-role unit weaker
+   in defence than unit 7 (Musketeers) counts as obsoleted by Gunpowder. The same sweep runs when
+   the wonder is completed, and for the new owner when its city changes hands (0x004ac56a,
+   0x00528720).
+7. The Great Library, while it stands: when its owner lacks the advance and at least two
+   civilizations know it, the owner gains it through this same routine, with source −2.
+
+Stand-in: the engine does not keep the per-advance record of who supplied it (civilization
++0x74 + advance), because nothing it has ported reads that yet.
 
 ## The AI's rate policy (VERIFIED, in the civilization turn 0x00467c61)
 

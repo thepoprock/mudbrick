@@ -5,7 +5,7 @@ import type { Rng } from './rng.js';
 import { DOMAIN_AIR, DOMAIN_SEA, type EngineRules } from './rules.js';
 import { lookAround } from './sight.js';
 import { ORDER } from './terraform.js';
-import type { Unit, World } from './world.js';
+import type { Civ, Unit, World } from './world.js';
 import { declareWar, setTreaty, TREATY, type DiplomacyContext } from './diplomacy.js';
 
 /**
@@ -30,6 +30,8 @@ export type ScenarioEffect =
   | { kind: 'scenario-note'; text: string };
 
 export interface EventContext {
+  /** Run the consequences of an advance just granted (Game.advanceGained). */
+  advanceGained?: (civ: Civ, advance: number) => void;
   turn: number;
   rng: Rng;
   isHuman: (slot: number) => boolean;
@@ -288,8 +290,10 @@ export class ScenarioEvents {
         r <= 7 &&
         ctx.inPlay(r) &&
         !civ.knownAdvances[a.giveTechnology.technology]
-      )
+      ) {
         grantAdvance(civ, a.giveTechnology.technology, 'other');
+        ctx.advanceGained?.(civ, a.giveTechnology.technology);
+      }
     }
     if (a.text) out.push({ kind: 'scenario-text', lines: a.text });
     if (a.dontPlayWonders) ctx.dontPlayWonders();

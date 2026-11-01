@@ -157,17 +157,23 @@ export function addScience(civ: Civ, amount: number, cost: (civ: Civ) => number)
 }
 
 /**
- * Give a civilization an advance (VERIFIED for the bookkeeping here). Beakers reset to zero
- * only when it was researched; an advance gained any other way keeps them. Future Technology
- * raises its own counter; the advances count rises for every discovery (INFERRED — the
- * add-advance routine itself is not yet read).
+ * Give a civilization an advance (VERIFIED, 0x004935e5). Beakers reset to zero only when it was
+ * researched; an advance gained any other way keeps them. The research target clears only when
+ * it is this advance. Future Technology raises its own counter. The advances count rises for
+ * every gain except while a game is set up (`setup`, turn 0), so starting advances never count.
+ * The consequences are `advanceEffects` in advances.ts.
  */
-export function grantAdvance(civ: Civ, advance: number, source: 'research' | 'other'): void {
+export function grantAdvance(
+  civ: Civ,
+  advance: number,
+  source: 'research' | 'other',
+  setup = false,
+): void {
   if (source === 'research') civ.scienceStored = 0;
-  civ.researching = null;
-  if (advance === FUTURE_TECHNOLOGY) civ.futureTechs += 1;
+  if (civ.researching === advance) civ.researching = null;
+  if (advance === FUTURE_TECHNOLOGY || advance > 99) civ.futureTechs += 1;
   else civ.knownAdvances[advance] = true;
-  civ.advancesCount += 1;
+  if (!setup) civ.advancesCount += 1;
 }
 
 export interface AiRateContext {

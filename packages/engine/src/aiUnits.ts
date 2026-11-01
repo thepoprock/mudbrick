@@ -95,6 +95,8 @@ export interface AiUnitContext extends MovementContext {
   /** Scenario event hooks (UNITKILLED, CITYTAKEN). */
   onUnitKilled?: (type: number, attacker: number, defender: number) => void;
   onCityTaken?: (city: string, attacker: number, defender: number) => void;
+  /** Run the consequences of an advance just granted (Game.advanceGained). */
+  advanceGained?: (civ: Civ, advance: number) => void;
 }
 
 export interface AiUnitEvent {
@@ -609,6 +611,7 @@ function takeCityHere(
     conquest: true,
     guerillaWarfareDiscovered: ctx.guerillaWarfareDiscovered ?? false,
     ...(ctx.onCityTaken ? { onCityTaken: ctx.onCityTaken } : {}),
+    ...(ctx.advanceGained ? { advanceGained: ctx.advanceGained } : {}),
   });
   events.push({
     kind: 'ai-unit',

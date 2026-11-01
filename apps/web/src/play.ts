@@ -500,6 +500,7 @@ export class PlaySession {
       guerillaWarfareDiscovered: (this.game.state.firstDiscoveredBy[34] ?? 0) !== 0,
       ...(this.game.state.forbidGovernmentChange ? { forbidGovernmentSwitching: true } : {}),
       onCityTaken: (c, a, d) => this.game.cityTaken(c, a, d),
+      advanceGained: (c, a) => this.game.advanceGained(c, a),
     });
     if (ev.cityDestroyed) {
       this.log(`${this.unitName(unit)} destroys the ${loser.adjective} city of ${city.name}.`);
@@ -540,6 +541,7 @@ export class PlaySession {
       difficulty: this.game.state.difficulty,
       barbarianActivity: 1,
       knownByAnyone: (a) => this.world.civs.some((c) => c.knownAdvances[a]),
+      advanceGained: (c, a) => this.game.advanceGained(c, a),
       nextCityName: () => this.nextCityName(),
     });
     const names: Record<string, string> = {
@@ -682,6 +684,16 @@ export class PlaySession {
         return `${cityName} holds ${this.rules.improvements[ev.improvement]?.name ?? 'a wonder'} back.`;
       case 'discovered':
         return `Discovery: ${this.rules.advances[ev.advance]?.name ?? ev.advance}.`;
+      case 'great-library':
+        return `The Great Library yields ${this.rules.advances[ev.advance]?.name ?? ev.advance}.`;
+      case 'barracks-sold':
+        return `${this.rules.advances[ev.advance]?.name ?? 'An advance'} closes ${ev.cities} Barracks for ${ev.gold} gold.`;
+      case 'units-upgraded':
+        return `Leonardo's Workshop turns ${this.rules.units[ev.from]?.name ?? 'a unit'} into ${this.rules.units[ev.to]?.name ?? 'a unit'}.`;
+      case 'wonder-expired':
+        return `${this.rules.advances[ev.advance]?.name ?? 'An advance'} ends ${this.rules.improvements[ev.improvement]?.name ?? 'a wonder'}.`;
+      case 'golden-age':
+        return 'A golden age: one free advance.';
       case 'choose-research':
         return 'Choose what to research next.';
       case 'retirement':

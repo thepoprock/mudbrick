@@ -27,6 +27,11 @@ Unit movement, orders and the AI's unit moves happen between these driver calls 
 main loop, which is not yet read. The order in which civilizations take their turns is slot
 order (INFERRED).
 
+One civilization's turn (0x00469773, VERIFIED): its treasury is clamped first. Above 30000 it
+becomes 30000, below −16384 it also becomes 30000 (read as an overflow), and any other negative
+figure becomes 0. Then 0x00468f0f, the civilization turn 0x00467c61, 0x0051326d, the unit routine
+0x004ed2dd and 0x004694b2 run in that order.
+
 ## What the engine implements
 
 `Game.processCity` and `Game.processCivilization` follow the verified order. Not yet

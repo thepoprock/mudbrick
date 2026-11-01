@@ -325,7 +325,7 @@ export function newGame(rules: EngineRules, rng: Rng, opts: NewGameOptions): New
       const choices = researchableAdvances(rules, civ);
       const advance = civ.researching ?? choices[rng.nextInt(Math.max(1, choices.length))];
       if (advance === undefined) break;
-      grantAdvance(civ, advance, 'other');
+      grantAdvance(civ, advance, 'other', true);
       granted += 1;
     }
     if (granted > 0)
