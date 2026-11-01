@@ -168,6 +168,7 @@ export class PlaySession {
   openCity: City | null = null;
   gotoMode = false;
   paradropMode = false;
+  private seatPending = false;
   muted = false;
   private readonly logLines: string[] = [];
   private cityNames = 0;
@@ -175,13 +176,19 @@ export class PlaySession {
   constructor(
     readonly game: Game,
     readonly folder: GameFolder,
-    readonly humanSlot: number,
+    public humanSlot: number,
     readonly el: PlayElements,
     readonly renderOptions: () => WorldRenderOptions,
   ) {
     game.wantsTalks = folder.popups.size > 0;
     void this.buildMenuBar();
     this.log(`You lead the ${this.civ.name}. Arrow keys or the number pad move the selected unit.`);
+    if (game.state.nextSlot === 0) {
+      this.playOn();
+    } else if (game.state.nextSlot === undefined) {
+      game.state.nextSlot = humanSlot + 1;
+      game.state.movingHuman = humanSlot;
+    }
     this.selectNext();
     this.refresh();
     if (!this.selected) {
@@ -806,7 +813,18 @@ export class PlaySession {
   }
 
   endTurn(): void {
-    const events = this.game.endTurn();
+    this.playOn();
+  }
+
+  /** Run the round on to the next human (Game.playUntilHuman), and hand the seat over. */
+  private playOn(): void {
+    const before = this.humanSlot;
+    const events = this.game.playUntilHuman();
+    this.humanSlot = this.game.state.movingHuman ?? this.humanSlot;
+    if (this.humanSlot !== before) {
+      this.log(`— The ${this.civ.name} to move —`);
+      this.announceSeat();
+    }
     for (const e of events) {
       if (e.slot !== this.humanSlot) continue;
       const text = this.eventText(e);
@@ -1130,6 +1148,22 @@ export class PlaySession {
     body.textContent = lines.length ? lines.join('\n') : 'No casualties reported.';
     box.append(body);
     this.talkButton(box, 'Close', () => this.closeTalk());
+  }
+
+  /** Hot seat: nobody sees the map until the next player says so (HOTSEATTURN). */
+  private announceSeat(): void {
+    this.seatPending = true;
+    const box = this.talkBox();
+    box.replaceChildren();
+    const text = document.createElement('div');
+    text.textContent = `${this.civ.leader} of the ${this.civ.name}: your turn.`;
+    box.appendChild(text);
+    this.talkButton(box, 'OK', () => {
+      this.seatPending = false;
+      this.closeTalk();
+      const home = this.world.cities.find((c) => c.owner === this.humanSlot);
+      if (home) this.centreOn(home.position);
+    });
   }
 
   private airliftMenu(unit: Unit): void {
@@ -1532,8 +1566,8 @@ export class PlaySession {
   }
 
   private nextTalk(): void {
-    if (this.talk) return;
-    const talk = this.game.nextPendingTalk();
+    if (this.talk || this.seatPending) return;
+    const talk = this.game.nextPendingTalk(this.humanSlot);
     if (!talk) return;
     this.talk = talk;
     this.showDialog(talk.next());

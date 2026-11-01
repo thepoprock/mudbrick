@@ -243,7 +243,14 @@ function startNewGame(): void {
   map = undefined;
   world = result.world;
   sourceName = `New game ${seed.toString(16)}`;
-  const game = new Game(result.world, rules, rng, result.state);
+  // Hot seat: the first civilizations after the chosen one become humans too (HOTSEAT1).
+  let extra = selectValue('ngHumans') - 1;
+  for (const c of result.world.civs) {
+    if (extra <= 0 || c.slot === 0 || !c.inPlay || c.isHuman) continue;
+    c.isHuman = true;
+    extra -= 1;
+  }
+  const game = new Game(result.world, rules, rng, { ...result.state, nextSlot: 0 });
   session = new PlaySession(
     game,
     folder,

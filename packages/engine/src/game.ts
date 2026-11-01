@@ -157,6 +157,10 @@ export interface GameState {
   bloodlust?: boolean;
   /** Save file offset 8: from this turn on the calendar advances one year per turn (−1 / unset: never). */
   calendarLockTurn?: number;
+  /** The next slot to play in this round, 0 between rounds. */
+  nextSlot?: number;
+  /** The human whose move it is. */
+  movingHuman?: number;
   /** Past this turn the historian reports (header +0x142). */
   nextHistory?: number;
   /** Times each tribe (leader index) has played, for restarts. */
@@ -351,8 +355,9 @@ export class Game {
   }
 
   /** The next queued conversation, if any. */
-  nextPendingTalk(): Conversation | null {
-    const next = this.pendingTalks.shift();
+  nextPendingTalk(human: number): Conversation | null {
+    const at = this.pendingTalks.findIndex((t) => t.human === human);
+    const next = at >= 0 ? this.pendingTalks.splice(at, 1)[0] : undefined;
     if (!next) return null;
     const civ = this.world.civs.find((c) => c.slot === next.computer);
     if (next.relations && civ)
@@ -1283,7 +1288,8 @@ export class Game {
   }
 
   /** End the turn: every civilization in play, in slot order (INFERRED), then the counter. */
-  endTurn(): TurnEvent[] {
+  /** The opening of a round (0x00467591): events, the historian, barbarian landings. */
+  private beginRound(): TurnEvent[] {
     const out: TurnEvent[] = [];
     // Scenario events at the turn's commencement (TURN, TURNINTERVAL, RANDOMTURN, RECEIVEDTECHNOLOGY).
     for (const e of this.events()?.turnStart(this.eventContext()) ?? [])
@@ -1299,16 +1305,30 @@ export class Game {
       for (const e of spawnBarbarians(this.world, this.rules, this.barbarianContext()))
         out.push({ slot: 0, event: e });
     }
-    for (const civ of this.world.civs) {
-      if (civ.slot === 0 || !civ.inPlay) continue;
-      // VERIFIED 0x00469773: a debt past −16384 is taken for an overflow and becomes the maximum.
-      if (civ.treasury > 30000 || civ.treasury < -0x4000) civ.treasury = 30000;
-      if (civ.treasury < 0) civ.treasury = 0;
-      out.push(...this.processCivilization(civ.slot));
-      out.push(...this.pendingEvents.splice(0));
-      out.push(...this.eliminateCityless());
+    return out;
+  }
+
+  /** One slot's turn in the round's order: slot 0 is the barbarians (0x0046b55e). */
+  private playSlot(slot: number): TurnEvent[] {
+    const out: TurnEvent[] = [];
+    if (slot === 0) {
+      out.push(...this.processBarbarians());
+      return out;
     }
-    out.push(...this.processBarbarians());
+    const civ = this.world.civs.find((c) => c.slot === slot);
+    if (!civ?.inPlay) return out;
+    // VERIFIED 0x00469773: a debt past −16384 is taken for an overflow and becomes the maximum.
+    if (civ.treasury > 30000 || civ.treasury < -0x4000) civ.treasury = 30000;
+    if (civ.treasury < 0) civ.treasury = 0;
+    out.push(...this.processCivilization(slot));
+    out.push(...this.pendingEvents.splice(0));
+    out.push(...this.eliminateCityless());
+    return out;
+  }
+
+  /** The close of a round: the turn counter and the year's bookkeeping. */
+  private endRound(): TurnEvent[] {
+    const out: TurnEvent[] = [];
     this.state.turn += 1;
     // VERIFIED (0x00467591): from turn 200 every turn adds a turn of peace; a battle between
     // two civilizations has reset the count during the turn.
@@ -1332,6 +1352,41 @@ export class Game {
       }
     }
     out.push(...this.endOfYear());
+    return out;
+  }
+
+  /** A whole round with nobody stopping to move. */
+  endTurn(): TurnEvent[] {
+    const out = this.beginRound();
+    for (let slot = 0; slot < 8; slot++) out.push(...this.playSlot(slot));
+    out.push(...this.endRound());
+    return out;
+  }
+
+  /**
+   * Play on from where the round stands until a human is to move, as the original does: each
+   * civilization moves in its slot, so a human sees what earlier slots did this turn, and later
+   * slots answer in the same turn. `state.nextSlot` is 0 between rounds. Stops after the human's
+   * cities are processed; `state.movingHuman` names who moves. With no human left it plays one
+   * round and stops.
+   */
+  playUntilHuman(): TurnEvent[] {
+    const out: TurnEvent[] = [];
+    for (let rounds = 0; rounds < 2; rounds++) {
+      if ((this.state.nextSlot ?? 0) === 0) out.push(...this.beginRound());
+      for (let slot = this.state.nextSlot ?? 0; slot < 8; slot++) {
+        out.push(...this.playSlot(slot));
+        const civ = this.world.civs.find((c) => c.slot === slot);
+        if (slot !== 0 && civ?.inPlay && civ.isHuman) {
+          this.state.nextSlot = slot + 1;
+          this.state.movingHuman = slot;
+          return out;
+        }
+      }
+      this.state.nextSlot = 0;
+      out.push(...this.endRound());
+      if (!this.world.civs.some((c) => c.isHuman && c.inPlay && c.slot !== 0)) return out;
+    }
     return out;
   }
 

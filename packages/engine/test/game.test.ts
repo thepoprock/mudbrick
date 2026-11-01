@@ -4,7 +4,7 @@ import { Game } from '../src/game.js';
 import { applyCityMood, researchableAdvances } from '../src/outcome.js';
 import { Rng } from '../src/rng.js';
 import { GOVERNMENT, IMPROVEMENT, type EngineRules } from '../src/rules.js';
-import { CITY_CENTRE_INDEX, World, type City, type Civ } from '../src/world.js';
+import { CITY_CENTRE_INDEX, World, type City, type Civ, type Unit } from '../src/world.js';
 
 const special = (food: number, shields: number, trade: number) => ({ food, shields, trade });
 const flags = () => ({
@@ -208,6 +208,24 @@ describe('Game turn loop', () => {
     expect(city.size).toBe(3);
     expect(city.specialists.entertainers).toBe(0);
     expect(city.worked).toBe(worked);
+  });
+
+  it('play stops after a human moves in its slot, and goes on to the next human', () => {
+    const { game, world, civ } = setup();
+    civ.isHuman = true;
+    const other = { ...civ, slot: 2, name: 'Second', isHuman: true };
+    world.civs.push(other);
+    world.units.push({ ...(world.units[0] as Unit), id: 1, owner: 2, homeCity: null });
+    game.state.nextSlot = 0;
+    game.playUntilHuman();
+    expect(game.state.movingHuman).toBe(1);
+    expect(game.state.nextSlot).toBe(2);
+    expect(game.state.turn).toBe(10);
+    game.playUntilHuman();
+    expect(game.state.movingHuman).toBe(2);
+    game.playUntilHuman();
+    expect(game.state.movingHuman).toBe(1);
+    expect(game.state.turn).toBe(11);
   });
 
   it("Darwin's Voyage completes the research target and the next one", () => {

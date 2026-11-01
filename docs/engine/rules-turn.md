@@ -111,3 +111,10 @@ and, for the only human, the game over. A new civilization may then restart in t
 every civilization's turn and at the end of the turn (`eliminateCityless`), lagging the original
 by at most part of a turn; a civilization that never founded a city is left alone, as the
 original never asks about it, except when it has no unit either (INFERRED).
+
+## Order within a round (VERIFIED 0x0046b55e)
+
+Barbarians move first as slot 0, then slots 1 to 7 in order. A human moves in its own slot, after
+its cities are processed, so it sees what earlier slots did this turn and later slots answer in
+the same turn. Hot seat is this loop with several humans, each with its own view and a handover
+message (HOTSEATTURN). `Game.playUntilHuman` runs it; `Game.endTurn` plays a round straight through.
