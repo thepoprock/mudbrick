@@ -137,6 +137,8 @@ export interface Civ {
   pardons?: Int8Array;
   /** Civilization flag bit 2, read by the senate test under the Republic (0x0050f0ea). */
   senateActive?: boolean;
+  /** The last population milestone announced (0x005d1332). */
+  populationMark?: number;
   /** A per-turn random 0–99 the original keeps at record +22 (patience, INFERRED name). */
   patience?: number;
   /** A counter at record +31 that falls every third turn (INFERRED name). */

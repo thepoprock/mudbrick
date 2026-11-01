@@ -70,6 +70,7 @@ import {
   type PollutionEvent,
 } from './pollution.js';
 import { aiChooseProduction } from './aiBuild.js';
+import { civPopulation } from './reports.js';
 import { computerPurchase, type PurchaseContext, type WonderTally } from './aiPurchase.js';
 import { runStrategy, type StrategyEvent } from './aiStrategy.js';
 import { gameYear, formatYear, type CalendarOptions } from './calendar.js';
@@ -861,6 +862,32 @@ export class Game {
     };
   }
 
+  /** A human's population passes a milestone (0x004694b2, FERTILE). */
+  private populationNews(civ: Civ): void {
+    const pop = civPopulation(this, civ.slot);
+    const mark = civ.populationMark ?? 0;
+    let reached = -1;
+    let next = mark;
+    if (pop < 100) {
+      if (mark * 10 < pop) {
+        reached = Math.trunc(pop / 10) * 10;
+        next = Math.trunc(pop / 10);
+      }
+    } else if ((mark - 9) * 100 < pop) {
+      reached = Math.trunc(pop / 100) * 100;
+      next = Math.trunc(pop / 100) + 9;
+    }
+    civ.populationMark = next;
+    if (next > mark && civ.isHuman)
+      this.pendingEvents.push({
+        slot: civ.slot,
+        event: {
+          kind: 'climate',
+          text: `The population of the ${civ.adjective} empire now exceeds ${(reached * 10000).toLocaleString('en-US')} citizens.`,
+        },
+      });
+  }
+
   /** A computer sells what its wonders make redundant (0x00474edb), at full price, all at once. */
   private sellRedundant(city: City, civ: Civ): void {
     if (civ.isHuman) return;
@@ -934,6 +961,54 @@ export class Game {
       return;
     }
   }
+
+  /** Tell every human something (the travellers' reports and the advisors' notices). */
+  private tellHumans(text: string): void {
+    for (const c of this.world.civs) {
+      if (c.isHuman && c.slot !== 0)
+        this.pendingEvents.push({ slot: c.slot, event: { kind: 'climate', text } });
+    }
+  }
+
+  /**
+   * Word of a computer's wonders (0x00430b61, STARTWONDER, SWITCHWONDER, ABANDONWONDER), once a
+   * civilization turn for each. A switch carries the other cities on the old wonder with it.
+   */
+  private wonderNews(city: City, before: Production): void {
+    const civ = this.civ(city.owner);
+    if (civ.isHuman) return;
+    const wonder = (p: Production) => (p.kind === 'improvement' && p.index > 38 ? p.index : null);
+    const was = wonder(before);
+    const now = wonder(city.production);
+    if (was === now) return;
+    const building = (w: number) =>
+      this.citiesOf(civ.slot).filter(
+        (c) => c !== city && c.production.kind === 'improvement' && c.production.index === w,
+      );
+    const label = (w: number) => this.rules.improvements[w]?.name ?? 'a wonder';
+    const once = (mark: string) => {
+      const key = `${civ.slot}:${mark}:${this.state.turn}`;
+      if (this.wonderTold.has(key)) return false;
+      this.wonderTold.add(key);
+      return true;
+    };
+    if (now !== null) {
+      if (building(now).length !== 0) return;
+      const others = was !== null ? building(was) : [];
+      if (was !== null && (others.length === 0 || this.wonderCity(was) !== null)) {
+        for (const c of others) c.production = { kind: 'improvement', index: now };
+        this.tellHumans(
+          `The ${civ.name} have changed projects from ${label(was)} to ${label(now)}.`,
+        );
+      } else if (once(`start${now}`)) {
+        this.tellHumans(`The ${civ.name} have undertaken a great project: ${label(now)}.`);
+      }
+    } else if (was !== null && building(was).length === 0 && !this.ownsWonder(civ.slot, was)) {
+      if (once(`drop${was}`)) this.tellHumans(`The ${civ.name} have abandoned ${label(was)}.`);
+    }
+  }
+
+  private wonderTold = new Set<string>();
 
   /** A civilization's military strength, summed in the strategy pass (0x005d132e). */
   private civStrength(slot: number): number {
@@ -1276,6 +1351,8 @@ export class Game {
       push(e);
       if (e.kind === 'capitalization') civ.treasury += e.gold;
       if (e.kind === 'wonder-effect') this.wonderEffect(civ, e.effect);
+      if (e.kind === 'palace-moved' && !civ.isHuman)
+        this.tellHumans(`The ${civ.name} capital moved to ${city.name}.`); // MOVECAPITAL
       if (e.kind === 'ghost-town') return out;
       if (
         !civ.isHuman &&
@@ -1518,6 +1595,26 @@ export class Game {
       !this.wonderExpired(IMPROVEMENT.leonardos)
     )
       this.runLeonardo(taker);
+    // CAPTUREWONDER, LOSTWONDER (0x00528720).
+    const prize = this.world.cities.find((c) => c.name === city);
+    if (prize) {
+      for (let w = 39; w < 67; w++) {
+        if (!prize.improvements[w]) continue;
+        const name = this.rules.improvements[w]?.name ?? 'a wonder';
+        const winner = this.world.civs.find((c) => c.slot === attacker);
+        const lost = this.world.civs.find((c) => c.slot === defender);
+        if (winner?.isHuman)
+          this.pendingEvents.push({
+            slot: attacker,
+            event: { kind: 'climate', text: `Our troops have captured ${name}!` },
+          });
+        if (lost?.isHuman)
+          this.pendingEvents.push({
+            slot: defender,
+            event: { kind: 'climate', text: `We have lost control of ${name}!` },
+          });
+      }
+    }
     const ev = this.events();
     if (!ev) return;
     for (const e of ev.cityTaken(city, attacker, defender, this.eventContext()))
@@ -1721,6 +1818,7 @@ export class Game {
       }
       for (const e of dipEvents) out.push({ slot, event: e });
     }
+    this.populationNews(civ);
     // The strategic layer runs for every civilization (tallies, plans; orders for computer players).
     const humans = this.world.civs.filter((c) => c.isHuman).map((c) => c.slot);
     for (const e of runStrategy(this.world, this.rules, slot, {
@@ -2345,6 +2443,7 @@ export class Game {
       t.support.settlers * settlersFood(this.rules, civ.government);
     const cityCount = this.citiesOf(city.owner).length;
     const race = this.spaceRace(civ);
+    const before = city.production;
     city.production = aiChooseProduction({
       world: this.world,
       rules: this.rules,
@@ -2450,6 +2549,7 @@ export class Game {
         reputationOf: (s) => this.world.civs.find((c) => c.slot === s)?.reputation ?? 0,
       },
     });
+    this.wonderNews(city, before);
   }
 
   /** May the city build this improvement (0x00494938)? */

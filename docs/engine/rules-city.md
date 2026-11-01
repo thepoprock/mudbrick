@@ -449,3 +449,10 @@ of the land mass's plan role from another Airport with no foreign non-allied uni
 same land mass only when defenders are absent, otherwise from a land mass with a different plan, and
 from a stack of 3 or more (2 from a plan 4 land mass). Enemy human fighters in reach of either end
 shoot it down one time in six, one in four when veteran.
+
+## Wonder reports (0x00430b61, VERIFIED; who hears them INFERRED)
+
+When a computer city's choice starts a wonder no other of its cities is building, humans hear of it
+once a civilization turn. Switching from a wonder that no other city is building, or that has been
+built, reports the change and moves any other cities on the old wonder to the new one. Leaving a
+wonder for something ordinary reports it abandoned. A computer's new Palace is also reported.
