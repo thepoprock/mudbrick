@@ -168,7 +168,10 @@ function artLoader(lookup: FileSource) {
         const right = (image.width - 1) * 4;
         const left = (image.height - 1) * image.width * 4;
         const clear = new Set([key(0), key(right), key(left), key(last), 0x00ffff, 0xff00ff]);
-        for (let i = 0; i < d.length; i += 4) if (clear.has(key(i))) d[i + 3] = 0;
+        for (let i = 0; i < d.length; i += 4) {
+          const cyan = (d[i] ?? 0) < 0x70 && (d[i + 1] ?? 0) > 0xc0 && (d[i + 2] ?? 0) > 0xc0;
+          if (cyan || clear.has(key(i))) d[i + 3] = 0;
+        }
         g.putImageData(px, 0, 0);
         return canvas.toDataURL('image/png');
       });

@@ -83,6 +83,8 @@ export function worldFromSave(save: SaveFile, rules: Rules): World {
             patience: rec.patience,
             talks: rec.talks,
             portrait: rec.portrait,
+            throne: rec.throne,
+            thronePieces: rec.thronePieces,
             casualties: rec.casualties,
             pardons: Int8Array.from(rec.pardons),
             senateActive: (rec.stateFlags & 4) !== 0,

@@ -103,3 +103,10 @@ Superhighways. Improvements 1 to 34 take places in random order from a 31-entry 
 few at fixed places (walls and others). Unbuilt ones leave a house. Wonders do the same from a
 24-entry list. The generator is the program's (seed × 0x19660d + 0x3c6ef35f), seeded with
 `x × 256 + y + map seed`, so a city's layout never changes. Places are drawn in order, back to front.
+
+## Throne Room (0x004389e0)
+
+A human with a Palace earns a piece when the score reaches `Σ (7 − difficulty) × n / 2 + 1` for
+piece n (0x00467035, 0x0046708f), up to 38. The player raises one of seven parts, each with four
+levels. The room is picture 100 of pv.dll with picture `105 + part × 5 + level − 1` on top, cut by
+the table at 0x005a9068. The extra pieces from flags at +0x3fb (pictures 160 on) are not ported.

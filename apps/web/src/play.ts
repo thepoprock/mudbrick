@@ -126,6 +126,16 @@ const DIRECTIONS: Record<string, Point> = {
   NW: { x: -1, y: -1 },
 };
 
+/** x, y, width, height of each of the four levels of the seven parts (pv.dll, 0x005a9068). */
+const THRONE_ART = [
+  145, 1, 322, 318, 118, 1, 360, 311, 137, 1, 348, 298, 169, 1, 267, 325, 1, 278, 640, 203, 1, 277,
+  640, 204, 1, 277, 640, 204, 1, 277, 640, 204, 1, 301, 640, 180, 213, 299, 202, 182, 247, 315, 110,
+  166, 204, 306, 217, 175, 1, 1, 640, 296, 1, 1, 640, 303, 1, 1, 640, 300, 1, 1, 640, 298, 177, 1,
+  276, 195, 173, 110, 264, 187, 207, 36, 189, 266, 184, 1, 234, 299, 1, 1, 640, 311, 1, 33, 640,
+  274, 1, 1, 640, 310, 1, 1, 640, 313, 236, 269, 125, 39, 299, 234, 40, 72, 200, 198, 209, 123, 242,
+  154, 122, 151,
+];
+
 type PediaCategory =
   'ADVANCE' | 'IMPROVEMENT' | 'WONDER' | 'UNIT' | 'GOVERNMENT' | 'TERRAIN_AND_RESOURCE' | 'CONCEPT';
 
@@ -858,6 +868,7 @@ export class PlaySession {
       if (text) this.log(text);
       this.eventSound(e.event);
     }
+    if (this.game.throneDue(this.humanSlot)) this.showThrone(true);
     this.sound('ENDOTURN');
     this.log(`— Turn ${this.game.state.turn}, ${this.yearText()} —`);
     this.nextTalk();
@@ -1128,6 +1139,7 @@ export class PlaySession {
           const value = m.value;
           m.selectedIndex = 0;
           if (value === 'CASUALTY') this.showCasualties();
+          else if (value === 'THRONE') this.showThrone(false);
           else if (value === 'RETIRE') this.retire();
           else if (value === 'CHAT') this.chat();
           else if (value) this.handleKey({ key: value, target: null } as unknown as KeyboardEvent);
@@ -1147,11 +1159,12 @@ export class PlaySession {
       if (label.startsWith('Casualty')) code = 'CASUALTY';
       if (section === 'PEDIA') code = '?';
       if (label === 'Game Options') code = 'O';
+      if (label === 'View Throne Room') code = 'THRONE';
       if (label === 'Retire') code = 'RETIRE';
       if (label === 'Chat with Kings') code = 'CHAT';
       const bound =
         /^F\d+$/.test(code) ||
-        ['Enter', ' ', '?', 'CASUALTY', 'RETIRE', 'CHAT', 'O'].includes(code) ||
+        ['Enter', ' ', '?', 'CASUALTY', 'RETIRE', 'CHAT', 'O', 'THRONE'].includes(code) ||
         (code.length === 1 && 'brimopgfshwkauljFEPDHCMTR'.includes(code));
       opt.value = bound ? code : '';
       opt.disabled = !bound;
@@ -1196,6 +1209,76 @@ export class PlaySession {
       const home = this.world.cities.find((c) => c.owner === this.humanSlot);
       if (home) this.centreOn(home.position);
     });
+  }
+
+  /** The Throne Room: picture 100, then each part's level on top (pv.dll). */
+  private async drawThrone(canvas: HTMLCanvasElement): Promise<void> {
+    const g = canvas.getContext('2d');
+    if (!g) return;
+    canvas.width = 640;
+    canvas.height = 480;
+    const load = (url: string) =>
+      new Promise<HTMLImageElement>((resolve, reject) => {
+        const i = new Image();
+        i.onload = () => resolve(i);
+        i.onerror = reject;
+        i.src = url;
+      });
+    const base = await this.folder.art('PV.DLL', 100, true);
+    if (!base) {
+      canvas.remove();
+      return;
+    }
+    g.drawImage(await load(base), 0, 0);
+    const levels = this.civ.throne ?? [];
+    for (let part = 0; part < 7; part++) {
+      const level = levels[part] ?? 0;
+      if (level === 0) continue;
+      const url = await this.folder.art('PV.DLL', 105 + part * 5 + level - 1);
+      if (!url) continue;
+      const at = (part * 4 + level - 1) * 4;
+      const [x, y, w, h] = THRONE_ART.slice(at, at + 4);
+      g.drawImage(
+        await load(url),
+        x ?? 0,
+        y ?? 0,
+        w ?? 0,
+        h ?? 0,
+        (x ?? 1) - 1,
+        (y ?? 1) - 1,
+        w ?? 0,
+        h ?? 0,
+      );
+    }
+  }
+
+  private showThrone(award: boolean): void {
+    const box = this.talkBox();
+    box.style.width = '660px';
+    box.replaceChildren();
+    const canvas = document.createElement('canvas');
+    canvas.style.width = '100%';
+    box.appendChild(canvas);
+    void this.drawThrone(canvas);
+    const done = () => {
+      box.style.width = '420px';
+      this.closeTalk();
+    };
+    if (award) {
+      const text = document.createElement('div');
+      text.textContent = 'Your people wish to add to the Throne Room.';
+      box.appendChild(text);
+      const levels = (this.civ.throne ??= Array<number>(7).fill(0));
+      levels.forEach((v, part) => {
+        if (v < 4)
+          this.talkButton(box, `Improve part ${part + 1} (level ${v + 1})`, () => {
+            levels[part] = v + 1;
+            this.showThrone(false);
+          });
+      });
+      return;
+    }
+    this.talkButton(box, 'Close', done);
   }
 
   /** The City View, for a city you can see. */

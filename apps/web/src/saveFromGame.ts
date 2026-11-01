@@ -121,6 +121,8 @@ export function saveFromGame(original: Uint8Array, parsed: SaveFile, game: Game)
     ...(civ.everExchanged !== undefined ? { everExchanged: civ.everExchanged } : {}),
     ...(civ.patience !== undefined ? { patience: civ.patience } : {}),
     ...(civ.talks !== undefined ? { talks: civ.talks } : {}),
+    ...(civ.throne ? { throne: civ.throne } : {}),
+    ...(civ.thronePieces !== undefined ? { thronePieces: civ.thronePieces } : {}),
     ...(civ.casualties ? { casualties: civ.casualties } : {}),
     ...(civ.pardons ? { pardons: Array.from(civ.pardons) } : {}),
     ...(civ.lastWarTurns ? { lastContact: Array.from(civ.lastWarTurns) } : {}),

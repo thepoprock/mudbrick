@@ -398,6 +398,23 @@ export class Game {
     return changed;
   }
 
+  /**
+   * Has the human earned a Throne Room piece (VERIFIED 0x0046708f)? With a Palace, past turn 1,
+   * when the score reaches `Σ (7 − difficulty) × n / 2 + 1` for the next piece. Stops at 38.
+   */
+  throneDue(slot: number): boolean {
+    const civ = this.civ(slot);
+    if (!this.citiesOf(slot).some((c) => c.improvements[IMPROVEMENT.palace])) return false;
+    if (this.state.turn <= 1) return false;
+    const next = (civ.thronePieces ?? 0) + 1;
+    let sum = 0;
+    for (let i = 0; i <= next; i++) sum += (7 - this.state.difficulty) * i;
+    if (this.scoreOf(slot).total < Math.trunc(sum / 2) + 1) return false;
+    civ.thronePieces = next;
+    if (next >= 38) return false;
+    return (civ.throne ?? []).length < 7 || (civ.throne ?? []).some((v) => v < 4);
+  }
+
   /** Leonardo's Workshop's sweep over a civilization's units (0x00492c44). */
   private runLeonardo(civ: Civ): void {
     for (const e of leonardoUpgrades(this.world, this.rules, civ, (a) => this.knows(civ.slot, a)))
