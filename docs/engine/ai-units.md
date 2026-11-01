@@ -279,7 +279,7 @@ square · 0x00556aea units of a role in a stack · 0x005567e1 stack totals (mode
 defence, 2 count, 3 attack, 4 homed defenders, 5 sea units, 6 free cargo room, 7 ranged aircraft,
 8–10 flag counts).
 
-## Air units (0x004f2dd3, VERIFIED; not ported yet)
+## Air units (0x004f2dd3, VERIFIED; ported in `aiAir.ts` with the strength comparison marked INFERRED)
 
 The move chooser hands aircraft to their own routine. It first works out the **fuel budget** in
 movement points: `(range − turns flown − 1) × full moves + moves left` (twice the full moves for

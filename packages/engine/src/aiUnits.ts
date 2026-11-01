@@ -30,6 +30,7 @@ import { DOMAIN_AIR, DOMAIN_GROUND, IMPROVEMENT, type EngineRules, DOMAIN_SEA } 
 import { ORDER } from './terraform.js';
 import { workerRules } from './aiTerraform.js';
 import { applyShipDecision, transportDecision } from './aiShips.js';
+import { airDecision, applyAirDecision } from './aiAir.js';
 import {
   aiEspionageChoice,
   bribeUnit,
@@ -705,9 +706,36 @@ export function aiMoveUnits(
       continue; // working
     if (movesLeft(rules, unit, ctx) <= 0) continue;
     if (type.domain === DOMAIN_AIR) {
-      // INFERRED: aircraft hold until their chooser (0x004f2dd3, documented) is ported.
-      if (unit.order === null) sentry(unit);
-      continue;
+      // Aircraft (aiAir.ts): a decision per turn; attacks resolve here, go-tos below.
+      const d = airDecision(world, rules, unit, {
+        rng: ctx.rng,
+        atWar: ctx.atWar,
+        canAttack: ctx.canAttack ?? ctx.atWar,
+        isHuman: ctx.isHuman ?? (() => false),
+        isAlly: ctx.isAlly ?? (() => false),
+        movement: ctx,
+      });
+      if (d.kind === 'attack') {
+        const r = tryMove(world, rules, ctx.rng, unit, d.target, ctx);
+        if (r.kind === 'attack') {
+          const ev = resolveAttack(world, rules, ctx.rng, unit, d.target, {
+            civ: (slot) => (slot === ctx.civ.slot ? ctx.civ : undefined),
+            wondersOf: ctx.wondersOf,
+            cityCount: ctx.cityCount,
+            difficulty: ctx.difficulty,
+            realisticCombat: ctx.realisticCombat,
+            barbarianActivity: 1,
+            attackerMovesLeft: movesLeft(rules, unit, ctx),
+          });
+          if (ev.kind === 'fought')
+            events.push({
+              kind: 'ai-unit',
+              text: `${type.name} strikes ${rules.units[ev.defender.type]?.name ?? 'a unit'}: ${ev.attackerWon ? 'wins' : 'loses'}`,
+            });
+        }
+        continue;
+      }
+      if (!applyAirDecision(unit, d)) continue;
     }
     if (type.domain === DOMAIN_SEA && (type.holds ?? 0) > 0) {
       // Transports (aiShips.ts): a decision per turn, then the go-to below carries it out.
