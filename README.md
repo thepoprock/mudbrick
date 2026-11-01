@@ -18,6 +18,9 @@ data.** What works today:
 
 Not yet: simultaneous moves, the map and scenario editors, wonder and council videos, music.
 
+**The decode is not finished.** [docs/decoding.md](docs/decoding.md) says how far it has got and how
+to help.
+
 ## Why
 
 The original game is still loved and has never been re-released, so it cannot be bought today.
