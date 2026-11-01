@@ -34,17 +34,17 @@ Every function in `docs/engine/function-status.tsv` has a `category`:
 
 | Category              | Functions |   Bytes | Meaning                                                                              |
 | --------------------- | --------- | ------: | ------------------------------------------------------------------------------------ |
-| `read`                | 703       | 810,517 | Opened and compared with the rules                                                   |
+| `read`                | 728       | 825,024 | Opened and compared with the rules                                                   |
 | `library`             | 508       |  85,009 | The C and MFC runtime, not the game's own                                            |
-| `generic`             | 3,175     | 317,733 | Touches no game table: arithmetic, lists, graphics, windows                          |
-| `interface`           | 487       | 255,075 | Draws or handles a window                                                            |
-| `game-data`           | 225       | 162,874 | Reads game tables but is display, file loading, options or the map and event editors |
-| `editor-or-reference` | 21        |  40,477 | Editors, cheats, the Civilopedia                                                     |
+| `generic`             | 3,166     | 316,138 | Touches no game table: arithmetic, lists, graphics, windows                          |
+| `interface`           | 486       | 254,258 | Draws or handles a window                                                            |
+| `game-data`           | 211       | 151,114 | Reads game tables but is display, file loading, options or the map and event editors |
+| `editor-or-reference` | 20        |  40,142 | Editors, cheats, the Civilopedia                                                     |
 | `network`             | 21        |  19,996 | Multiplayer transport                                                                |
 
 The categories other than `read` came from a signature search, then a scan of all 227 `game-data`
 functions and of every unread function that writes game state and is reachable from the turn
-routines: none held a game rule missed by the port. The `generic` and `interface` functions were not
+routines: none held a game rule missed by the port. A later search of all unread code for random rolls, treasury changes and calls into rule routines flagged 32 functions; reading the rule-like ones found the random choice of civilizations, Parley and the world roll, all now ported. The `generic` and `interface` functions were not
 read one by one, and the network packet code is not ported, since the relay does that job differently. So the claim is:
 no rule of the single-player game is known to be missing, not that every line has been read.
 
