@@ -112,6 +112,7 @@ export function saveFromGame(original: Uint8Array, parsed: SaveFile, game: Game)
     ...(civ.treaties ? { treaties: Array.from(civ.treaties) } : {}),
     ...(civ.attitudes ? { attitudes: Array.from(civ.attitudes) } : {}),
     ...(civ.reputation !== undefined ? { reputation: civ.reputation } : {}),
+    ...(civ.eiffelApplied !== undefined ? { eiffelApplied: civ.eiffelApplied } : {}),
     ...(civ.patience !== undefined ? { patience: civ.patience } : {}),
     ...(civ.lastWarTurns ? { lastContact: Array.from(civ.lastWarTurns) } : {}),
     ...(civ.governmentScores ? { governmentScores: Array.from(civ.governmentScores) } : {}),

@@ -79,6 +79,7 @@ export function worldFromSave(save: SaveFile, rules: Rules): World {
             treaties: Uint32Array.from(rec.treaties.map((t) => t.raw)),
             attitudes: Uint8Array.from(rec.attitudes),
             reputation: rec.reputation,
+            eiffelApplied: (rec.stateFlags & 0x10) !== 0,
             patience: rec.patience,
             lastWarTurns: Int16Array.from(rec.lastContact),
             governmentScores: Int16Array.from(rec.governmentScores),

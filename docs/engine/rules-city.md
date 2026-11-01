@@ -292,10 +292,21 @@ penalty for production type change" (50) of the stored shields; within a categor
   while a human city is building the same wonder with shields enough for it (VERIFIED
   0x004b7e74; the shields and the production stay). Completing a wonder sets the city's
   "has built a wonder" flag (city flag bit 8), which the AI's wonder valuation reads.
-- Wonder effects on completion: Manhattan Project halves every civilization's reputation
-  counter and announces itself; Darwin's Voyage grants two advances; Leonardo's Workshop runs
-  the unit upgrade; the Eiffel Tower adjusts attitudes; the Apollo Program reveals the map. Other
-  AI cities building the same wonder re-choose.
+- Wonder effects on completion:
+  - Manhattan Project: every civilization's reputation becomes `(reputation + 1) / 2`, clamped to
+    0 to 6, and it announces itself.
+  - Darwin's Voyage: 0x0049675f twice. Each call finishes the research target, zeroes the beakers
+    and passes through the advance routine. With no target one is chosen, asking a human. The
+    engine's picker stands in for that question.
+  - Leonardo's Workshop: the unit sweep 0x00492c44.
+  - Eiffel Tower (0x004b7d88): once per civilization, shown by byte 0 bit 4. Reputation halves
+    (`>> 1`), every other civilization's attitude changes by −25 and its vendetta bit toward
+    the builder clears, one way only.
+  - Apollo Program (0x004bcc9a): every square is seen by everyone and every city is known to all
+    at its true size. The engine has no per-civilization city knowledge, so only the map part
+    applies.
+
+  Other AI cities building the same wonder re-choose.
 
 ### Completing a unit (production value ≥ 0 = unit type)
 

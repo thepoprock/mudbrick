@@ -117,6 +117,8 @@ export interface Civ {
   attitudes?: Uint8Array;
   /** Reputation 0–100 (record +30). */
   reputation?: number;
+  /** The Eiffel Tower's one-time amnesty has been used (civilization byte 0 bit 4, 0x004b7d88). */
+  eiffelApplied?: boolean;
   /** A per-turn random 0–99 the original keeps at record +22 (patience, INFERRED name). */
   patience?: number;
   /** A counter at record +31 that falls every third turn (INFERRED name). */

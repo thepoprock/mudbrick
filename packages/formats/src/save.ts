@@ -129,6 +129,8 @@ export interface Spaceship {
 
 export interface CivRecord {
   slot: Slot;
+  /** Byte 0. Bit 4: the Eiffel Tower's amnesty has been used (VERIFIED 0x004b7d88). */
+  stateFlags: number;
   gender: number;
   treasury: number;
   tribeId: number;
@@ -591,6 +593,7 @@ export function parseSave(bytes: Uint8Array): SaveFile {
     for (let i = 0; i < T; i++) knownAdvances.push(r.bit(o + 88 + (i >> 3), i & 7));
     return {
       slot,
+      stateFlags: r.u8(o),
       gender: r.u8(o + 1),
       treasury: r.i32(o + 2),
       tribeId: r.u16(o + 6),

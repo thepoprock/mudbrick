@@ -124,6 +124,7 @@ function civ(over: Partial<Civ> = {}): Civ {
     ...over,
   };
 }
+const civ2 = (slot: number) => civ({ slot, name: `C${slot}` });
 function setup(cityOver: Partial<City> = {}, civOver: Partial<Civ> = {}) {
   const world = new World({ columns: 15, rows: 24, flatEarth: true, resourceSeed: 1 });
   world.terrain.fill(2);
@@ -207,6 +208,47 @@ describe('Game turn loop', () => {
     expect(city.size).toBe(3);
     expect(city.specialists.entertainers).toBe(0);
     expect(city.worked).toBe(worked);
+  });
+
+  it("Darwin's Voyage completes the research target and the next one", () => {
+    const { city, civ, game } = setup({
+      production: { kind: 'improvement', index: IMPROVEMENT.darwins },
+    });
+    civ.researching = 0;
+    civ.scienceStored = 40;
+    city.improvements[0] = false;
+    city.shieldsStored = 999;
+    game.processCity(city);
+    expect(civ.knownAdvances[0]).toBe(true);
+    expect(civ.scienceStored).toBeLessThan(40);
+    expect(civ.advancesCount).toBe(2);
+  });
+
+  it('the Eiffel Tower forgives once; the Manhattan Project halves everyone within 0 to 6', () => {
+    const { city, civ, game, world } = setup({
+      production: { kind: 'improvement', index: IMPROVEMENT.eiffelTower },
+      shieldsStored: 999,
+    });
+    world.civs.push(civ2(2));
+    civ.reputation = 8;
+    game.processCity(city);
+    expect(civ.reputation).toBe(4);
+    expect(civ.eiffelApplied).toBe(true);
+    civ.reputation = 7;
+    city.production = { kind: 'improvement', index: IMPROVEMENT.manhattanProject };
+    city.shieldsStored = 999;
+    game.processCity(city);
+    expect(civ.reputation).toBe(4);
+  });
+
+  it('the Apollo Program shows the map to everyone', () => {
+    const { city, game, world } = setup({
+      production: { kind: 'improvement', index: IMPROVEMENT.apolloProgram },
+      shieldsStored: 999,
+    });
+    expect(world.isSeen(0, 0, 3)).toBe(false);
+    game.processCity(city);
+    expect(world.isSeen(0, 0, 3)).toBe(true);
   });
 
   it('collects no gold in disorder and lets a Democracy fall after two disorder turns', () => {

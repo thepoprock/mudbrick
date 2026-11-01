@@ -77,7 +77,9 @@ import {
   attitude,
   atPeace as treatyAtPeace,
   atWar as treatyAtWar,
+  adjustAttitude,
   canAttack as treatyCanAttack,
+  treatiesOf,
   contactSweep,
   diplomacyTurn,
   type DiplomacyContext,
@@ -286,6 +288,56 @@ export class Game {
   private runLeonardo(civ: Civ): void {
     for (const e of leonardoUpgrades(this.world, this.rules, civ, (a) => this.knows(civ.slot, a)))
       this.pendingEvents.push({ slot: civ.slot, event: e });
+  }
+
+  /** What a finished wonder does at once (VERIFIED, the end of 0x004b7e74). */
+  private wonderEffect(
+    civ: Civ,
+    effect: 'manhattan' | 'darwin' | 'leonardo' | 'eiffel' | 'apollo',
+  ) {
+    if (effect === 'leonardo') this.runLeonardo(civ);
+    if (effect === 'darwin') {
+      this.darwinAdvance(civ);
+      this.darwinAdvance(civ);
+    }
+    if (effect === 'manhattan') {
+      for (const c of this.world.civs) {
+        if (c.slot < 1 || c.slot > 7) continue;
+        c.reputation = Math.min(6, Math.max(0, ((c.reputation ?? 0) + 1) >> 1));
+      }
+    }
+    if (effect === 'eiffel' && !civ.eiffelApplied) {
+      // 0x004b7d88: once per civilization, whoever built it first.
+      civ.reputation = (civ.reputation ?? 0) >> 1;
+      civ.eiffelApplied = true;
+      for (let s = 1; s < 8; s++) {
+        if (s === civ.slot) continue;
+        adjustAttitude(this.world, s, civ.slot, -25);
+        // One way only: what the others hold against the builder.
+        const other = this.world.civs.find((c) => c.slot === s);
+        if (other)
+          treatiesOf(other)[civ.slot] = (treatiesOf(other)[civ.slot] ?? 0) & ~TREATY.vendetta;
+      }
+    }
+    // 0x004bcc9a: the whole map is seen by everyone.
+    if (effect === 'apollo') this.world.seen.fill(0xff);
+  }
+
+  /**
+   * Darwin's Voyage, one of its two advances (VERIFIED, 0x0049675f): the current research target
+   * completes at once and the beakers go. With no target the original picks one, asking a human;
+   * the engine's picker stands in for that question (INFERRED harmless, the UI has no prompt here).
+   */
+  private darwinAdvance(civ: Civ): void {
+    if (civ.researching === null) this.aiChooseResearch(civ);
+    const advance = civ.researching;
+    if (advance === null) return;
+    grantAdvance(civ, advance, 'research');
+    this.pendingEvents.push({
+      slot: civ.slot,
+      event: { kind: 'discovered', advance, free: false },
+    });
+    this.advanceGained(civ, advance);
   }
 
   /** The consequences of an advance `civ` has just been given (0x004935e5). */
@@ -611,7 +663,7 @@ export class Game {
     for (const e of prodEvents) {
       push(e);
       if (e.kind === 'capitalization') civ.treasury += e.gold;
-      if (e.kind === 'wonder-effect' && e.effect === 'leonardo') this.runLeonardo(civ);
+      if (e.kind === 'wonder-effect') this.wonderEffect(civ, e.effect);
       if (e.kind === 'ghost-town') return out;
       if (
         !civ.isHuman &&
