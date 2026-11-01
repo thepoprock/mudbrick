@@ -76,7 +76,7 @@ question for the orders code.)
 | barbarian attacker vs a city holding the Palace                                                             | A = A / 2 and the defender gets the double-roll (below)                      |
 | barbarian attacker vs a civilization with fewer than 8 cities                                               | defender gets the double-roll                                                |
 | barbarian attacker vs a civilization owning the Great Wall                                                  | A = A / 2                                                                    |
-| barbarian defender that is unit type 4 (Archers), or type 5 (Legion) under a condition not yet read         | D = max(1, D / 2)                                                            |
+| barbarian defender that is unit type 4 (Archers), or type 5 (Legion) while no human knows advance 39        | D = max(1, D / 2)                                                            |
 | attacker's civilization owns the Great Wall vs a barbarian defender                                         | A ×2                                                                         |
 
 Improvement and wonder numbers are RULES @IMPROVE indices (Palace 1, City Walls 8, SDI 17,
@@ -109,8 +109,8 @@ generator over the same ranges.
   `rand() % (A + D) <= A` or its civilization owns Sun Tzu's War Academy; if the attacker won, it
   is promoted when `rand() % (A + D) <= D` or its civilization owns Sun Tzu's. So beating a
   stronger opponent promotes more often, and the chance is never zero.
-- The attacker spends one movement point (3 thirds) on the attack (INFERRED from one branch;
-  the exact condition is not yet read).
+- The attacker spends one movement point on the attack (VERIFIED: every caller of the mover asks
+  for it).
 - A per-civilization-pair "losses" counter is incremented when the attacker loses and reset
   when it wins; the AI reads it.
 

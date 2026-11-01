@@ -3,8 +3,8 @@
 Read from the per-civilization unit routine that the turn driver runs after the city turn,
 0x004ed2dd (about 850 decompiled lines). It prepares the computer player's view of the world,
 assigns a **plan** to every land mass, keeps a table of **objectives**, hands units go-to orders
-toward them, and finally calls the per-unit move loop (0x004709d5, not yet read). VERIFIED
-unless marked INFERRED; the engine does not implement this layer yet — see the last section.
+toward them, and finally calls the per-unit move loop (0x004709d5). VERIFIED
+unless marked INFERRED; the last section says what the engine implements.
 
 ## Order of work
 

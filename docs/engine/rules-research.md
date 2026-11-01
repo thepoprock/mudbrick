@@ -150,8 +150,7 @@ advance is X or one of X's prerequisite ancestors (0x00492025):
 ## Civilization turn order (VERIFIED, 0x00467c61)
 
 Cities are processed from the **last** city slot to the first. Then the AI rate policy runs,
-then the AI's attitude counters toward the human player are updated (not yet decoded in
-detail). City sizes become visible to allied civilizations and to everyone once the Apollo
+then the AI's attitude counters toward the human player are updated (`attitudeDrift`). City sizes become visible to allied civilizations and to everyone once the Apollo
 Program exists.
 
 ## Still to read

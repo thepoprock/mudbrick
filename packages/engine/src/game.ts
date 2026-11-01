@@ -50,6 +50,7 @@ import {
   DOMAIN_SEA,
 } from './rules.js';
 import { beginUnitsTurn, type UnitTurnEvent } from './turnStart.js';
+import { fallout } from './nuclear.js';
 import { cityPollution, meltdownRoll, pollutionRoll, type PollutionEvent } from './pollution.js';
 import { aiChooseProduction } from './aiBuild.js';
 import { runStrategy, type StrategyEvent } from './aiStrategy.js';
@@ -888,7 +889,10 @@ export class Game {
       this.state.pollutionSquares = counter.value;
       if (dirty) push(dirty);
       const melt = meltdownRoll(this.rng, city, pctx);
-      if (melt) push(melt);
+      if (melt) {
+        push(melt);
+        fallout(this.world, this.rng, city.position.x, city.position.y); // VERIFIED 0x004bb7bb
+      }
     }
 
     // 8. Upkeep — VERIFIED human cities only: the paying routine (0x004bbc98) has one caller,

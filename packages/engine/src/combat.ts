@@ -283,7 +283,12 @@ function prepareSides(
     }
   }
   if (defender.owner === 0) {
-    if (defender.type === UNIT_TYPE.archers || defender.type === UNIT_TYPE.legion) {
+    // VERIFIED 0x0052d472: a Legion only while no human knows advance 39.
+    const humanKnows = world.civs.some((c) => c.isHuman && c.knownAdvances[39] === true);
+    if (
+      defender.type === UNIT_TYPE.archers ||
+      (defender.type === UNIT_TYPE.legion && !humanKnows)
+    ) {
       d = Math.max(1, Math.floor(d / 2));
       tag(defence, 'barbarian archers/legion', 0.5);
     }

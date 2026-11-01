@@ -780,6 +780,9 @@ export function contactSweep(
  * Military aid (0x005129ba): a computer civilization sends one strong land unit to an ally at
  * war with someone at least as strong, from a city on a full land mass (or any, when it is at
  * war with nobody) to an ally's city that wants units on a defend-plan land mass.
+ *
+ * Not called, to match the shipped game: the original's unit test asks for a unit that is off the
+ * map, so aid never happens (VERIFIED in the machine code at 0x00512c94). Kept for a future option.
  */
 export function militaryAid(
   world: World,
@@ -942,7 +945,6 @@ export function diplomacyTurn(
       }
     }
   }
-  if (!human) militaryAid(world, slot, ctx, events);
 }
 
 /** Squares to the nearest city of a civilization (for the UI and tests). */

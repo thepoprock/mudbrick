@@ -31,10 +31,7 @@ figure becomes 0. Then 0x00468f0f, the civilization turn 0x00467c61, 0x0051326d,
 
 ## What the engine implements
 
-`Game.processCity` and `Game.processCivilization` follow the verified order. Not yet
-implemented and therefore skipped: the pollution roll (0x004bb7bb), the AI's production choice
-and worker tasks, and the pre- and post-turn routines beyond the treasury clamp and warning.
-Each skipped step is listed in the "Still to read" section of the rules file it belongs to.
+`Game.processCity` and `Game.processCivilization` follow the verified order.
 
 ## The calendar (VERIFIED, 0x0046520c and the table at 0x005b63d0)
 

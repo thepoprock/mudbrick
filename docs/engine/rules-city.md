@@ -355,8 +355,9 @@ threshold) < 2 × pollution value`: a random one of the 20 radius squares (not t
 is land, has no city and is clean gets pollution and the world count rises.
 
 A city **in disorder** with a **Nuclear Plant** whose owner lacks Fusion Power melts down with
-probability `1 / (6 − difficulty)`: the plant is destroyed and the square suffers a nuclear blast
-(0x0052c788, not yet read).
+probability `1 / (6 − difficulty)`: the plant is destroyed and the city and the eight squares
+around it take a nuclear device's fallout (0x00559699, `fallout`): cities halve and the land is
+damaged. 0x0052c788 is only the explosion's animation.
 
 ## Still to read
 

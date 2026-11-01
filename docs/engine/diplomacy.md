@@ -86,10 +86,14 @@ toward computer partners the tech-gift bit is cleared, every 32 turns the grudge
 renewed, and every 16 turns (when they have not met this turn) a pair that is not allied either
 reviews its relations (at peace, with options byte 0 bit 0 set) or, when not at peace, lets a
 war without a grudge **peter out by losing contact** — a message when at war; allies exchange
-advances instead, as they also do every 8 turns. Then (not ported) the computer approaches
-each human it has contact with, sends **military aid** (0x005129ba: one strong land unit from
-a city on a full land mass to an ally at war with someone at least as strong, into an ally's
-city on a defend-plan land mass with units in it and no enemy adjacent), and makes demands.
+advances instead, as they also do every 8 turns. Then the computer approaches each human it has
+contact with (negotiation.md) and makes demands.
+
+**Military aid** (0x005129ba) was written to send one strong land unit from a city on a full land
+mass to an ally at war with someone at least as strong, into an ally's city on a defend-plan land
+mass with units in it and no enemy adjacent. In the shipped game it never happens: its first test
+on a candidate unit passes only when the unit is out of map bounds (VERIFIED in the machine code
+at 0x00512c94, both exits jump to the loop's next unit). `militaryAid` is written but not called.
 
 ## Governments
 
