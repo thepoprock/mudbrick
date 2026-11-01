@@ -182,21 +182,18 @@ nearest city`, or the best is here and the land mass has no own city yet, or the
   fortified; when the city holds more than it wants, a surplus unit whose index matches
   `(turn + index) & 7 == 0` is released; a lone defender in a city with a weaker neighbour adds a
   "defend" objective (type 5, priority 1).
-- **Transports (sea units with holds)** in a city release fortified cargo. With room to spare
-  they look for an own **coastal** city (city flag bit 7, set at founding for any city with an ocean neighbour — VERIFIED in the founding routine; earlier read here as "wants units") on another land mass whose
-  plan is not 4 and whose unit count is below its wanted number (0x004f266b): scored by distance,
-  +16 when the port already holds four transports, +16 or −(units on that land mass / 4)
-  by plan. The chosen city becomes the target (tag `3`) and objectives are posted at the port so
-  land units gather: "defend" and "escort" (types 5 and 21) at priority 2 or 4 by plan, "attack"
-  (type 1) and "settle" (type 0) the same, "explore" (type 6) under plans 4 and 5, and a
-  "board" objective (type 7, priority 2). A transport that cannot find a destination ferries to a
-  city of any civilization on another land mass scored by `trade × distance factor`, ×½ for own
-  cities, −⅓ at war, +⅓ for allies, and falls back to a random square on another land mass
-  (tag `V`) or a random walk (tag `6`).
-- **Engine status (ships):** `aiShips.ts` ports the transport decisions above with the scoring
-  details marked INFERRED in the code (the ferry weights, the unload test), the gathering
-  objectives at the port, and the cargo rule of rules-units.md; warships use the direction
-  chooser. Aircraft still hold.
+- **Transports (sea units with holds)** in a city release fortified cargo. With room (three
+  units at most in a city, one elsewhere) they look for an own **coastal** city to collect from
+  (tag `3`, VERIFIED 0x004f44cc): reachable, not already chosen by another ship, and scored by
+  distance, +16 when transports already stand there, `− attack total on that land mass / 4` when
+  its plan is 4 or it has no land flags, else +16. A land mass **short of units keeps them**: such
+  a port is skipped unless caravans wait there. The ship goes when the score beats 6 (12 for a plan
+  4 land mass), and only every fourth turn from a city, unless it is settlers only. Objectives
+  gather land units **at the destination**: "defend" and "escort" (types 5, 21; priority one less
+  for the second) unless settlers stand there or the plan is 5, "attack" and "settle" (types 1, 0)
+  unless that is the plan, "explore" (6) under plans 4 and 5, and "board" (7, priority 2). Failing
+  that, a port with fewer than two transports and units to spare gathers them there and the ship
+  waits, three times in four. Otherwise the ship takes the chain for a loaded one.
 - **Loaded transports with cargo** without a go-to take the first of these that finds anything
   (0x004f44cc). Reach is by ocean: in port, a city sharing one of the port's oceans or land touching
   one; at sea, the ocean the ship is on. "Cargo" is the mask of cargo roles.

@@ -164,17 +164,21 @@ describe('transports', () => {
     expect(wantedUnits(16)).toBe(30);
   });
 
-  it('an empty transport in port gathers for a port on another island short of units, then sails loaded', () => {
+  it('an empty transport sails to a port with units to spare, not one short of them', () => {
     const w = islands();
-    const home = city(w, 0, 8, 12);
-    city(w, 1, 28, 12);
+    city(w, 0, 8, 12);
+    const spare = city(w, 1, 28, 12);
     const s = emptyStrategy();
     s.citiesOn[1] = 1;
     s.citiesOn[2] = 1;
-    s.unitsOn[2] = 0;
+    s.unitsOn[1] = 0; // home is short, so it keeps its units
+    s.unitsOn[2] = 9;
+    s.attackOn[2] = 24; // a strong force there brings the 15 squares down to 9
+    s.plans[2] = 4;
     const ship = unit(w, 2, 8, 12);
+    ship.cityStep = 3; // the two low bits decide which turns it may leave on
     const ctx = {
-      turn: 10,
+      turn: 12,
       rng: new Rng(3),
       strategy: s,
       canAttack: () => false,
@@ -183,14 +187,26 @@ describe('transports', () => {
       isHuman: () => false,
       cityTrade: (c: City) => c.lastTrade ?? 0,
     };
-    const d1 = transportDecision(w, rules, ship, ctx);
-    expect(d1.kind).toBe('hold');
-    expect(
-      s.objectives.some((o) => o.x === home.position.x && o.y === home.position.y && o.type === 5),
-    ).toBe(true);
-    unit(w, 1, 8, 12);
-    const d2 = transportDecision(w, rules, ship, ctx);
-    expect(d2).toMatchObject({ kind: 'goto', target: { x: 28, y: 12 }, tag: '3' });
+    expect(transportDecision(w, rules, ship, ctx)).toMatchObject({
+      kind: 'goto',
+      target: spare.position,
+      tag: '3',
+    });
+    expect(s.objectives.some((o) => o.x === 28 && o.y === 12 && o.type === 7)).toBe(true);
+    // Short of units with no caravans waiting, the same port is passed over.
+    const other = islands();
+    city(other, 0, 8, 12);
+    city(other, 1, 28, 12);
+    const t = emptyStrategy();
+    t.citiesOn[1] = 1;
+    t.citiesOn[2] = 1;
+    t.plans[1] = 5;
+    t.plans[2] = 5;
+    const second = unit(other, 2, 8, 12);
+    second.cityStep = 3;
+    expect(transportDecision(other, rules, second, { ...ctx, strategy: t })).not.toMatchObject({
+      tag: '3',
+    });
   });
 
   it('a loaded ship at sea makes for an own city on a defend land mass, else its other cities', () => {

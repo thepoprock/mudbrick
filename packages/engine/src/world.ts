@@ -178,6 +178,8 @@ export interface City {
   worked: number;
   /** A ship has met this city's Coastal Fortress (city flag bit 27); ships then avoid it. */
   coastalFortressKnown?: boolean;
+  /** The turn a transport last chose this port (city flag bits 9 and 10). */
+  ferryDue?: number;
   specialists: Specialists;
   production: Production;
   inDisorder: boolean;

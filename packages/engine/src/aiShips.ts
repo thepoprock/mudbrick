@@ -68,36 +68,6 @@ export interface ShipContext {
 export type ShipDecision =
   { kind: 'hold' } | { kind: 'goto'; target: Point; tag: string } | { kind: 'chooser' };
 
-/** Own coastal cities on other land masses whose land mass is short of units and not "full". */
-function portsWantingUnits(world: World, ship: Unit, ctx: ShipContext): City[] {
-  const s = ctx.strategy;
-  const here = landmassAt(world, ship.position);
-  const out: City[] = [];
-  for (const c of world.cities) {
-    if (c.owner !== ship.owner || !coastal(world, c)) continue;
-    const lm = landmassAt(world, c.position);
-    if (lm === here || lm === 0) continue;
-    if (s) {
-      if ((s.plans[lm] ?? 0) === PLAN_FULL) continue;
-      if ((s.unitsOn[lm] ?? 0) >= wantedUnits(s.citiesOn[lm] ?? 0)) continue;
-    }
-    out.push(c);
-  }
-  return out;
-}
-
-/** Post the gathering objectives at a port (VERIFIED types; priority 4 under attack/defend plans, else 2). */
-function postGathering(port: City, targetPlan: number, s: CivStrategy): void {
-  const p = targetPlan === 0 || targetPlan === 1 ? 4 : 2;
-  const at = { x: port.position.x, y: port.position.y };
-  addObjective(s, { ...at, type: 1, priority: p });
-  addObjective(s, { ...at, type: 21, priority: p });
-  addObjective(s, { ...at, type: 0, priority: p });
-  addObjective(s, { ...at, type: 5, priority: p });
-  if (targetPlan === 4 || targetPlan === 5) addObjective(s, { ...at, type: 6, priority: 2 });
-  addObjective(s, { ...at, type: 7, priority: 2 });
-}
-
 /** Decide what a transport does (one decision per turn; the dispatcher follows the go-to). */
 export function transportDecision(
   world: World,
@@ -108,7 +78,6 @@ export function transportDecision(
   const type = rules.units[ship.type];
   if (!type) return { kind: 'hold' };
   const here = ship.position;
-  const cityHere = world.cityAt(here.x, here.y);
   const stack = world
     .unitsAt(here.x, here.y)
     .filter(
@@ -117,7 +86,6 @@ export function transportDecision(
   const aboard = stack.filter((u) => u.aboard === ship.id);
   const atSea = world.terrainAt(here.x, here.y) === OCEAN;
   const holds = type.holds ?? 0;
-  const lmHere = landmassAt(world, here);
 
   // A loaded transport.
   const loaded = atSea ? stack.length > 0 : aboard.length > 0 || stack.length >= holds;
@@ -152,62 +120,133 @@ export function transportDecision(
     return loadedDestination(world, rules, ship, stack, ctx);
   }
 
-  // In port with room: a destination for units gathered here (tag 3).
-  if (cityHere && cityHere.owner === ship.owner) {
-    for (const u of aboard) if (u.fortified) delete u.aboard; // release fortified cargo
-    const s = ctx.strategy;
-    const candidates = portsWantingUnits(world, ship, ctx);
-    let best: City | null = null;
-    let bestScore = 9999;
-    const transportsHere = world
-      .unitsAt(here.x, here.y)
-      .filter((u) => u.owner === ship.owner && rules.units[u.type]?.role === ROLE_TRANSPORT).length;
-    for (const c of candidates) {
-      const lm = landmassAt(world, c.position);
-      let score = distance(world, here, c.position);
-      if (transportsHere >= 4) score += 16;
-      const plan = s?.plans[lm] ?? 5;
-      // INFERRED reading of "+16 or −(units on that land mass / 4) by plan".
-      if (plan === 0 || plan === 1) score -= (s?.unitsOn[lm] ?? 0) >> 2;
-      else score += 16;
-      if (score < bestScore) {
-        bestScore = score;
-        best = c;
-      }
-    }
-    if (best && s) {
-      postGathering(cityHere, s.plans[landmassAt(world, best.position)] ?? 5, s);
-      // Wait a turn for the gathering unless something is already aboard or waiting here.
-      if (stack.length === 0) return { kind: 'hold' };
-      return { kind: 'goto', target: best.position, tag: '3' };
-    }
-    // Ferry to a city of anyone on another land mass by trade and distance (INFERRED weights).
-    let ferry: City | null = null;
-    let fScore = -1;
-    for (const c of world.cities) {
-      if (landmassAt(world, c.position) === lmHere || !coastal(world, c)) continue;
-      const d = distance(world, here, c.position);
-      let v = Math.trunc((ctx.cityTrade(c) * 32) / (d + 8));
-      if (c.owner === ship.owner) v >>= 1;
-      else if (ctx.atWar(c.owner)) v -= Math.trunc(v / 3);
-      else if (ctx.isAlly(c.owner)) v += Math.trunc(v / 3);
-      if (v > fScore) {
-        fScore = v;
-        ferry = c;
-      }
-    }
-    if (ferry && stack.length > 0) return { kind: 'goto', target: ferry.position, tag: 'T' };
-    if (stack.length === 0) return { kind: 'hold' };
-    const v = otherLandmass(world, ship, ctx);
-    if (v) return { kind: 'goto', target: v, tag: 'V' };
-    return { kind: 'chooser' };
+  return emptyDestination(world, rules, ship, stack, ctx);
+}
+
+/** Post the objectives that gather units for a transport (0x004f44cc). */
+function postGathering(
+  world: World,
+  rules: EngineRules,
+  at: Point,
+  plan: number,
+  priority: number,
+  s: CivStrategy,
+): void {
+  const here = { x: at.x, y: at.y };
+  const settlers = world.unitsAt(at.x, at.y).some((u) => rules.units[u.type]?.role === 5);
+  if (!settlers && plan !== 5) {
+    addObjective(s, { ...here, type: 5, priority });
+    addObjective(s, { ...here, type: 21, priority: priority - 1 });
   }
-  // At sea and empty: home to the nearest own coastal city.
-  if (atSea && stack.length === 0) {
+  if (plan !== 1) addObjective(s, { ...here, type: 1, priority });
+  if (plan !== 0) addObjective(s, { ...here, type: 0, priority });
+  if (plan === 4 || plan === 5) addObjective(s, { ...here, type: 6, priority });
+  addObjective(s, { ...here, type: 7, priority: 2 });
+}
+
+/**
+ * A transport with room (0x004f44cc): tag 3 sails to an own coastal city where units can be
+ * collected. A land mass short of units keeps them, unless caravans wait there, so such ports are
+ * passed over. With nowhere worth sailing to, a port with enough units gathers them here and the
+ * ship waits. Otherwise the ship takes the same chain as a loaded one.
+ */
+function emptyDestination(
+  world: World,
+  rules: EngineRules,
+  ship: Unit,
+  stack: Unit[],
+  ctx: ShipContext,
+): ShipDecision {
+  const me = ship.owner;
+  const here = ship.position;
+  const s = ctx.strategy;
+  const cityHere = world.cityAt(here.x, here.y);
+  const inPort = cityHere !== null && cityHere !== undefined && cityHere.owner === me;
+  const holds = rules.units[ship.type]?.holds ?? 0;
+  if (cityHere) {
+    if ((ship.cityStep ?? 0) < 0) ship.cityStep = ctx.turn & 7;
+    for (const u of stack) if (u.fortified) delete u.aboard; // release fortified cargo
+  }
+  if (!cityHere && ship.order !== null && ship.gotoTarget)
+    return { kind: 'goto', target: ship.gotoTarget, tag: 'keep' };
+  const onlySettlers = stack.length > 0 && stack.every((u) => rules.units[u.type]?.role === 5);
+  const hasSettlers = stack.some((u) => rules.units[u.type]?.role === 5);
+  const room = stack.length < (cityHere ? Math.min(holds, 3) : 1);
+  if (s && room) {
+    const ocean = landmassAt(world, here);
+    let best = 999;
+    let target: City | null = null;
+    for (const c of world.cities) {
+      if (c.owner !== me || !coastal(world, c)) continue;
+      const mine = (ship.cityStep ?? 0) === -1 - (world.cities.indexOf(c) & 0x3f);
+      // Set for two passes of the unit routine (0x004ed2dd clears it a bit at a time).
+      if (c.ferryDue !== undefined && ctx.turn - c.ferryDue <= 1 && !mine) continue;
+      const reach = inPort
+        ? oceansBeside(world, cityHere).some((o) => oceansBeside(world, c).includes(o))
+        : oceansBeside(world, c).includes(ocean);
+      if (!reach) continue;
+      const lm = landmassAt(world, c.position);
+      const plan = s.plans[lm] ?? 5;
+      if ((s.unitsOn[lm] ?? 0) < wantedUnits(s.citiesOn[lm] ?? 0) && plan !== PLAN_FULL) {
+        if ((s.caravansOn[lm] ?? 0) === 0) continue;
+      }
+      let score = distance(world, here, c.position);
+      const transports = world
+        .unitsAt(c.position.x, c.position.y)
+        .filter((u) => u.owner === me && rules.units[u.type]?.role === ROLE_TRANSPORT).length;
+      if (transports > (score === 0 ? 1 : 0)) score += 16;
+      if (plan === PLAN_FULL || (s.landFlags[lm] ?? 0) === 0) score -= (s.attackOn[lm] ?? 0) >> 2;
+      else score += 16;
+      if (score < best) {
+        best = score;
+        target = c;
+      }
+    }
+    if (
+      cityHere &&
+      (((ship.cityStep ?? 0) ^ ((ctx.turn - 1) & 3)) & 3) !== 0 &&
+      (!hasSettlers || onlySettlers || stack.length < holds)
+    )
+      best = 1000;
+    const plan = target ? (s.plans[landmassAt(world, target.position)] ?? 5) : 5;
+    const priority = plan === PLAN_FULL ? 4 : 2;
+    if (target && best < priority * 3) {
+      ship.cityStep = -1 - (world.cities.indexOf(target) & 0x3f);
+      target.ferryDue = ctx.turn;
+      postGathering(world, rules, target.position, plan, priority, s);
+      return { kind: 'goto', target: target.position, tag: '3' };
+    }
+    if (inPort) {
+      const lm = landmassAt(world, here);
+      const planHere = s.plans[lm] ?? 5;
+      const transportsHere = world
+        .unitsAt(here.x, here.y)
+        .filter((u) => u.owner === me && rules.units[u.type]?.role === ROLE_TRANSPORT).length;
+      const roll = ctx.rng.nextInt(4);
+      if (
+        transportsHere < 2 &&
+        (roll !== 0 || best === 1000) &&
+        ((s.landFlags[lm] ?? 0) & 0x10) === 0
+      ) {
+        const surplus =
+          (s.unitsOn[lm] ?? 0) >= wantedUnits(s.citiesOn[lm] ?? 0) || planHere === PLAN_FULL;
+        const caravans = (s.caravansOn[lm] ?? 0) !== 0;
+        if (surplus || caravans) {
+          cityHere.ferryDue = ctx.turn;
+          const p = planHere === PLAN_FULL ? 4 : 2;
+          if (surplus) postGathering(world, rules, here, planHere, p, s);
+          else addObjective(s, { x: here.x, y: here.y, type: 7, priority: 2 });
+          return { kind: 'hold' };
+        }
+      }
+    }
+  }
+  if (stack.length === 0 && !world.cityAt(here.x, here.y)) {
+    // At sea and empty: home to the nearest own coastal city.
     let home: City | null = null;
     let bestD = 9999;
     for (const c of world.cities) {
-      if (c.owner !== ship.owner || !coastal(world, c)) continue;
+      if (c.owner !== me || !coastal(world, c)) continue;
       const d = distance(world, here, c.position);
       if (d < bestD) {
         bestD = d;
@@ -216,7 +255,7 @@ export function transportDecision(
     }
     if (home) return { kind: 'goto', target: home.position, tag: 'home' };
   }
-  return { kind: 'chooser' };
+  return loadedDestination(world, rules, ship, stack, ctx);
 }
 
 /** Which land masses touch which oceans (the original's table 0x005ead57, read by 0x00559951). */
@@ -473,27 +512,6 @@ function shoreNear(world: World, target: Point, from: Point): Point | null {
     }
   }
   return best;
-}
-
-/**
- * A random square on another land mass of at least 17 rated squares with no own city (tag V,
- * VERIFIED shape: the original draws a random square and checks these), tried a few times.
- */
-function otherLandmass(world: World, ship: Unit, ctx: ShipContext): Point | null {
-  const s = ctx.strategy;
-  const here = landmassAt(world, ship.position);
-  for (let tries = 0; tries < 24; tries++) {
-    const y = ctx.rng.nextInt(world.rows);
-    const x = ctx.rng.nextInt(world.widthX2 >> 1) * 2 + (y & 1);
-    if (!world.isSquare(x, y) || world.terrainAt(x, y) === OCEAN) continue;
-    if (y < 2 || y > world.rows - 3) continue;
-    const lm = landmassAt(world, { x, y });
-    if (lm === here || lm === 0) continue;
-    if (s && (s.citiesOn[lm] ?? 0) !== 0) continue;
-    if ((world.landmassStats?.rated[lm] ?? 17) <= 16) continue;
-    return { x, y };
-  }
-  return null;
 }
 
 /** Apply a decision to the ship's orders. Returns true when the ship should keep moving this turn. */
