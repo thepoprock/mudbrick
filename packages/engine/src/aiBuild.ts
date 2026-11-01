@@ -81,6 +81,12 @@ export interface AiBuildFacts {
   caravansOnContinent?: number;
   /** Slots the civilization has met (contact), for the diplomat rule. */
   metSlots?: number[];
+  /** Choosing for a human's Auto button (city flag bit 4): no Diplomats, no Caravans. */
+  autoProduction?: boolean;
+  /** CITYPREF.TXT @NODEFEND: a human's cities ignore their defence need. */
+  noDefend?: boolean;
+  /** CITYPREF.TXT @AUTOBUILD: improvements a human's cities take first, in order. */
+  preferredImprovements?: readonly number[];
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -322,6 +328,18 @@ function scaleCommon(
   return v;
 }
 
+/** Which advisors the Auto button leaves in charge (dialog AUTOMODE; city flag bits 24 and 25). */
+export type AutoProductionMode = 'both' | 'military' | 'domestic';
+
+interface ProductionRanking {
+  overall: Production;
+  overallScore: number;
+  military: Production | null;
+  militaryScore: number;
+  domestic: Production | null;
+  domesticScore: number;
+}
+
 export interface AiBuildEnv {
   world: World;
   rules: EngineRules;
@@ -435,7 +453,40 @@ function humanThreat(env: ForeignStrengthEnv): boolean {
 
 /** Choose what a computer-controlled city builds next. */
 export function aiChooseProduction(env: AiBuildEnv): Production {
+  return rankProduction(env).overall;
+}
+
+/**
+ * What the Auto button picks for a human's city (VERIFIED 0x00474edb, the end): both advisors
+ * together, or one of them, and nothing at all once the best choice scores above 500.
+ * `null` leaves the production alone.
+ */
+export function autoProduction(env: AiBuildEnv, mode: AutoProductionMode): Production | null {
+  const r = rankProduction({ ...env, facts: { ...env.facts, autoProduction: true } });
+  if (mode === 'military') return r.militaryScore > 500 ? null : r.military;
+  if (mode === 'domestic') return r.domesticScore > 500 ? null : r.domestic;
+  return r.overallScore > 500 ? null : r.overall;
+}
+
+/** The two advisors' suggestions (0x004d0c6c shows them in the production list with help on). */
+export function advisedProduction(env: AiBuildEnv): {
+  military: Production | null;
+  domestic: Production | null;
+} {
+  const r = rankProduction(env);
+  return { military: r.military, domestic: r.domestic };
+}
+
+function rankProduction(env: AiBuildEnv): ProductionRanking {
   const { world, rules, civ, city, facts: f } = env;
+  const only = (p: Production): ProductionRanking => ({
+    overall: p,
+    overallScore: 0,
+    military: p,
+    militaryScore: 0,
+    domestic: null,
+    domesticScore: NEVER * 100,
+  });
   const knows = (a: number) => civ.knownAdvances[a] === true;
   const buildable = (t: number) =>
     canBuildUnit(rules, civ, t, {
@@ -459,13 +510,14 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
   // Early exit: a civilization with no units under Anarchy/Despotism builds its best defender.
   if (myUnits.length === 0 && civ.government < GOVERNMENT.monarchy) {
     const d = bestDefender();
-    if (d >= 0) return { kind: 'unit', index: d };
+    if (d >= 0) return only({ kind: 'unit', index: d });
   }
   // Barbarians keep producing units.
   if (civ.slot === 0) {
-    if (city.production.kind === 'unit' && buildable(city.production.index)) return city.production;
+    if (city.production.kind === 'unit' && buildable(city.production.index))
+      return only(city.production);
     const d = bestDefender();
-    return { kind: 'unit', index: d >= 0 ? d : 0 };
+    return only({ kind: 'unit', index: d >= 0 ? d : 0 });
   }
 
   const mass = world.landmass[world.index(city.position.x, city.position.y)] ?? 0;
@@ -538,13 +590,32 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
   let best = NEVER * 100;
   let pick: Production | null = null;
   const currentPick = (): Production | null => pick;
+  // The original keeps three running bests (0x00474edb): everything, what the domestic advisor
+  // proposes (improvements, wonders, Diplomats, Caravans), and what the military advisor proposes
+  // (the units of roles 0 to 5).
+  let domesticBest = NEVER * 100;
+  let domestic: Production | null = null;
+  let militaryBest = NEVER * 100;
+  let military: Production | null = null;
   const consider = (n: number, p: Production) => {
     env.trace?.(n, p);
     if (n < best) {
       best = n;
       pick = p;
     }
+    if (n < domesticBest) {
+      domesticBest = n;
+      domestic = p;
+    }
   };
+  const ranking = (overall: Production): ProductionRanking => ({
+    overall,
+    overallScore: best,
+    military,
+    militaryScore: militaryBest,
+    domestic,
+    domesticScore: domesticBest,
+  });
 
   // Improvements.
   for (let imp = 1; imp < 39; imp++) {
@@ -557,6 +628,7 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
       if (imp !== 35) continue;
       if (env.wonderCity(IMPROVEMENT.apolloProgram) === null || hasLaunched(civ)) continue;
       if ((env.nextShipKind?.(0) ?? 0) < 0) continue;
+      if (civ.isHuman && (civ.spaceship?.parts[0] ?? 0) >= 38) continue;
       // VERIFIED 0x00474edb, case 0x23: worth 4, or 2 once a human has a ship. Under race pressure
       // above Chieftain it is worth less still; and when no other city is on it, or the human is
       // ahead, a productive city puts it before everything else.
@@ -704,7 +776,19 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
   const wonderInProgress = currentWonder !== null && city.shieldsStored > 39;
   const wonderAllowed =
     wonderInProgress || (city.size > 2 && !city.inDisorder && continentCities >= 4 - f.civilize);
-  if (wonderAllowed) {
+  // VERIFIED 0x00474edb: the first improvement on a human's @AUTOBUILD list the city lacks and can
+  // build replaces the running pick, keeps the best score as it stands and skips the wonders.
+  let preferred = false;
+  if (civ.isHuman) {
+    for (const imp of f.preferredImprovements ?? []) {
+      if (city.improvements[imp] === true || !env.canBuildImprovement(imp)) continue;
+      pick = { kind: 'improvement', index: imp };
+      domestic = pick;
+      preferred = true;
+      break;
+    }
+  }
+  if (wonderAllowed && !preferred) {
     for (let w = 39; w < 67; w++) {
       if (!env.canBuildImprovement(w) || env.wonderCity(w) !== null) continue;
       // VERIFIED 0x00474edb: on the two easiest levels the computer starts no wonder before a
@@ -952,6 +1036,7 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
       // VERIFIED: with an urgent defence need nothing but a defender is considered.
       if (need === 2 && u.role !== 1) continue;
       if (u.role === 6) {
+        if (f.autoProduction) continue; // VERIFIED: the Auto button never builds these
         // VERIFIED 0x00474edb, the diplomat/spy valuation (ai-city.md "Diplomats/Spies"). The
         // original counts cities building the type (`building`) and units of it on the land
         // mass (`onContinent`).
@@ -1058,7 +1143,7 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
         // fewer than three routes, +2 per route, at least 2, plus the civilization's caravans on
         // the land mass; then the non-combat scaling `× 10 × 3 / (civilize + 3)` (×20 under a
         // military plan), +¼ with Barracks. A city flagged for a caravan builds none.
-        if (f.cityHasCaravan) continue;
+        if (f.cityHasCaravan || f.autoProduction) continue;
         let v = 10;
         if (city.tradeRoutes.length < 3) v = 10 - Math.trunc(((5 - f.expand) * f.trade) / 10);
         v = Math.max(2, v + city.tradeRoutes.length * 2) + (f.caravansOnContinent ?? 0);
@@ -1083,7 +1168,9 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
       // VERIFIED 0x00474edb: paratroopers are valued as attackers; a defender while one is needed
       // is valued by the need alone, anything else waits; attackers and ships off the plan double.
       const role = u.flags.canParadrop ? 0 : u.role;
-      if (need !== 0) {
+      // VERIFIED: a human's NODEFEND preference ignores the defence need and every defender.
+      if (f.noDefend && civ.isHuman && role === 1) continue;
+      if (need !== 0 && !(f.noDefend && civ.isHuman)) {
         if (role === 1) {
           n = Math.trunc(2 / need);
           if (need === 2 && !city.inDisorder) n = -1;
@@ -1186,6 +1273,10 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
         n += extra;
       }
       const notUnit = pick === null || (pick as Production).kind !== 'unit';
+      if (n < militaryBest) {
+        militaryBest = n;
+        military = { kind: 'unit', index: t };
+      }
       if (
         n < best ||
         (notUnit &&
@@ -1202,15 +1293,20 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
   // VERIFIED 0x00474edb, the end: the Palace in hand stays; a wonder waits for a Temple; a wonder
   // under way, with no other city on it and defended, is not dropped for something lesser.
   const current = city.production;
-  if (current.kind === 'improvement' && current.index === IMPROVEMENT.palace) return current;
+  if (f.autoProduction) {
+    const chosen = currentPick();
+    return ranking(chosen ?? current);
+  }
+  if (current.kind === 'improvement' && current.index === IMPROVEMENT.palace)
+    return ranking(current);
   const chosen = currentPick();
   if (chosen === null) {
     const d = bestDefender();
-    return { kind: 'unit', index: d >= 0 ? d : 0 };
+    return ranking({ kind: 'unit', index: d >= 0 ? d : 0 });
   }
   if (chosen.kind === 'improvement' && chosen.index > 38) {
     if (!city.improvements[IMPROVEMENT.temple] && env.canBuildImprovement(IMPROVEMENT.temple))
-      return { kind: 'improvement', index: IMPROVEMENT.temple };
+      return ranking({ kind: 'improvement', index: IMPROVEMENT.temple });
   } else if (
     current.kind === 'improvement' &&
     current.index > 38 &&
@@ -1224,9 +1320,9 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
         c !== city && c.production.kind === 'improvement' && c.production.index === current.index,
     )
   ) {
-    return current;
+    return ranking(current);
   }
-  return chosen;
+  return ranking(chosen);
 }
 
 /** The sea a city's ships sail (0x0043177d): the last one found, stepping as the original does. */

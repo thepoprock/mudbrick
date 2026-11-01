@@ -227,6 +227,8 @@ export interface CityRecord {
   canBuildCoastal: boolean;
   canBuildHydro: boolean;
   canBuildShips: boolean;
+  /** The Auto button is on; the two flags below name one advisor, or neither for both. */
+  autoProduction: boolean;
   autoBuildMilitary: boolean;
   autoBuildDomestic: boolean;
   objectiveX1: boolean;
@@ -783,6 +785,7 @@ export function parseSave(bytes: Uint8Array): SaveFile {
       improvementSoldThisTurn: r.bit(o + 4, 2),
       airlifted: r.bit(o + 6, 0),
       stolenTech: r.bit(o + 4, 3),
+      autoProduction: r.bit(o + 4, 4),
       autoBuildMilitary: r.bit(o + 7, 0),
       autoBuildDomestic: r.bit(o + 7, 1),
       objectiveX1: r.bit(o + 7, 2),

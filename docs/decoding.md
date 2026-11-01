@@ -62,8 +62,7 @@ Compare only at the same difficulty; `docs/engine/difficulty.md` lists what diff
 
 ## Known gaps
 
-The human's auto-build option (`CITYPREF.TXT`, 0x00474d90, and the human branches of 0x00474edb) is
-not ported, nor are simultaneous moves.
+Simultaneous moves are not ported.
 
 ## How to help
 

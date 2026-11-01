@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  advisedProduction,
   aiChooseProduction,
+  autoProduction,
   fighterAllowed,
   improvementPriority,
   nuclearAllowed,
@@ -429,6 +431,75 @@ describe('diplomat valuation (0x00474edb)', () => {
     });
     expect(scoresFor(w, c, facts({ citiesOnContinent: 1 }), me).has(`unit:${diplomat}`)).toBe(
       false,
+    );
+  });
+});
+
+describe('the Auto button (0x00474edb, human branches)', () => {
+  const humanCity = () => {
+    const w = new World({ columns: 20, rows: 30, flatEarth: true });
+    w.terrain.fill(2);
+    const c = city(w, 4, [IMPROVEMENT.palace]);
+    const owner = civ();
+    owner.isHuman = true;
+    w.civs.push(owner);
+    w.units.push({
+      id: 0,
+      position: { x: 2, y: 2 },
+      owner: owner.slot,
+      type: 4,
+      veteran: false,
+      hitPointsLost: 0,
+      movesSpent: 0,
+      fortified: false,
+      homeCity: null,
+      order: null,
+      workCounter: 0,
+      gotoTarget: null,
+      lastDirection: null,
+      gotoSteps: 0,
+    });
+    return { w, c, owner };
+  };
+
+  it('asks one advisor or both, and advice names one of each', () => {
+    const { w, c, owner } = humanCity();
+    const e = env(w, c, facts({ defendersInCity: 2 }), owner);
+    expect(autoProduction(e, 'domestic')?.kind).toBe('improvement');
+    expect(autoProduction(e, 'military')?.kind).toBe('unit');
+    const advice = advisedProduction(e);
+    expect(advice.domestic?.kind).toBe('improvement');
+    expect(advice.military?.kind).toBe('unit');
+  });
+
+  it('leaves the production alone when an advisor has nothing under 500', () => {
+    const { w, c, owner } = humanCity();
+    const e = env(w, c, facts({ defendersInCity: 2 }), owner);
+    e.canBuildImprovement = () => false;
+    expect(autoProduction(e, 'domestic')).toBeNull();
+  });
+
+  it('honours the preference list and NODEFEND', () => {
+    const { w, c, owner } = humanCity();
+    const listed = env(
+      w,
+      c,
+      facts({
+        defendersInCity: 2,
+        preferredImprovements: [IMPROVEMENT.palace, IMPROVEMENT.temple],
+      }),
+      owner,
+    );
+    listed.canBuildImprovement = (i) => i === IMPROVEMENT.temple || i === IMPROVEMENT.granary;
+    expect(autoProduction(listed, 'domestic')).toEqual({
+      kind: 'improvement',
+      index: IMPROVEMENT.temple,
+    });
+    const bare = env(w, c, facts({ defendersInCity: 0, noDefend: true }), owner);
+    const pick = autoProduction(bare, 'both');
+    expect(pick === null || rules.units[pick.index]?.role !== 1 || pick.kind !== 'unit').toBe(true);
+    expect(autoProduction(env(w, c, facts({ defendersInCity: 0 }), owner), 'both')?.kind).toBe(
+      'unit',
     );
   });
 });

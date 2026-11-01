@@ -188,6 +188,8 @@ export interface City {
   ferryDue?: number;
   specialists: Specialists;
   production: Production;
+  /** The advisors choose the production (city flag bit 4; bits 24 and 25 name one advisor). */
+  autoProduction?: 'both' | 'military' | 'domestic';
   inDisorder: boolean;
   /** Attacked since its last city turn (city flag bit 5). */
   attacked?: boolean;

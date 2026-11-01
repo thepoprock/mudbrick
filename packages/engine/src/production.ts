@@ -347,6 +347,7 @@ export function changeProduction(
   difficulty: number,
 ): number {
   const before = city.shieldsStored;
+  delete city.autoProduction; // VERIFIED 0x004d0c6c: choosing by hand ends the Auto button's rule
   if (difficulty !== 0 && productionCategory(city.production) !== productionCategory(next)) {
     const pct = rules.cosmic.productionChangePenaltyPct ?? 50;
     city.shieldsStored -= Math.trunc((pct * (before & 0xffff)) / 100);

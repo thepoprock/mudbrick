@@ -1,5 +1,5 @@
 import { PART_SHEETS, PARTS_OVER, PARTS_UNDER, SHIP_FRAMES, type PartRow } from './shipParts.js';
-import { decodeText, descriptionFor } from '@mudbrick/formats';
+import { decodeText, descriptionFor, parseCityPreferences } from '@mudbrick/formats';
 /**
  * The interactive layer: a human plays one civilization from a loaded save.
  *
@@ -73,6 +73,7 @@ import {
   unitSupport,
   wake,
   type City,
+  type Production,
   type Civ,
   type Game,
   type MovementContext,
@@ -222,6 +223,12 @@ export class PlaySession {
     readonly renderOptions: () => WorldRenderOptions,
   ) {
     game.wantsTalks = folder.popups.size > 0;
+    if (folder.cityPreferences !== undefined) {
+      game.cityPreferences = parseCityPreferences(
+        folder.cityPreferences,
+        (i) => game.rules.improvements[i]?.name,
+      );
+    }
     game.askEscape = (c) =>
       window.confirm(`Pay 1000 gold to move the government to ${c.name} and save the spaceship?`);
     this.startTimer();
@@ -2482,7 +2489,49 @@ export class PlaySession {
       }
     });
     label.append(select);
-    el.replaceChildren(header, label, this.cityOrders(city));
+    el.replaceChildren(header, label, this.autoProductionBox(city), this.cityOrders(city));
+  }
+
+  /** The Auto choice and the advisors' suggestions (0x004d0c6c). */
+  private autoProductionBox(city: City): HTMLElement {
+    const box = document.createElement('div');
+    const auto = document.createElement('label');
+    auto.textContent = 'Advisors choose: ';
+    const select = document.createElement('select');
+    const modes = [
+      ['off', 'No'],
+      ['both', 'Both'],
+      ['military', 'Military'],
+      ['domestic', 'Domestic'],
+    ] as const;
+    for (const [value, text] of modes) {
+      const o = document.createElement('option');
+      o.value = value;
+      o.textContent = text;
+      o.selected = (city.autoProduction ?? 'off') === value;
+      select.append(o);
+    }
+    select.addEventListener('change', () => {
+      const v = select.value;
+      this.game.setAutoProduction(
+        city,
+        v === 'both' || v === 'military' || v === 'domestic' ? v : null,
+      );
+      this.refresh();
+    });
+    auto.append(select);
+    box.append(auto);
+    const advice = this.game.adviseProduction(city);
+    const name = (p: Production | null) =>
+      p === null
+        ? 'nothing'
+        : p.kind === 'unit'
+          ? (this.rules.units[p.index]?.name ?? '?')
+          : (this.rules.improvements[p.index]?.name ?? '?');
+    const hint = document.createElement('div');
+    hint.textContent = `Military suggests ${name(advice.military)}. Domestic suggests ${name(advice.domestic)}.`;
+    box.append(hint);
+    return box;
   }
 
   /** Buy, sell and the workers (humanOrders.ts). */

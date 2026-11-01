@@ -69,7 +69,13 @@ import {
   warmingTurn,
   type PollutionEvent,
 } from './pollution.js';
-import { aiChooseProduction } from './aiBuild.js';
+import {
+  advisedProduction,
+  aiChooseProduction,
+  autoProduction,
+  type AiBuildEnv,
+  type AutoProductionMode,
+} from './aiBuild.js';
 import { civPopulation } from './reports.js';
 import { computerPurchase, type PurchaseContext, type WonderTally } from './aiPurchase.js';
 import { runStrategy, type StrategyEvent } from './aiStrategy.js';
@@ -301,6 +307,15 @@ export function yearTextOf(state: GameState): string {
   return formatYear(yearOf(state), calendarOptionsOf(state));
 }
 
+/** The totals of a city turn that the production chooser reads. */
+interface ProductionTotals {
+  raw: { food: number; shields: number; trade: number };
+  support: { shields: number; settlers: number; inCity: number; abroad: number };
+  shields: { produced: number };
+  trade: { corruption: number };
+  mood: { happy: number; unhappy: number };
+}
+
 export class Game {
   private nextUnitId: number;
 
@@ -313,6 +328,11 @@ export class Game {
   pendingTalks: { human: number; computer: number; relations?: boolean }[] = [];
 
   /** Debug hook: the build advisor's candidates for a city (score, production). */
+  /** The player's CITYPREF.TXT (0x00474d90), when the folder has one. */
+  cityPreferences: { noDefend: boolean; autoBuild: readonly number[] } = {
+    noDefend: false,
+    autoBuild: [],
+  };
   buildTrace?: (city: City, score: number, p: Production) => void;
 
   constructor(
@@ -1397,6 +1417,16 @@ export class Game {
       ) {
         this.aiChooseProduction(city, t); // the original re-chooses after every completion (0x00430b61 with 99)
       }
+      if (
+        civ.isHuman &&
+        (e.kind === 'built-unit' ||
+          e.kind === 'built-improvement' ||
+          e.kind === 'built-wonder' ||
+          e.kind === 'bad-build' ||
+          e.kind === 'bad-space')
+      ) {
+        this.humanAutoProduction(city, t); // VERIFIED 0x004b7e74: the Auto button chooses again
+      }
     }
     if (!civ.isHuman) {
       // VERIFIED 0x004b7e74: an attacked or empty city thinks again, then the treasury helps.
@@ -2438,19 +2468,43 @@ export class Game {
   }
 
   /** The AI's production choice (docs/engine/ai-city.md), from the city's current totals. */
-  aiChooseProduction(
-    city: City,
-    totals?: {
-      raw: { food: number; shields: number; trade: number };
-      support: { shields: number; settlers: number; inCity: number; abroad: number };
-      shields: { produced: number };
-      trade: { corruption: number };
-      mood: { happy: number; unhappy: number };
-    },
-  ): void {
+  aiChooseProduction(city: City, totals?: ProductionTotals): void {
     const civ = this.civ(city.owner);
     this.sellRedundant(city, civ);
     this.computerAirlift(city, civ);
+    const before = city.production;
+    city.production = aiChooseProduction(this.productionEnv(city, totals));
+    this.wonderNews(city, before);
+  }
+
+  /**
+   * Hand a human city's production to the advisors, or take it back with `null` (the Auto button
+   * of 0x004d0c6c). The choice is made at once and again after every completion.
+   */
+  setAutoProduction(city: City, mode: AutoProductionMode | null): void {
+    if (mode === null) {
+      delete city.autoProduction;
+      return;
+    }
+    city.autoProduction = mode;
+    this.humanAutoProduction(city);
+  }
+
+  /** What the two advisors would build here (the production list's suggestions, 0x004d0c6c). */
+  adviseProduction(city: City): ReturnType<typeof advisedProduction> {
+    return advisedProduction(this.productionEnv(city));
+  }
+
+  private humanAutoProduction(city: City, totals?: ProductionTotals): void {
+    const mode = city.autoProduction;
+    if (!mode) return;
+    const pick = autoProduction(this.productionEnv(city, totals), mode);
+    if (pick) city.production = pick;
+  }
+
+  /** Everything the chooser reads about a city. */
+  private productionEnv(city: City, totals?: ProductionTotals): AiBuildEnv {
+    const civ = this.civ(city.owner);
     const ctx = this.cityContext(city);
     const leader = this.rules.leaders?.[civ.tribe ?? -1];
     const homed = this.world.units.filter((u) => u.homeCity === city.id);
@@ -2486,8 +2540,7 @@ export class Game {
       t.support.settlers * settlersFood(this.rules, civ.government);
     const cityCount = this.citiesOf(city.owner).length;
     const race = this.spaceRace(civ);
-    const before = city.production;
-    city.production = aiChooseProduction({
+    return {
       world: this.world,
       rules: this.rules,
       civ,
@@ -2513,6 +2566,8 @@ export class Game {
         civilize: leader?.civilize ?? 0,
         difficulty: this.state.difficulty,
         turn: this.state.turn,
+        noDefend: this.cityPreferences.noDefend,
+        preferredImprovements: this.cityPreferences.autoBuild,
         simplifiedCombat: !this.state.realisticCombat,
         spaceRace: (race.on ? 1 : 0) + (race.pressure ? 1 : 0),
         spaceRacePressure: race.pressure,
@@ -2591,8 +2646,7 @@ export class Game {
         atPeace: (x, y) => hasTreaty(this.world, x, y, TREATY.peace),
         reputationOf: (s) => this.world.civs.find((c) => c.slot === s)?.reputation ?? 0,
       },
-    });
-    this.wonderNews(city, before);
+    };
   }
 
   /** May the city build this improvement (0x00494938)? */

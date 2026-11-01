@@ -50,6 +50,8 @@ export interface GameFolder {
   citySize: CellAnchors[][];
   /** GAME.TXT's dialogs, when the folder has the file. */
   popups: Map<string, Popup>;
+  /** CITYPREF.TXT as raw text, when the folder has one. */
+  cityPreferences?: string;
   /** COUNCIL0–2.TXT as raw text, by era; empty strings when absent. */
   council: string[];
   /** A picture from one of the folder's DLLs, with its transparent colour removed. */
@@ -199,6 +201,11 @@ async function loadFrom(
     ? parsePopups(decodeText(new Uint8Array(await gameText.arrayBuffer())))
     : new Map<string, Popup>();
 
+  const prefsFile = await lookup('CITYPREF.TXT');
+  const cityPreferences = prefsFile
+    ? decodeText(new Uint8Array(await prefsFile.arrayBuffer()))
+    : undefined;
+
   const council: string[] = [];
   for (let i = 0; i < 3; i++) {
     const f = await lookup(`COUNCIL${i}.TXT`);
@@ -248,6 +255,7 @@ async function loadFrom(
   return {
     rules,
     popups,
+    ...(cityPreferences !== undefined ? { cityPreferences } : {}),
     council,
     descriptions,
     art: artLoader(lookup),

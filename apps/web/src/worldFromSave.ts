@@ -137,6 +137,15 @@ export function worldFromSave(save: SaveFile, rules: Rules): World {
       specialists,
       production: c.production,
       inDisorder: c.civilDisorder,
+      ...(c.autoProduction
+        ? {
+            autoProduction: c.autoBuildMilitary
+              ? ('military' as const)
+              : c.autoBuildDomestic
+                ? ('domestic' as const)
+                : ('both' as const),
+          }
+        : {}),
       ...(c.attacked ? { attacked: true } : {}),
       celebrating: c.weLoveTheKingDay,
       soldThisTurn: c.improvementSoldThisTurn,

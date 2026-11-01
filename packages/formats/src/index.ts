@@ -11,3 +11,4 @@ export * from './dll.js';
 export * from './debugColours.js';
 export * as sprites from './sprites.js';
 export * from './events.js';
+export * from './cityPrefs.js';

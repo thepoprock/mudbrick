@@ -74,6 +74,7 @@ export interface CityWrite {
   improvements: boolean[];
   production: { kind: 'unit' | 'improvement'; index: number };
   civilDisorder: boolean;
+  autoProduction?: 'both' | 'military' | 'domestic';
   attacked?: boolean;
   soldThisTurn?: boolean;
   airlifted?: boolean;
@@ -269,6 +270,15 @@ export function cityWrite(c: CityRecord): CityWrite {
     improvements: c.improvements,
     production: c.production,
     civilDisorder: c.civilDisorder,
+    ...(c.autoProduction
+      ? {
+          autoProduction: c.autoBuildMilitary
+            ? ('military' as const)
+            : c.autoBuildDomestic
+              ? ('domestic' as const)
+              : ('both' as const),
+        }
+      : {}),
     attacked: c.attacked,
     weLoveTheKingDay: c.weLoveTheKingDay,
     wonderCity: c.wonderCity,
@@ -464,6 +474,11 @@ export function writeSave(original: Uint8Array, save: SaveFile, patch: SavePatch
     w.u16(b, c.x);
     w.u16(b + 2, c.y);
     w.bit(b + 4, 0, c.civilDisorder);
+    if (c.autoProduction) {
+      w.bit(b + 4, 4, true);
+      w.bit(b + 7, 0, c.autoProduction === 'military');
+      w.bit(b + 7, 1, c.autoProduction === 'domestic');
+    }
     w.bit(b + 4, 5, c.attacked === true);
     w.bit(b + 4, 1, c.weLoveTheKingDay);
     if (c.objective) w.bit(b + 7, 2, true);
