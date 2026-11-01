@@ -125,7 +125,8 @@ const DIRECTIONS: Record<string, Point> = {
   NW: { x: -1, y: -1 },
 };
 
-type PediaCategory = 'ADVANCE' | 'IMPROVEMENT' | 'WONDER' | 'UNIT' | 'GOVERNMENT';
+type PediaCategory =
+  'ADVANCE' | 'IMPROVEMENT' | 'WONDER' | 'UNIT' | 'GOVERNMENT' | 'TERRAIN_AND_RESOURCE' | 'CONCEPT';
 
 const KEY_DIRECTIONS: Record<string, string> = {
   ArrowUp: 'N',
@@ -165,6 +166,7 @@ export class PlaySession {
   /** Network play: this browser's seat, and the call that sends the game on. */
   seat: number | null = null;
   onTurnPassed: ((moving: number) => void) | null = null;
+  onChat: ((text: string) => void) | null = null;
   /** The conversation on screen, if any. */
   private talk: Conversation | null = null;
   selected: Unit | null = null;
@@ -265,6 +267,13 @@ export class PlaySession {
     }
     if (this.talk) return true;
     if (!this.ourMove) return false;
+    if (e.ctrlKey) {
+      if (e.key === 'c') this.chat();
+      else if (e.key === 'r') this.retire();
+      else if (e.key === 'd') this.showCasualties();
+      else return false;
+      return true;
+    }
     if (e.key === 'Escape' && document.getElementById('talkBox')?.style.display === 'block') {
       this.closeTalk();
       return true;
@@ -286,6 +295,12 @@ export class PlaySession {
       case 'M':
         this.muted = !this.muted;
         this.log(this.muted ? 'Sound off.' : 'Sound on.');
+        return true;
+      case 'G':
+        this.showPowerGraph(false);
+        return true;
+      case 'O':
+        this.showOptions();
         return true;
       case 'F10':
         this.showCouncil();
@@ -321,12 +336,6 @@ export class PlaySession {
       case 'C':
         this.findCity();
         return true;
-      case 'd':
-        if (e.ctrlKey) {
-          this.showCasualties();
-          return true;
-        }
-        return false;
       case 'T':
         this.log(`Rates are in the panel: up to ${maxRate(this.civ.government) * 10} % each.`);
         return true;
@@ -1118,6 +1127,8 @@ export class PlaySession {
           const value = m.value;
           m.selectedIndex = 0;
           if (value === 'CASUALTY') this.showCasualties();
+          else if (value === 'RETIRE') this.retire();
+          else if (value === 'CHAT') this.chat();
           else if (value) this.handleKey({ key: value, target: null } as unknown as KeyboardEvent);
           this.refresh();
         });
@@ -1134,9 +1145,12 @@ export class PlaySession {
       if (label === 'Consult High Council') code = 'F10';
       if (label.startsWith('Casualty')) code = 'CASUALTY';
       if (section === 'PEDIA') code = '?';
+      if (label === 'Game Options') code = 'O';
+      if (label === 'Retire') code = 'RETIRE';
+      if (label === 'Chat with Kings') code = 'CHAT';
       const bound =
         /^F\d+$/.test(code) ||
-        ['Enter', ' ', '?', 'CASUALTY'].includes(code) ||
+        ['Enter', ' ', '?', 'CASUALTY', 'RETIRE', 'CHAT', 'O'].includes(code) ||
         (code.length === 1 && 'brimopgfshwkauljFEPDHCMTR'.includes(code));
       opt.value = bound ? code : '';
       opt.disabled = !bound;
@@ -1319,6 +1333,11 @@ export class PlaySession {
           label: 'Governments',
           items: this.folder.rules.governments.map((g, i) => ({ name: g.name, row: i })),
         },
+        TERRAIN_AND_RESOURCE: {
+          label: 'Terrain Types',
+          items: this.groupItems('TERRAIN_AND_RESOURCE'),
+        },
+        CONCEPT: { label: 'Game Concepts', items: this.groupItems('CONCEPT') },
       };
     const heading = document.createElement('div');
     heading.style.fontWeight = 'bold';
@@ -1345,12 +1364,88 @@ export class PlaySession {
     heading.textContent = item?.name ?? '';
     const body = document.createElement('div');
     body.style.cssText = 'max-height:60vh;overflow:auto;margin:8px 0';
-    const entry = this.folder.descriptions
-      ? descriptionFor(this.folder.descriptions, category, row)
-      : undefined;
+    const group = this.folder.descriptions?.groups.get(category);
+    const entry =
+      category === 'TERRAIN_AND_RESOURCE' || category === 'CONCEPT'
+        ? group?.entries[row]
+        : this.folder.descriptions
+          ? descriptionFor(this.folder.descriptions, category, row)
+          : undefined;
     body.textContent = [...this.pediaFacts(category, row), '', ...(entry?.text ?? [])].join('\n');
     box.append(heading, body);
     this.talkButton(box, 'Back', () => this.showPedia(category));
+  }
+
+  private groupItems(category: PediaCategory): { name: string; row: number }[] {
+    const g = this.folder.descriptions?.groups.get(category);
+    return (g?.entries ?? []).map((e, row) => ({ name: e.title, row }));
+  }
+
+  /** The game options that mean something in a browser (the GAMEOPTIONS list). */
+  private showOptions(): void {
+    const box = this.talkBox();
+    box.replaceChildren();
+    const title = document.createElement('div');
+    title.textContent = 'Game Options';
+    box.appendChild(title);
+    this.talkButton(box, `Sound effects: ${this.muted ? 'off' : 'on'}`, () => {
+      this.muted = !this.muted;
+      this.showOptions();
+    });
+    this.talkButton(box, 'Close', () => this.closeTalk());
+  }
+
+  private chat(): void {
+    if (!this.onChat) {
+      this.log('Chat needs a network game.');
+      return;
+    }
+    const text = window.prompt('Message to the other players:');
+    if (text) this.onChat(text);
+  }
+
+  /** Retire (0x004af61c): the power graph, then the score, and the game ends. */
+  private retire(): void {
+    if (window.confirm('Really retire?')) this.showPowerGraph(true);
+  }
+
+  private showPowerGraph(ending: boolean): void {
+    const box = this.talkBox();
+    box.replaceChildren();
+    const title = document.createElement('div');
+    title.textContent = 'Civilization Power';
+    const canvas = document.createElement('canvas');
+    canvas.width = 400;
+    canvas.height = 200;
+    box.append(title, canvas);
+    const g = canvas.getContext('2d');
+    const history = this.game.state.powerHistory ?? [];
+    const last = Math.min(149, this.game.state.turn >> 2);
+    const top = Math.max(1, ...history.flat());
+    const colours = ['#888', '#fff', '#0a0', '#44f', '#ee0', '#0cc', '#f80', '#c0c'];
+    if (g) {
+      g.fillStyle = '#111';
+      g.fillRect(0, 0, 400, 200);
+      for (let s = 1; s < 8; s++) {
+        g.strokeStyle = colours[s] ?? '#fff';
+        g.beginPath();
+        for (let t = 0; t <= last; t++) {
+          const v = history[t]?.[s] ?? 0;
+          const x = (t / Math.max(1, last)) * 396 + 2;
+          const y = 198 - (v / top) * 196;
+          if (t === 0) g.moveTo(x, y);
+          else g.lineTo(x, y);
+        }
+        g.stroke();
+      }
+    }
+    const score = document.createElement('div');
+    score.textContent = `Your score: ${this.game.scoreOf(this.humanSlot).total}`;
+    box.appendChild(score);
+    this.talkButton(box, ending ? 'End game' : 'Close', () => {
+      if (ending) this.game.state.gameOver = { winner: this.humanSlot, reason: 'retirement' };
+      this.closeTalk();
+    });
   }
 
   private pediaFacts(category: PediaCategory, row: number): string[] {
@@ -1526,7 +1621,7 @@ export class PlaySession {
       case 'F9': {
         const s = game.scoreOf(slot);
         return {
-          title: 'Civilization Score',
+          title: 'Civilization Score (G: the power graph)',
           lines: Object.entries(s).map(([k, v]) => `${pad(k, 22)}${num(String(v), 8)}`),
         };
       }

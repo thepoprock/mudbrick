@@ -387,6 +387,14 @@ showCities.addEventListener('change', redraw);
 
 window.addEventListener('keydown', (e) => {
   if (!session) return;
+  if ((e.key === 'z' || e.key === 'x') && !e.ctrlKey && !(e.target instanceof HTMLInputElement)) {
+    const next = zoomSelect.selectedIndex + (e.key === 'z' ? 1 : -1);
+    if (next >= 0 && next < zoomSelect.options.length) {
+      zoomSelect.selectedIndex = next;
+      zoomSelect.dispatchEvent(new Event('change'));
+    }
+    return;
+  }
   if (session.handleKey(e)) e.preventDefault();
 });
 
@@ -427,6 +435,7 @@ function attachNet(s: PlaySession, seat: number): void {
   s.seat = seat;
   s.humanSlot = seat;
   s.onTurnPassed = (moving) => net?.sendState(snapshotGame(s.game, moving), moving);
+  s.onChat = (text) => net?.chat(text);
 }
 
 byId<HTMLButtonElement>('netJoin').addEventListener('click', () => {
