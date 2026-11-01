@@ -203,6 +203,8 @@ export interface Unit {
   wanted?: boolean;
   /** AI: the unit stands on its objective (unit flag 0x80). */
   arrived?: boolean;
+  /** Carried by this ship (the original keeps the ship's index in the go-to x field of a sentried passenger). */
+  aboard?: number;
 }
 
 export interface WorldInit {

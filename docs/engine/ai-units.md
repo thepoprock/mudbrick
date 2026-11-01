@@ -183,7 +183,7 @@ nearest city`, or the best is here and the land mass has no own city yet, or the
   `(turn + index) & 7 == 0` is released; a lone defender in a city with a weaker neighbour adds a
   "defend" objective (type 5, priority 1).
 - **Transports (sea units with holds)** in a city release fortified cargo. With room to spare
-  they look for an own city flagged "wants units" (city flag bit 7) on another land mass whose
+  they look for an own **coastal** city (city flag bit 7, set at founding for any city with an ocean neighbour — VERIFIED in the founding routine; earlier read here as "wants units") on another land mass whose
   plan is not 4 and whose unit count is below its wanted number (0x004f266b): scored by distance,
   +16 when the port already holds four transports, +16 or −(units on that land mass / 4)
   by plan. The chosen city becomes the target (tag `3`) and objectives are posted at the port so
@@ -193,10 +193,14 @@ nearest city`, or the best is here and the land mass has no own city yet, or the
   city of any civilization on another land mass scored by `trade × distance factor`, ×½ for own
   cities, −⅓ at war, +⅓ for allies, and falls back to a random square on another land mass
   (tag `V`) or a random walk (tag `6`).
+- **Engine status (ships):** `aiShips.ts` ports the transport decisions above with the scoring
+  details marked INFERRED in the code (the ferry weights, the unload test), the gathering
+  objectives at the port, and the cargo rule of rules-units.md; warships use the direction
+  chooser. Aircraft still hold.
 - **Loaded transports with cargo** head for the nearest enemy land with a city we can attack
   (tag `A`), for a war target with a human we are fighting (tag `I`, scored by distance, halved
   when another human is also at war with the owner, doubled against a walled city), for the
-  nearest "wants units" own city on another land mass (tag `4`), for any enemy city scored
+  nearest own coastal city short of units on another land mass (tag `4`), for any enemy city scored
   `trade × distance / 8` (tag `T`), or unload where the cargo's land mass is wanted (tag `5`).
 - **Pollution and fortresses.** An Engineers unit (role 21) or settler finds the nearest
   pollution within the radius of its city and goes to clean it (tag `p`); on rough terrain

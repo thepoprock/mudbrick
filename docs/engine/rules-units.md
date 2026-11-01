@@ -53,6 +53,16 @@ disembarking from a boat. Moving into a square with a friendly unit is therefore
 - A ship ordered onto land with no city there asks to make **landfall**: a carried ground unit
   with its **full** movement allowance moves instead. With none available the move is refused.
 - A ship entering a city wakes every sentried unit aboard.
+- **Who sails (VERIFIED, the stack routine 0x00556b62 the move handler calls before relocating
+  the ship):** the mover is detached from its square's stack (0x005572df); a ship first gathers
+  its passengers into its own list, up to its capacity: the ground units sentried aboard it (a
+  sentried passenger keeps the ship's index in its go-to x field), then — at sea — every other
+  ground unit of the owner on the square; in port, a computer player's units that are not
+  fortified (unless they stand on a land mass whose plan is "defend" and have a combat role), or a
+  human player's sentried units not aboard another ship. Carriers take air units instead (not
+  modelled). Then the ship and its list move together (0x00555214). The stack lists in the save
+  are per owner and square (verified on the shipped scenarios: every multi-unit square is fully
+  linked).
 
 ## Attacking (VERIFIED)
 

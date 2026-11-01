@@ -21,7 +21,15 @@ export interface MovementContext {
   lighthouse?: boolean;
   /** Options word bit 4: simplified combat OFF, so damage slows units down. */
   damageSlowsUnits?: boolean;
+  /** Whether a slot is human-controlled (the cargo rule differs); default: every slot is. */
+  isHuman?: (slot: number) => boolean;
+  /** The owner's continent plan for a land mass (computer cargo on a "defend" land mass stays). */
+  planOf?: (slot: number, landmass: number) => number;
 }
+
+const ORDER_FORTIFY = 0;
+const ORDER_FORTIFIED = 1;
+const ORDER_SLEEP = 2;
 
 /** Full movement allowance of a unit, in thirds (VERIFIED, 0x00554169). */
 export function fullMoves(rules: EngineRules, unit: Unit, ctx: MovementContext = {}): number {
@@ -255,6 +263,71 @@ export function applyMove(
 }
 
 /**
+ * The units that sail with a departing ship (VERIFIED, the stack routine 0x00556b62): up to the
+ * ship's capacity, first the ground units sentried aboard it, then — at sea — every other ground
+ * unit of the owner on the square; in port, a computer player's units that are not fortified
+ * (unless they sit on a land mass whose plan is "defend" and have a combat role), or a human's
+ * sentried units not aboard another ship. Carriers and submarines (air cargo) are not modelled.
+ */
+export function gatherCargo(
+  world: World,
+  rules: EngineRules,
+  ship: Unit,
+  ctx: MovementContext = {},
+): Unit[] {
+  const type = rules.units[ship.type];
+  if (!type || type.domain !== DOMAIN_SEA) return [];
+  let room = type.holds ?? 0;
+  if (room <= 0) return [];
+  const atSea = !world.isLand(ship.position.x, ship.position.y);
+  const human = ctx.isHuman ? ctx.isHuman(ship.owner) : true;
+  const stack = world
+    .unitsAt(ship.position.x, ship.position.y)
+    .filter(
+      (u) => u !== ship && u.owner === ship.owner && rules.units[u.type]?.domain === DOMAIN_GROUND,
+    );
+  const taken: Unit[] = [];
+  const lm = (world.landmass[world.index(ship.position.x, ship.position.y)] ?? 0) & 63;
+  for (let pass = 0; pass < 2 && room > 0; pass++) {
+    for (const u of stack) {
+      if (room <= 0) break;
+      if (taken.includes(u)) continue;
+      let take = false;
+      if (pass === 0) take = u.order === ORDER_SLEEP && u.aboard === ship.id;
+      else if (!human) {
+        if ((u.order !== ORDER_FORTIFY && u.order !== ORDER_FORTIFIED) || atSea) {
+          if (!atSea && ctx.planOf) {
+            const role = rules.units[u.type]?.role ?? 0;
+            take = ctx.planOf(ship.owner, lm) !== 1 || role > 4;
+          } else take = true;
+        }
+      } else take = (u.order === ORDER_SLEEP && u.aboard === undefined) || atSea;
+      if (take) {
+        taken.push(u);
+        room -= 1;
+      }
+    }
+  }
+  return taken;
+}
+
+/** Carry the cargo along after a ship's step; entering a city wakes the sentried passengers (VERIFIED). */
+function carryCargo(world: World, ship: Unit, cargo: Unit[], to: Point): void {
+  const city = world.cityAt(to.x, to.y);
+  for (const u of cargo) {
+    u.position = { x: to.x, y: to.y };
+    u.aboard = ship.id;
+    if (city) {
+      if (u.order === ORDER_SLEEP) u.order = null;
+      delete u.aboard;
+    } else if (u.order !== ORDER_SLEEP) {
+      u.order = ORDER_SLEEP;
+      u.fortified = false;
+    }
+  }
+}
+
+/**
  * Attempt a step with the verified rules: checks, the partial-move gamble, boarding. Returns
  * what happened; `attack` means the caller should resolve combat instead.
  */
@@ -286,6 +359,7 @@ export function tryMove(
     unit.fortified = false;
     unit.order = null;
     unit.moved = true;
+    unit.aboard = ship.id;
     endUnitMove(rules, unit, ctx);
     return { kind: 'boarded', ship };
   }
@@ -294,7 +368,11 @@ export function tryMove(
     endUnitMove(rules, unit, ctx);
     return { kind: 'failed-roll' };
   }
+  const moverType = rules.units[unit.type];
+  const cargo = moverType?.domain === DOMAIN_SEA ? gatherCargo(world, rules, unit, ctx) : [];
   applyMove(rules, unit, to, verdict.cost, ctx);
+  if (cargo.length > 0) carryCargo(world, unit, cargo, to);
+  if (moverType?.domain === DOMAIN_GROUND && world.isLand(to.x, to.y)) delete unit.aboard;
   world.reveal(to.x, to.y, unit.owner);
   return { kind: 'moved', cost: verdict.cost };
 }

@@ -63,6 +63,8 @@ import {
   diplomacyTurn,
   type DiplomacyContext,
   type DiplomacyEvent,
+  hasTreaty,
+  TREATY,
 } from './diplomacy.js';
 import {
   aiPickGovernment,
@@ -634,6 +636,9 @@ export class Game {
         ...(civ.strategy ? { strategy: civ.strategy } : {}),
         trade: this.tradeContext(),
         attitude: (other) => attitude(this.world, slot, other),
+        isAlly: (other) => hasTreaty(this.world, slot, other, TREATY.alliance),
+        isHuman: (s) => this.world.civs.find((c) => c.slot === s)?.isHuman ?? false,
+        planOf: (s, lm) => this.world.civs.find((c) => c.slot === s)?.strategy?.plans[lm] ?? 5,
         nuclearPower: this.knows(slot, ADVANCE.nuclearPower),
         magellans: this.ownsWonder(slot, IMPROVEMENT.magellans),
         lighthouse: this.ownsWonder(slot, IMPROVEMENT.lighthouse),

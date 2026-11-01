@@ -26,9 +26,10 @@ import {
 } from './movement.js';
 import { fortify, sentry } from './orders.js';
 import type { Rng } from './rng.js';
-import { DOMAIN_AIR, DOMAIN_GROUND, IMPROVEMENT, type EngineRules } from './rules.js';
+import { DOMAIN_AIR, DOMAIN_GROUND, IMPROVEMENT, type EngineRules, DOMAIN_SEA } from './rules.js';
 import { ORDER } from './terraform.js';
 import { workerRules } from './aiTerraform.js';
+import { applyShipDecision, transportDecision } from './aiShips.js';
 import { hutAt } from './terrainSpecials.js';
 import {
   aiCaravanDestination,
@@ -76,6 +77,12 @@ export interface AiUnitContext extends MovementContext {
   trade?: TradeContext;
   /** Attitude toward a slot, for caravan destinations. */
   attitude?: (slot: number) => number;
+  /** Allied with a slot (transports ferrying to friends). */
+  isAlly?: (slot: number) => boolean;
+  /** Human-controlled slot (the cargo rule differs); the game passes it. */
+  isHuman?: (slot: number) => boolean;
+  /** The civilization's continent plan for a land mass (cargo on a "defend" land mass stays home). */
+  planOf?: (slot: number, landmass: number) => number;
 }
 
 export interface AiUnitEvent {
@@ -593,10 +600,24 @@ export function aiMoveUnits(
     if (unit.order !== null && unit.order >= ORDER.fortress && unit.order <= ORDER.airbase)
       continue; // working
     if (movesLeft(rules, unit, ctx) <= 0) continue;
-    if (type.domain !== DOMAIN_GROUND) {
-      // INFERRED: ships and aircraft hold until their own choosers are read.
+    if (type.domain === DOMAIN_AIR) {
+      // INFERRED: aircraft hold until their chooser (0x004f2dd3, documented) is ported.
       if (unit.order === null) sentry(unit);
       continue;
+    }
+    if (type.domain === DOMAIN_SEA && (type.holds ?? 0) > 0) {
+      // Transports (aiShips.ts): a decision per turn, then the go-to below carries it out.
+      const d = transportDecision(world, rules, unit, {
+        turn: ctx.turn,
+        rng: ctx.rng,
+        ...(ctx.strategy ? { strategy: ctx.strategy } : {}),
+        canAttack: ctx.canAttack ?? ctx.atWar,
+        atWar: ctx.atWar,
+        isAlly: ctx.isAlly ?? (() => false),
+        isHuman: ctx.isHuman ?? (() => false),
+        cityTrade: (c) => c.lastTrade ?? 0,
+      });
+      if (!applyShipDecision(unit, d)) continue;
     }
     let guard = 0;
     while (movesLeft(rules, unit, ctx) > 0 && world.units.includes(unit) && guard++ < 12) {
