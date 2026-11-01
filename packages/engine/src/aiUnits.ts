@@ -760,6 +760,16 @@ export function aiMoveUnits(
           unit.order = null;
           unit.arrived = true;
           takeCityHere(world, rules, unit, ctx, events);
+          // VERIFIED: the handler runs for a unit that has just arrived; a settler's work order
+          // needs no movement points, so it is given this turn rather than next.
+          if (
+            (type.role === ROLE_SETTLE || type.role === ROLE_TRANSFORM) &&
+            world.units.includes(unit) &&
+            movesLeft(rules, unit, ctx) <= 0
+          ) {
+            settlersAct(world, rules, unit, ctx, events);
+            break;
+          }
           continue;
         }
         if (r.kind !== 'goto-step') {

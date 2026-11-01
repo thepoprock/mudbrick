@@ -161,11 +161,15 @@ export function gotoDirection(
   rules: EngineRules,
   unit: Unit,
   goal: Point,
+  opts: { ignoreOwnUnits?: boolean } = {},
 ): number | null {
   const here = unit.position;
   if (here.x === goal.x && here.y === goal.y) return null;
   if (manhattan(world, here, goal) >= WINDOW) return null;
   const b = board(world, rules, unit);
+  // Planning walks (road links, route modifiers) ignore the stacking cost of own units, else a
+  // worker standing on the link shifts the link away from itself every turn.
+  if (opts.ignoreOwnUnits) b.sameRole.fill(0);
   const goalIndex = world.index(goal.x, goal.y);
   const hereIndex = world.index(here.x, here.y);
   const cost = new Int32Array(world.area); // 0 = unreached

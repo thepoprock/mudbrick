@@ -92,7 +92,7 @@ export function routeModifier(
   };
   let allRail = true;
   for (let steps = 0; steps < 50; steps++) {
-    const dir = gotoDirection(world, rules, walker, b.position);
+    const dir = gotoDirection(world, rules, walker, b.position, { ignoreOwnUnits: true });
     if (dir === null) return 0;
     const off = NEIGHBOUR_OFFSETS[dir];
     if (!off) return 0;

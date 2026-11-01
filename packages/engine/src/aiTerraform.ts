@@ -63,7 +63,7 @@ function walkPath(
     gotoSteps: 0,
   };
   for (let steps = 0; steps < 50; steps++) {
-    const dir = gotoDirection(world, rules, walker, to);
+    const dir = gotoDirection(world, rules, walker, to, { ignoreOwnUnits: true });
     if (dir === null) return;
     const off = NEIGHBOUR_OFFSETS[dir];
     if (!off) return;

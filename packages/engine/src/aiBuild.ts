@@ -693,14 +693,19 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
               if (citiesOn < k) n = 0;
             }
           }
-        } else {
-          n <<= 4;
         }
-      } else if (u.role === 1 && need > 0) {
-        n = Math.trunc(2 / need);
-        if (need === 2 && !city.inDisorder) n = -1;
-      } else if (u.role !== 1 && u.role !== 5) {
-        n <<= 1;
+      } else {
+        // VERIFIED (0x00474edb, the else of the settlers branch): every other unit is
+        // scaled sixteen-fold before the cost and strength terms — this is what lets
+        // settlers (and improvements) outrank cheap defenders.
+        if (u.role === 1 && need > 0) {
+          n = Math.trunc(2 / need);
+          if (need === 2 && !city.inDisorder) n = -1;
+        } else if (u.role !== 1) {
+          n <<= 1;
+          if (f.plan !== undefined && u.role !== f.plan) n <<= 1;
+        }
+        n <<= 4;
       }
       n = (u.costRows + 2) * Math.max(0, n);
       if (u.attack === 0 && u.defence === 0) n = 0;
