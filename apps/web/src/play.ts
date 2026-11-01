@@ -193,6 +193,9 @@ export interface PlayElements {
   log: HTMLElement;
 }
 
+/** How long a pause in orders hands the lock back in simultaneous play. */
+const LOCK_HOLD_MS = 400;
+
 export class PlaySession {
   /** Anarchy has ended and the engine waits for the player's choice. */
   governmentChoiceDue = false;
@@ -204,6 +207,14 @@ export class PlaySession {
   seat: number | null = null;
   onTurnPassed: ((moving: number) => void) | null = null;
   onChat: ((text: string) => void) | null = null;
+  /** Simultaneous play over the network: ask the relay for the lock, and send the state and let go. */
+  onLock: (() => void) | null = null;
+  onRelease: (() => void) | null = null;
+  private lockHeld = false;
+  private lockAsked = false;
+  private replaying = false;
+  private pendingOrder: (() => void) | null = null;
+  private releaseTimer: number | null = null;
   /** The conversation on screen, if any. */
   private talk: Conversation | null = null;
   selected: Unit | null = null;
@@ -216,21 +227,17 @@ export class PlaySession {
   private cityNames = 0;
 
   constructor(
-    readonly game: Game,
+    public game: Game,
     readonly folder: GameFolder,
     public humanSlot: number,
     readonly el: PlayElements,
     readonly renderOptions: () => WorldRenderOptions,
   ) {
-    game.wantsTalks = folder.popups.size > 0;
-    if (folder.cityPreferences !== undefined) {
-      game.cityPreferences = parseCityPreferences(
-        folder.cityPreferences,
-        (i) => game.rules.improvements[i]?.name,
-      );
+    this.bindGame(game);
+    for (const panel of [el.cityPanel, el.unitPanel, el.researchPanel]) {
+      panel.addEventListener('click', (e) => this.guardPanel(e, () => this.reclick(e)), true);
+      panel.addEventListener('change', (e) => this.guardPanel(e, () => this.rechange(e)), true);
     }
-    game.askEscape = (c) =>
-      window.confirm(`Pay 1000 gold to move the government to ${c.name} and save the spaceship?`);
     this.startTimer();
     void this.buildMenuBar();
     this.log(`You lead the ${this.civ.name}. Arrow keys or the number pad move the selected unit.`);
@@ -248,6 +255,111 @@ export class PlaySession {
         this.world.units.find((u) => u.owner === humanSlot);
       if (home) this.centreOn(home.position);
     }
+  }
+
+  private bindGame(game: Game): void {
+    game.wantsTalks = this.folder.popups.size > 0;
+    if (this.folder.cityPreferences !== undefined) {
+      game.cityPreferences = parseCityPreferences(
+        this.folder.cityPreferences,
+        (i) => game.rules.improvements[i]?.name,
+      );
+    }
+    game.askEscape = (c) =>
+      window.confirm(`Pay 1000 gold to move the government to ${c.name} and save the spaceship?`);
+  }
+
+  /** Simultaneous play: another seat's state replaces ours; what was open stays open. */
+  adopt(game: Game): void {
+    const moving = this.awaitingUs;
+    const unit = this.selected?.id;
+    const city = this.openCity?.id;
+    this.bindGame(game);
+    this.game = game;
+    this.selected = this.world.units.find((u) => u.id === unit) ?? null;
+    this.openCity = this.world.cities.find((c) => c.id === city) ?? null;
+    if (!moving && this.awaitingUs) {
+      this.log('All moved. Your move.');
+      this.selectNext();
+    }
+    this.refresh();
+  }
+
+  /** The seat is known: look at this seat's own units. */
+  takeSeat(): void {
+    if (this.selected?.owner === this.humanSlot) return;
+    this.selected = null;
+    this.selectNext();
+    const home =
+      this.selected ??
+      this.world.cities.find((c) => c.owner === this.humanSlot) ??
+      this.world.units.find((u) => u.owner === this.humanSlot);
+    if (home) this.centreOn(home.position);
+    this.refresh();
+  }
+
+  /** The lock the relay grants has arrived: carry out the order that asked for it. */
+  lockGranted(): void {
+    this.lockHeld = true;
+    this.lockAsked = false;
+    const run = this.pendingOrder;
+    this.pendingOrder = null;
+    run?.();
+    this.holdLockBriefly();
+  }
+
+  /** May this seat change the game now? If not, ask for the lock and do `order` once it comes. */
+  private writable(order: () => void): boolean {
+    if (!this.game.state.simultaneous || this.seat === null) return true;
+    if (!this.awaitingUs) return false;
+    if (this.lockHeld) {
+      this.holdLockBriefly();
+      return true;
+    }
+    this.pendingOrder = order;
+    if (!this.lockAsked) {
+      this.lockAsked = true;
+      this.onLock?.();
+    }
+    return false;
+  }
+
+  /** The panels change the game too: hold their input until this seat has the lock. */
+  private guardPanel(e: Event, replay: () => void): void {
+    if (this.replaying || this.writable(replay)) return;
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  private reclick(e: Event): void {
+    this.replaying = true;
+    if (e.target instanceof HTMLElement) e.target.click();
+    this.replaying = false;
+  }
+
+  private rechange(e: Event): void {
+    this.replaying = true;
+    e.target?.dispatchEvent(new Event('change', { bubbles: true }));
+    this.replaying = false;
+  }
+
+  /** Orders come in bursts: send the state on once the player pauses. */
+  private holdLockBriefly(): void {
+    if (this.releaseTimer !== null) window.clearTimeout(this.releaseTimer);
+    this.releaseTimer = window.setTimeout(() => {
+      this.releaseTimer = null;
+      if (!this.lockHeld) return;
+      if (this.talk) {
+        this.holdLockBriefly();
+        return;
+      }
+      this.lockHeld = false;
+      this.onRelease?.();
+    }, LOCK_HOLD_MS);
+  }
+
+  private get awaitingUs(): boolean {
+    return (this.game.state.awaitingMoves ?? []).includes(this.seat ?? this.humanSlot);
   }
 
   get world() {
@@ -306,6 +418,7 @@ export class PlaySession {
 
   handleKey(e: KeyboardEvent): boolean {
     if (e.target instanceof HTMLSelectElement || e.target instanceof HTMLInputElement) return false;
+    if (!this.writable(() => this.handleKey(e))) return true;
     const dir = KEY_DIRECTIONS[e.key];
     if (dir && this.selected) {
       this.moveSelected(dir);
@@ -475,6 +588,7 @@ export class PlaySession {
   }
 
   handleClick(clientX: number, clientY: number): void {
+    if (!this.writable(() => this.handleClick(clientX, clientY))) return;
     const rect = this.el.canvas.getBoundingClientRect();
     const zoom = this.renderOptions().zoom;
     const hit = hitTest(
@@ -528,6 +642,7 @@ export class PlaySession {
   // ---- actions
 
   moveSelected(dirName: string): void {
+    if (!this.writable(() => this.moveSelected(dirName))) return;
     const unit = this.selected;
     const d = DIRECTIONS[dirName];
     if (!unit || !d) return;
@@ -929,11 +1044,22 @@ export class PlaySession {
 
   /** Is it this browser's move? */
   get ourMove(): boolean {
+    if (this.game.state.simultaneous) return this.awaitingUs;
     return this.seat === null || (this.game.state.movingHuman ?? this.seat) === this.seat;
   }
 
   endTurn(): void {
     if (!this.ourMove) return;
+    if (!this.writable(() => this.endTurn())) return;
+    if (this.game.state.simultaneous) {
+      this.game.finishMoves(this.seat ?? this.humanSlot);
+      if ((this.game.state.awaitingMoves?.length ?? 0) > 0) {
+        if (this.seat === null) this.playOn();
+        else this.log('Waiting for the others to finish.');
+        this.refresh();
+        return;
+      }
+    }
     this.playOn();
   }
 
@@ -941,7 +1067,11 @@ export class PlaySession {
   private playOn(): void {
     const before = this.humanSlot;
     const events = this.game.playUntilHuman();
-    const moving = this.game.state.movingHuman ?? this.humanSlot;
+    const moving = this.game.state.simultaneous
+      ? this.seat === null
+        ? (this.game.state.awaitingMoves?.[0] ?? this.humanSlot)
+        : this.seat
+      : (this.game.state.movingHuman ?? this.humanSlot);
     if (this.onTurnPassed && moving !== this.seat) {
       this.onTurnPassed(moving);
       this.log(`Waiting for the ${this.game.civ(moving).name}.`);
@@ -1874,6 +2004,15 @@ export class PlaySession {
 
   /** Retire (0x004af61c): the power graph, then the score, and the game ends. */
   private retire(): void {
+    if (this.seat !== null && !this.game.state.byFile) {
+      // Network play: this player leaves and the game goes on (0x004aeab6).
+      if (!window.confirm('Really leave the game?')) return;
+      const seat = this.seat;
+      if (!this.writable(() => this.game.retireHuman(seat))) return;
+      this.game.retireHuman(seat);
+      this.refresh();
+      return;
+    }
     if (window.confirm('Really retire?')) this.showPowerGraph(true);
   }
 

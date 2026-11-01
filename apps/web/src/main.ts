@@ -261,7 +261,9 @@ function startNewGame(): void {
     ...result.state,
     nextSlot: 0,
     ...(byFile ? { byFile } : {}),
+    ...multiplayerOptions(),
   });
+  game.introduceHumans();
   session = new PlaySession(
     game,
     folder,
@@ -426,6 +428,19 @@ function attachByFile(s: PlaySession): void {
   };
 }
 
+/** The Select Multiplayer Features choices (dialog ADVANCEDMP) from the new game panel. */
+function multiplayerOptions() {
+  const on = (id: string) => byId<HTMLInputElement>(id).checked;
+  if (selectValue('ngHumans') < 2) return {};
+  return {
+    ...(on('ngSimultaneous') ? { simultaneous: true } : {}),
+    ...(on('ngDoubleProduction') ? { doubleProduction: true } : {}),
+    ...(on('ngDoubleMoves') ? { doubleMoves: true } : {}),
+    ...(on('ngShowStarts') ? { showHumanStarts: true } : {}),
+    ...(on('ngKillRetire') ? { killOnRetirement: true } : {}),
+  };
+}
+
 // ---- network play: a room on a relay, one seat per browser (apps/relay, net.ts)
 let net: NetLink | undefined;
 
@@ -437,7 +452,7 @@ function restoreFrom(text: string, seat: number): void {
   session = new PlaySession(
     restored.game,
     folder,
-    moving === seat ? seat : moving,
+    restored.game.state.simultaneous || moving === seat ? seat : moving,
     {
       canvas,
       status: byId('status'),
@@ -457,8 +472,14 @@ function restoreFrom(text: string, seat: number): void {
 function attachNet(s: PlaySession, seat: number): void {
   s.seat = seat;
   s.humanSlot = seat;
+  s.takeSeat();
   s.onTurnPassed = (moving) => net?.sendState(snapshotGame(s.game, moving), moving);
   s.onChat = (text) => net?.chat(text);
+  s.onLock = () => net?.lock();
+  s.onRelease = () => {
+    net?.sendState(snapshotGame(s.game, seat), seat);
+    net?.unlock();
+  };
 }
 
 byId<HTMLButtonElement>('netJoin').addEventListener('click', () => {
@@ -466,8 +487,11 @@ byId<HTMLButtonElement>('netJoin').addEventListener('click', () => {
   const room = byId<HTMLInputElement>('netRoom').value;
   const seat = Number(byId<HTMLInputElement>('netSeat').value);
   net = new NetLink(url, room, seat, (m) => {
+    if (m.type === 'lock') session?.lockGranted();
     if (m.type === 'state' && m.text) {
-      if (m.moving === seat) restoreFrom(m.text, seat);
+      if (session?.game.state.simultaneous && folder)
+        session.adopt(restoreGame(m.text, engineRules(folder.rules)).game);
+      else if (m.moving === seat) restoreFrom(m.text, seat);
       else if (!session) restoreFrom(m.text, seat);
     }
     if (m.type === 'seats') byId('netStatus').textContent = `seats: ${(m.seats ?? []).join(', ')}`;

@@ -145,7 +145,7 @@ import {
   type ScenarioEffect,
   type ScenarioEvent,
 } from './events.js';
-import { inEnemyZoc } from './movement.js';
+import { fullMoves, inEnemyZoc } from './movement.js';
 import { payUpkeep, type UpkeepEvent } from './upkeep.js';
 import { citySquareClick } from './humanOrders.js';
 import { history, type HistoryEvent } from './reports.js';
@@ -206,6 +206,18 @@ export interface GameState {
   byFile?: boolean;
   /** The human whose move it is. */
   movingHuman?: number;
+  /** Multiplayer: every terrain square yields double (0x004b4102). */
+  doubleProduction?: boolean;
+  /** Multiplayer: ground units move at double the rate (0x004ae667). */
+  doubleMoves?: boolean;
+  /** Multiplayer: humans begin in contact and see each other's start (0x00415f2f). */
+  showHumanStarts?: boolean;
+  /** Multiplayer: a human who retires takes the civilization with them (0x004aeab6). */
+  killOnRetirement?: boolean;
+  /** Humans move at once after the computers (0x0054d335). */
+  simultaneous?: boolean;
+  /** Simultaneous play: the humans still moving this round. */
+  awaitingMoves?: number[];
   /** Past this turn the historian reports (header +0x142). */
   nextHistory?: number;
   /** Times each tribe (leader index) has played, for restarts. */
@@ -334,13 +346,21 @@ export class Game {
     autoBuild: [],
   };
   buildTrace?: (city: City, score: number, p: Production) => void;
+  readonly rules: EngineRules;
 
   constructor(
     public readonly world: World,
-    public readonly rules: EngineRules,
+    rules: EngineRules,
     public readonly rng: Rng,
     public readonly state: GameState,
   ) {
+    // VERIFIED 0x004ae667: Double Moves rewrites the ground units' line of the rules.
+    this.rules = state.doubleMoves
+      ? {
+          ...rules,
+          units: rules.units.map((u) => (u.domain === 0 ? { ...u, move: u.move * 2 } : u)),
+        }
+      : rules;
     this.nextUnitId = world.units.reduce((m, u) => Math.max(m, u.id), -1) + 1;
   }
 
@@ -1219,6 +1239,7 @@ export class Game {
     const isCapital = city.improvements[IMPROVEMENT.palace] === true;
     return {
       rowsRelief: this.rowsRelief(),
+      ...(this.state.doubleProduction ? { doubleProduction: true } : {}),
       government: civ.government,
       difficulty: this.state.difficulty,
       isHuman: civ.isHuman,
@@ -1417,6 +1438,14 @@ export class Game {
       ) {
         this.aiChooseProduction(city, t); // the original re-chooses after every completion (0x00430b61 with 99)
       }
+      // VERIFIED 0x0055543a: when everyone moves at once, a new unit waits for the next round.
+      if (e.kind === 'built-unit' && this.state.simultaneous)
+        e.unit.movesSpent = fullMoves(this.rules, e.unit, {
+          nuclearPower: this.knows(civ.slot, ADVANCE.nuclearPower),
+          magellans: this.ownsWonder(civ.slot, IMPROVEMENT.magellans),
+          lighthouse: this.ownsWonder(civ.slot, IMPROVEMENT.lighthouse),
+          damageSlowsUnits: this.state.realisticCombat,
+        });
       if (
         civ.isHuman &&
         (e.kind === 'built-unit' ||
@@ -1776,6 +1805,16 @@ export class Game {
   /** The civilization's turn: cities last-to-first, then the AI's rates. */
   processCivilization(slot: number): TurnEvent[] {
     const out: TurnEvent[] = [];
+    const notes = this.civilizationCities(slot, out);
+    this.civilizationMoves(slot, out, notes);
+    return out;
+  }
+
+  /** The first half of a civilization's turn (0x00469773): its treasury, cities and diplomacy. */
+  private civilizationCities(
+    slot: number,
+    out: TurnEvent[],
+  ): { anyDisorder: boolean; anyLargeQuiet: boolean } {
     const civ = this.civ(slot);
     // VERIFIED 0x0046732a: a warning off foreign land fades on the unit's turn in four.
     this.world.units.forEach((u, i) => {
@@ -1904,6 +1943,16 @@ export class Game {
     })) {
       out.push({ slot, event: e });
     }
+    return { anyDisorder, anyLargeQuiet };
+  }
+
+  /** The second half (0x004ff777): the computer's units or a human's automated ones, its rates. */
+  private civilizationMoves(
+    slot: number,
+    out: TurnEvent[],
+    notes: { anyDisorder: boolean; anyLargeQuiet: boolean },
+  ): void {
+    const civ = this.civ(slot);
     const automated = civ.isHuman && this.world.units.some((u) => u.owner === slot && u.automated);
     if (!civ.isHuman || automated) {
       let names = this.citiesOf(slot).length;
@@ -1977,8 +2026,8 @@ export class Game {
       ];
       const rates = aiRates(civ, {
         turn: this.state.turn,
-        anyDisorder,
-        anyLargeContentCity: anyLargeQuiet,
+        anyDisorder: notes.anyDisorder,
+        anyLargeContentCity: notes.anyLargeQuiet,
         civilize,
         // VERIFIED meaning: a continent plan in the expansion states (5, room to grow) on some
         // land mass the civilization holds (aiStrategy.ts).
@@ -1994,7 +2043,6 @@ export class Game {
       civ.taxRate = rates.tax;
       out.push({ slot, event: { kind: 'rates', ...rates } });
     }
-    return out;
   }
 
   /** End the turn: every civilization in play, in slot order (INFERRED), then the counter. */
@@ -2094,6 +2142,7 @@ export class Game {
    * round and stops.
    */
   playUntilHuman(): TurnEvent[] {
+    if (this.state.simultaneous) return this.simultaneousRound();
     const out: TurnEvent[] = [];
     for (let rounds = 0; rounds < 2; rounds++) {
       if ((this.state.nextSlot ?? 0) === 0) out.push(...this.beginRound());
@@ -2111,6 +2160,89 @@ export class Game {
       if (!this.world.civs.some((c) => c.isHuman && c.inPlay && c.slot !== 0)) return out;
     }
     return out;
+  }
+
+  /**
+   * A round with humans moving together (VERIFIED 0x0054d335): the computers' cities, then the
+   * humans', then the barbarians and the computers move, then every human moves at once. The
+   * round closes when the last human finishes (`finishMoves`). Does nothing while one is moving.
+   */
+  private simultaneousRound(): TurnEvent[] {
+    const out: TurnEvent[] = [];
+    if ((this.state.awaitingMoves?.length ?? 0) > 0) return out;
+    const inPlay = (human: boolean) =>
+      this.world.civs
+        .filter((c) => c.slot !== 0 && c.inPlay && c.isHuman === human)
+        .map((c) => c.slot)
+        .sort((a, b) => a - b);
+    out.push(...this.beginRound());
+    const notes = new Map<number, { anyDisorder: boolean; anyLargeQuiet: boolean }>();
+    const computers = inPlay(false);
+    const humans = inPlay(true);
+    const cities = (slot: number) => {
+      const civ = this.civ(slot);
+      if (civ.treasury > 30000 || civ.treasury < -0x4000) civ.treasury = 30000;
+      if (civ.treasury < 0) civ.treasury = 0;
+      notes.set(slot, this.civilizationCities(slot, out));
+      out.push(...this.pendingEvents.splice(0));
+    };
+    for (const s of computers) cities(s);
+    for (const s of humans) cities(s);
+    out.push(...this.playSlot(0));
+    for (const s of [...computers, ...humans]) {
+      const n = notes.get(s);
+      if (!n || !this.civ(s).inPlay) continue;
+      this.civilizationMoves(s, out, n);
+      out.push(...this.pendingEvents.splice(0));
+      out.push(...this.eliminateCityless());
+    }
+    this.state.nextSlot = 0;
+    this.state.awaitingMoves = humans.filter((s) => this.civ(s).inPlay);
+    if (this.state.awaitingMoves.length === 0) out.push(...this.endRound());
+    return out;
+  }
+
+  /** A human has finished moving; the last to finish closes the round. Simultaneous play only. */
+  finishMoves(slot: number): TurnEvent[] {
+    const waiting = this.state.awaitingMoves ?? [];
+    if (!waiting.includes(slot)) return [];
+    this.state.awaitingMoves = waiting.filter((s) => s !== slot);
+    return this.state.awaitingMoves.length === 0 ? this.endRound() : [];
+  }
+
+  /**
+   * The humans' opening in a multiplayer game (VERIFIED 0x00415f2f, with Show Human Starting
+   * Positions on or at the lowest difficulty): each sees what any of them sees, and all have met.
+   */
+  introduceHumans(): void {
+    if (!this.state.showHumanStarts && this.state.difficulty !== 0) return;
+    const humans = this.world.civs.filter((c) => c.isHuman && c.slot !== 0);
+    if (humans.length < 2) return;
+    const mask = humans.reduce((m, c) => m | (1 << c.slot), 0);
+    for (let i = 0; i < this.world.seen.length; i++) {
+      if (((this.world.seen[i] ?? 0) & mask) !== 0)
+        this.world.seen[i] = (this.world.seen[i] ?? 0) | mask;
+    }
+    for (const a of humans)
+      for (const b of humans) if (a !== b) setTreaty(this.world, a.slot, b.slot, TREATY.contact);
+  }
+
+  /**
+   * A human leaves a multiplayer game (VERIFIED 0x004aeab6): the computer takes the civilization
+   * over, or with Kill Civilization on Retirement it goes, its units and cities and wonders with
+   * it.
+   */
+  retireHuman(slot: number): void {
+    const civ = this.civ(slot);
+    civ.isHuman = false;
+    if (this.state.awaitingMoves)
+      this.state.awaitingMoves = this.state.awaitingMoves.filter((s) => s !== slot);
+    if (!this.state.killOnRetirement) return;
+    for (const c of this.citiesOf(slot)) removeCity(this.world, this.rules, c);
+    for (const u of this.world.units.filter((x) => x.owner === slot))
+      this.world.units.splice(this.world.units.indexOf(u), 1);
+    civ.inPlay = false;
+    this.state.destroyedCivilizations = (this.state.destroyedCivilizations ?? 0) + 1;
   }
 
   /**

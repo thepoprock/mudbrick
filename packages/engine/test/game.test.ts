@@ -546,3 +546,60 @@ describe('late catch-up for computers (0x004b3b24)', () => {
     expect(game.rowsRelief()).toBe(0);
   });
 });
+
+describe('multiplayer options', () => {
+  it('moves the computers first and closes the round with the last human', () => {
+    const { world, game, civ } = setup();
+    civ.isHuman = true;
+    const other: Civ = { ...civ, slot: 3, knownAdvances: [...civ.knownAdvances] };
+    world.civs.push(other);
+    world.units.push({ ...(world.units[0] as Unit), id: 90, owner: 3, homeCity: null });
+    game.state.simultaneous = true;
+    game.state.nextSlot = 0;
+    const start = game.state.turn;
+    game.playUntilHuman();
+    expect(game.state.awaitingMoves?.includes(civ.slot)).toBe(true);
+    expect(game.state.awaitingMoves?.includes(3)).toBe(true);
+    expect(game.playUntilHuman()).toEqual([]); // nothing runs while humans are moving
+    game.finishMoves(civ.slot);
+    expect(game.state.turn).toBe(start);
+    game.finishMoves(3);
+    expect(game.state.turn).toBe(start + 1);
+    expect(game.state.awaitingMoves).toEqual([]);
+  });
+
+  it('doubles ground moves and terrain yields', () => {
+    const { world, game, city } = setup();
+    const doubled = new Game(world, rules, new Rng(1), { ...game.state, doubleMoves: true });
+    expect(doubled.rules.units[0]?.move).toBe((rules.units[0]?.move ?? 0) * 2);
+    const plain = rawYields(world, rules, city, game.cityContext(city));
+    game.state.doubleProduction = true;
+    const rich = rawYields(world, rules, city, game.cityContext(city));
+    expect(rich.food).toBeGreaterThan(plain.food);
+  });
+
+  it('a retiring human gives way to the computer, or takes the civilization along', () => {
+    const { world, game, civ } = setup();
+    civ.isHuman = true;
+    game.retireHuman(civ.slot);
+    expect(civ.isHuman).toBe(false);
+    expect(civ.inPlay).toBe(true);
+    civ.isHuman = true;
+    game.state.killOnRetirement = true;
+    game.retireHuman(civ.slot);
+    expect(civ.inPlay).toBe(false);
+    expect(world.cities.filter((c) => c.owner === civ.slot)).toEqual([]);
+  });
+
+  it('introduces the humans at the start', () => {
+    const { world, game, civ } = setup();
+    civ.isHuman = true;
+    const other: Civ = { ...civ, slot: 3, knownAdvances: [...civ.knownAdvances] };
+    world.civs.push(other);
+    game.state.showHumanStarts = true;
+    world.revealSquare(4, 4, civ.slot);
+    game.introduceHumans();
+    expect(world.isSeen(4, 4, 3)).toBe(true);
+    expect(hasTreaty(world, civ.slot, 3, TREATY.contact)).toBe(true);
+  });
+});

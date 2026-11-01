@@ -1,6 +1,7 @@
 /**
  * Network play over the relay (apps/relay). The moving player's browser plays and sends the game
- * state on; everyone else waits. The original's simultaneous-move option is not ported.
+ * state on; everyone else waits. With simultaneous moves every seat plays, taking the relay's lock
+ * for each burst of orders and sending the state on as it lets go.
  */
 export interface NetMessage {
   type: string;
@@ -30,6 +31,14 @@ export class NetLink {
 
   sendState(text: string, moving: number): void {
     this.socket.send(JSON.stringify({ type: 'state', text, moving }));
+  }
+
+  lock(): void {
+    this.socket.send(JSON.stringify({ type: 'lock' }));
+  }
+
+  unlock(): void {
+    this.socket.send(JSON.stringify({ type: 'unlock' }));
   }
 
   chat(text: string): void {

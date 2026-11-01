@@ -45,7 +45,7 @@ Every function in `docs/engine/function-status.tsv` has a `category`:
 The categories other than `read` came from a signature search, then a scan of all 227 `game-data`
 functions and of every unread function that writes game state and is reachable from the turn
 routines: none held a game rule missed by the port. The `generic` and `interface` functions were not
-read one by one, and multiplayer rules for simultaneous moves are not decoded. So the claim is:
+read one by one, and the network packet code is not ported, since the relay does that job differently. So the claim is:
 no rule of the single-player game is known to be missing, not that every line has been read.
 
 ## Checking against the original
@@ -62,7 +62,7 @@ Compare only at the same difficulty; `docs/engine/difficulty.md` lists what diff
 
 ## Known gaps
 
-Simultaneous moves are not ported.
+Simultaneous moves are ported (0x0054d335, `Game.simultaneousRound`). The square locks of 0x0053d7b1 become one writer at a time on the relay (`apps/relay/src/lock.ts`), and each burst of orders sends the whole state, so a slow link will feel it. Open games, where a new player joins mid-game, are not ported.
 
 ## How to help
 

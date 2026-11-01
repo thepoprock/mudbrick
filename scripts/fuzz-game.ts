@@ -60,7 +60,12 @@ for (const c of result.world.civs) {
   c.isHuman = true;
   extra -= 1;
 }
-let game = new Game(result.world, rules, rng, { ...result.state, nextSlot: 0 });
+// SIMULTANEOUS=1 plays every multiplayer option: all humans move each round after the computers.
+const multiplayer = process.env.SIMULTANEOUS
+  ? { simultaneous: true, doubleMoves: true, doubleProduction: true, showHumanStarts: true }
+  : {};
+let game = new Game(result.world, rules, rng, { ...result.state, nextSlot: 0, ...multiplayer });
+game.introduceHumans();
 game.wantsTalks = true;
 
 const problems = new Map<string, number>();
@@ -222,6 +227,14 @@ for (let step = 0; game.state.turn < turns && !game.state.gameOver && step < tur
   if (process.env.FUZZ_TIMES && game.state.turn % 25 === 0)
     console.log('turn', game.state.turn, spent, 'ms');
   check();
+  if (game.state.simultaneous) {
+    for (const s of [...(game.state.awaitingMoves ?? [])]) {
+      play(s);
+      check();
+      game.finishMoves(s);
+    }
+    continue;
+  }
   const slot = game.state.movingHuman;
   if (slot === undefined) break;
   if (!game.world.civs.some((c) => c.isHuman && c.inPlay && c.slot !== 0)) break;
