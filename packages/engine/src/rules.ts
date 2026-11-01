@@ -45,6 +45,8 @@ export interface UnitFlagsRule {
   /** Sees the ring at distance two as well (squares of its own element). */
   twoSquareVisibility: boolean;
   ignoreZonesOfControl: boolean;
+  /** May attack from a ship (Marines). */
+  amphibiousAssault?: boolean;
   alpine: boolean;
   mustStayNearLand: boolean;
   negatesCityWalls: boolean;

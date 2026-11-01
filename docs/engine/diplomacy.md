@@ -149,3 +149,32 @@ is positive and 1 unless it is already a Democracy; later ties win. The change i
 divisible by four (at once with the Statue of Liberty); a human is offered the choice on such a
 turn, never on the turn the revolution began. A human Democracy with a city in disorder two
 turns running falls into anarchy (the happiness routine, already in the engine).
+
+## Breaking a treaty, declaring war, allies, cancelling an alliance (VERIFIED)
+
+- **Breaking a treaty** (0x004447be; `breakTreaty(a, b, witness)`): outside an alliance, at
+  mere contact only the witness's attitude toward the breaker drops by 5; at cease-fire or
+  peace the breaker's reputation byte rises (worsens) once for a fully human-controlled breaker
+  with more than four cities when there is no witness and once above Chieftain without the
+  Eiffel Tower — the original runs both tests twice when the peace and cease-fire bits both
+  stand — a human breaker's count toward the victim (record +0x48) drops, the witness's attitude
+  drops by 15; then a human breaker earns the victim's vendetta, war is declared, the human's
+  word gains the grudge bits, the last-war turn is noted and the victim's allies join (below).
+  Inside an alliance: reputation worsens above Chieftain without the Eiffel Tower and once more
+  without a witness, the witness's attitude drops by 25, the alliance is cancelled and a human
+  breaker earns a vendetta.
+- **Declaring war** (0x00526d80; `declareWar`): the strain and broken bits go; at cease-fire or
+  peace with a human on either side the treaty is broken as above; peace and alliance go; with
+  contact the war bit is set, both attitudes jump to 100, and the first declaration of the war
+  marks the declarer's word (bit 12). Called by the MAKEAGGRESSION event, by the attack handler
+  after the human confirms breaking the treaty, and by the negotiation screens.
+- **Allies join** (0x0044442f; `alliesJoinWar`): when the victim has contact with the breaker,
+  each ally of the victim that has contact and neither war nor alliance with the breaker declares
+  war (war, met-this-turn, contact) with the grudge bits — for a computer breaker only when the
+  victim is human; for a human breaker always, the ally's attitude toward the breaker going to
+  100, the victim's word gaining the grudge bits and the breaker's last-war turn noted.
+- **Cancelling an alliance** (0x0044e525; `cancelAlliance`): the alliance bit goes and each
+  side's units standing in the other's cities move to the nearest own city (0x0044e1e2; the
+  original's further conditions — coastal cities for ships — were not read in full, INFERRED).
+- **Pillage** (0x00498170) inside another civilization's city radius breaks the treaty when not
+  already at war and declares war outright (rules-units.md).

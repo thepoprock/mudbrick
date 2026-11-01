@@ -123,6 +123,8 @@ export interface Civ {
   restraint?: number;
   /** Per slot: the turn that slot last attacked or declared war on us, −1 none (record +994). */
   lastWarTurns?: Int16Array;
+  /** Record +0x48, 8 bytes: treaty breaks charged per slot (INFERRED name; 0x004447be writes it). */
+  treatyBreaks?: Uint8Array;
   /** Government preference scores, 7 × i16 (record +980). */
   governmentScores?: Int16Array;
   /** The best `2 × shields − support` over the cities processed so far this turn (+0x3d2),

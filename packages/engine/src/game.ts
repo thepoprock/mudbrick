@@ -745,6 +745,7 @@ export class Game {
       dontPlayWonders: () => {
         this.state.wonderMoviesOff = true;
       },
+      diplomacy: this.diplomacyContext(),
     };
   }
 

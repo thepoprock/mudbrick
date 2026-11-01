@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { emptyStrategy } from '../src/aiStrategy.js';
 import {
   atWar,
+  breakTreaty,
   canAttack,
+  cancelAlliance,
   clearTreaty,
   contactSweep,
+  declareWar,
   diplomacyTurn,
   hasTreaty,
   reviewRelations,
@@ -265,5 +268,81 @@ describe('contact and reviews', () => {
     setTreaty(w, 2, 3, TREATY.contact | TREATY.war);
     reviewRelations(w, 2, 3, ctx(w, { turn: 39, humanAccepts: () => false }), refused); // (39 + 2 + 3) & 3 === 0
     expect(hasTreaty(w, 2, 3, TREATY.war)).toBe(true);
+  });
+});
+
+describe('breaking treaties and declaring war (0x004447be, 0x00526d80, 0x0044442f, 0x0044e525)', () => {
+  it('a human breaking a peace worsens its reputation, earns a vendetta and brings in allies', () => {
+    const w = world();
+    const h = w.civs.find((c) => c.slot === 1);
+    if (h) h.isHuman = true;
+    setTreaty(w, 1, 2, TREATY.contact | TREATY.peace);
+    setTreaty(w, 2, 3, TREATY.contact | TREATY.alliance);
+    setTreaty(w, 1, 3, TREATY.contact);
+    const events: DiplomacyEvent[] = [];
+    const c = ctx(w, { difficulty: 3, control: (s) => (s === 1 ? 7 : 3), cityCount: () => 5 });
+    declareWar(w, 1, 2, c, events);
+    const me = w.civs.find((x) => x.slot === 1);
+    expect(me?.reputation).toBe(2); // human with more than four cities, and no Eiffel Tower
+    expect(hasTreaty(w, 2, 1, TREATY.vendetta)).toBe(true);
+    expect(hasTreaty(w, 1, 2, TREATY.war)).toBe(true);
+    expect(hasTreaty(w, 1, 2, TREATY.grudge)).toBe(true);
+    expect(hasTreaty(w, 1, 2, TREATY.warDeclared)).toBe(true);
+    // The victim's ally joins against the human breaker, with the grudge bits.
+    expect(hasTreaty(w, 3, 1, TREATY.war)).toBe(true);
+    expect(hasTreaty(w, 3, 1, TREATY.grudge)).toBe(true);
+    expect(events.some((e) => e.text.includes('join'))).toBe(true);
+    expect(events.some((e) => e.text.includes('declare war'))).toBe(true);
+  });
+
+  it('a witness loses attitude; a cancelled alliance sends units home', () => {
+    const w = world();
+    const c = ctx(w);
+    setTreaty(w, 1, 2, TREATY.contact | TREATY.alliance);
+    const events: DiplomacyEvent[] = [];
+    breakTreaty(w, 1, 2, 3, c, events);
+    const witness = w.civs.find((x) => x.slot === 3);
+    expect(witness?.treatyBreaks?.[1]).toBe(1);
+    expect(hasTreaty(w, 1, 2, TREATY.alliance)).toBe(false);
+    expect(events.some((e) => e.text.includes('cancelled'))).toBe(true);
+    // Units in an ex-ally's city go to the nearest own city.
+    setTreaty(w, 1, 2, TREATY.alliance);
+    w.cities.push(
+      {
+        id: 0,
+        position: { x: 4, y: 4 },
+        owner: 2,
+        name: 'Theirs',
+        size: 3,
+        improvements: [],
+        foodStored: 0,
+        shieldsStored: 0,
+        worked: 0,
+        specialists: { entertainers: 0, taxCollectors: 0, scientists: 0 },
+        production: { kind: 'unit', index: 0 },
+        inDisorder: false,
+        celebrating: false,
+        tradeRoutes: [],
+      },
+      {
+        id: 1,
+        position: { x: 12, y: 12 },
+        owner: 1,
+        name: 'Mine',
+        size: 3,
+        improvements: [],
+        foodStored: 0,
+        shieldsStored: 0,
+        worked: 0,
+        specialists: { entertainers: 0, taxCollectors: 0, scientists: 0 },
+        production: { kind: 'unit', index: 0 },
+        inDisorder: false,
+        celebrating: false,
+        tradeRoutes: [],
+      },
+    );
+    const u = unit(w, 4, 4, 1);
+    cancelAlliance(w, 1, 2, events);
+    expect(u.position).toEqual({ x: 12, y: 12 });
   });
 });

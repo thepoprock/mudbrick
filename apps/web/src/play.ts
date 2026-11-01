@@ -67,6 +67,10 @@ import {
   type SpaceshipEvent,
   yearOf,
   yearTextOf,
+  declareWar,
+  treaty,
+  TREATY,
+  type DiplomacyEvent,
 } from '@mudbrick/engine';
 import { ADVANCE, IMPROVEMENT } from '@mudbrick/engine';
 import { sprites } from '@mudbrick/formats';
@@ -375,6 +379,10 @@ export class PlaySession {
         return 'Cannot move from one enemy zone of control into another.';
       case 'needs-transport':
         return 'No transport there to board.';
+      case 'amphibious':
+        return 'Only units with amphibious assault can attack from a ship.';
+      case 'submarine':
+        return 'A submarine cannot attack a land square.';
       case 'impassable':
         return 'That unit cannot enter that square.';
       case 'no-moves':
@@ -387,6 +395,23 @@ export class PlaySession {
   private attack(unit: Unit, to: Point): void {
     const city = this.world.cityAt(to.x, to.y);
     const enemies = this.world.unitsAt(to.x, to.y).filter((u) => u.owner !== unit.owner);
+    // VERIFIED (the attack handler 0x0052d472): attacking a civilization at cease-fire or peace
+    // asks whether to break the treaty, then declares war (0x00526d80).
+    const victim = enemies[0]?.owner ?? (city && city.owner !== unit.owner ? city.owner : null);
+    if (victim !== null && victim !== 0) {
+      const word = treaty(this.world, unit.owner, victim);
+      if ((word & (TREATY.ceaseFire | TREATY.peace)) !== 0) {
+        const ok =
+          typeof window === 'undefined' ||
+          window.confirm(
+            `Attacking the ${this.world.civs.find((c) => c.slot === victim)?.name ?? 'civilization'} breaks our treaty. Declare war?`,
+          );
+        if (!ok) return;
+        const events: DiplomacyEvent[] = [];
+        declareWar(this.world, unit.owner, victim, this.game.diplomacyContext(), events);
+        for (const e of events) this.log(`${e.text}.`);
+      }
+    }
     if (enemies.length === 0 && city && city.owner !== unit.owner) {
       if (this.rules.units[unit.type]?.domain !== DOMAIN_GROUND) {
         this.log('Only ground units can occupy a city.');
@@ -605,7 +630,9 @@ export class PlaySession {
         : (window.prompt(`Pillage which? ${v.options.join(', ')}`, v.options[0]) as
             (typeof v.options)[number] | null);
     if (!choice || !v.options.includes(choice)) return;
-    pillage(this.world, this.rules, unit, choice);
+    const events: DiplomacyEvent[] = [];
+    pillage(this.world, this.rules, unit, choice, { ctx: this.game.diplomacyContext(), events });
+    for (const e of events) this.log(`${e.text}.`);
     this.log(`${this.unitName(unit)} pillages the ${choice}.`);
   }
 

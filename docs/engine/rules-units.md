@@ -191,7 +191,9 @@ Entering a hut with a ground unit rolls one of five outcomes (`rand() % 5`), the
   irrigation, a mine, a road or railroad, a fortress or an airbase. With more than one, the player
   chooses: farmland, irrigation, mine, airbase, fortress, railroad (a railroad goes before the
   road). Pillaging inside another civilization's city radius while at cease-fire, peace or
-  alliance asks whether to break the treaty and sours attitudes.
+  alliance asks whether to break the treaty and sours attitudes. The pillage itself (VERIFIED
+  0x00498170) removes the chosen improvement, breaks the treaty (0x004447be) when not already at
+  war with the owner of the city radius and declares war outright, and spends the unit's turn.
 - **Disband** asks for confirmation. A unit disbanded inside a city adds half its shield cost
   (`cost rows × shield-box rows / 2`) to the city's production box.
 

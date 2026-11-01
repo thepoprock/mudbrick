@@ -365,7 +365,8 @@ export function chooseDirection(
     } else if (foreignUnits && occupantOwner !== null) {
       // 7. Attacking.
       if (role === ROLE_SETTLE || role === ROLE_TRADE) continue;
-      if (hereOcean && type.domain === DOMAIN_GROUND) continue; // INFERRED: no amphibious flag yet
+      // VERIFIED (ai-units.md): a ground unit at sea attacks only with the amphibious flag.
+      if (hereOcean && type.domain === DOMAIN_GROUND && !type.flags.amphibiousAssault) continue;
       if (!canAttack(occupantOwner)) continue; // at peace or cease-fire a unit never attacks
       if (type.attack === 0) continue;
       const defender = chooseDefender(world, rules, occupants, unit, {

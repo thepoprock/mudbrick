@@ -53,3 +53,10 @@ the contact and waking live in diplomacy.ts and the unit orders. Cities reveal t
 radius when founded (INFERRED; the original's founding routine shows it only for a computer
 player's first city, whose radius it reveals square by square, and reveals the city square
 itself to every civilization).
+
+## Attacking from a ship (VERIFIED 0x00539099)
+
+A ground unit standing on an ocean square (aboard a ship) may attack a foreign unit only when
+its type has the amphibious-assault flag (RULES `@UNITS` flag bit 2); otherwise the move is
+refused (the AMPHIB message). A submarine never attacks a land square. The engine's movement
+verdict reports `amphibious` / `submarine`; the computer's attack scoring skips such targets.

@@ -9,7 +9,7 @@
  * routine 0x0051326d. VERIFIED unless marked INFERRED. docs/engine/diplomacy.md.
  */
 import { distance } from './city.js';
-import type { EngineRules } from './rules.js';
+import { IMPROVEMENT, type EngineRules } from './rules.js';
 import { OCEAN, SquareFlag, type Civ, type Unit, type World } from './world.js';
 
 /** Bits of the 32-bit treaty word a civilization keeps about each other slot. */
@@ -30,6 +30,8 @@ export const TREATY = {
   metThisTurn: 1 << 10,
   /** A grudge that keeps a war from lapsing (INFERRED name; cleared every 32 turns). */
   grudge: 1 << 11,
+  /** Set on the declarer's word by the first declaration of a war (0x00526d80; INFERRED name). */
+  warDeclared: 1 << 12,
   war: 1 << 13,
   /** First contact this turn (cleared next turn). */
   firstContact: 1 << 14,
@@ -374,6 +376,204 @@ export function allyJoinsWar(
   });
   setTreaty(world, a, c, TREATY.war);
   return true;
+}
+
+/** Record +0x48: treaty breaks charged per slot. */
+export function treatyBreaksOf(civ: Civ): Uint8Array {
+  civ.treatyBreaks ??= new Uint8Array(8);
+  return civ.treatyBreaks;
+}
+
+/**
+ * Breaking a treaty (VERIFIED 0x004447be): `a` turns on `b`; `witness` is the civilization whose
+ * attitude suffers (an espionage victim's friend, for instance), null when the deed speaks for
+ * itself. Outside an alliance: at mere contact only the witness's attitude drops (−5); at
+ * cease-fire or peace the breaker's reputation worsens — once for a fully human-controlled
+ * breaker with more than four cities and no witness, once above Chieftain without the Eiffel
+ * Tower, and (the original repeats both tests when both the peace and cease-fire bits stand) —
+ * the human breaker's count toward the victim drops, the witness's attitude drops by 15; a human
+ * breaker earns the victim's vendetta, war is declared, the human's word gains the grudge bits,
+ * the last-war turn is noted and the victim's allies join. Inside an alliance: reputation
+ * worsens above Chieftain without the Eiffel Tower and once more without a witness, the
+ * witness's attitude drops by 25, the alliance is cancelled and a human breaker earns a vendetta.
+ */
+export function breakTreaty(
+  world: World,
+  a: number,
+  b: number,
+  witness: number | null,
+  ctx: DiplomacyContext,
+  events: DiplomacyEvent[],
+): void {
+  const ca = civOf(world, a);
+  const cb = civOf(world, b);
+  if (!ca || !cb) return;
+  const human = ctx.isHuman(a);
+  if (witness !== null) {
+    const cw = civOf(world, witness);
+    if (cw) treatyBreaksOf(cw)[a] = (treatyBreaksOf(cw)[a] ?? 0) + 1;
+  }
+  const worsen = () => {
+    ca.reputation = Math.min(255, (ca.reputation ?? 0) + 1);
+  };
+  const eiffel = ctx.ownsWonder(a, IMPROVEMENT.eiffelTower);
+  if (!hasTreaty(world, a, b, TREATY.alliance)) {
+    const word = treaty(world, a, b);
+    if ((word & (TREATY.ceaseFire | TREATY.peace)) === 0) {
+      if (witness !== null) adjustAttitude(world, witness, a, -5);
+    } else {
+      const both = (word & TREATY.peace) !== 0 && (word & TREATY.ceaseFire) !== 0;
+      const charge = () => {
+        if (ctx.control(a) === 7 && ctx.cityCount(a) > 4 && witness === null) worsen();
+        if (ctx.difficulty !== 0 && !eiffel) worsen();
+        if (witness === null && human) treatyBreaksOf(ca)[b] = (treatyBreaksOf(ca)[b] ?? 0) - 1;
+      };
+      if (both) charge();
+      charge();
+      if (witness !== null) adjustAttitude(world, witness, a, -15);
+    }
+    if (human) treatiesOf(cb)[a] = (treatiesOf(cb)[a] ?? 0) | TREATY.vendetta;
+    setTreaty(world, a, b, TREATY.war);
+    if (human) {
+      treatiesOf(ca)[b] = (treatiesOf(ca)[b] ?? 0) | TREATY.grudge | TREATY.grudgeRenewed;
+      lastWarTurnsOf(ca)[b] = ctx.turn;
+      alliesJoinWar(world, b, a, ctx, events);
+    }
+  } else {
+    if (ctx.difficulty !== 0 && !eiffel) worsen();
+    if (witness === null) {
+      worsen();
+      if (human) treatyBreaksOf(ca)[b] = (treatyBreaksOf(ca)[b] ?? 0) - 1;
+    }
+    if (witness !== null) adjustAttitude(world, witness, a, -25);
+    cancelAlliance(world, a, b, events);
+    if (human) treatiesOf(cb)[a] = (treatiesOf(cb)[a] ?? 0) | TREATY.vendetta;
+  }
+}
+
+/**
+ * The victim's allies join a war (VERIFIED 0x0044442f): when `victim` has contact with the
+ * breaker, each ally of the victim with contact and neither war nor alliance with the breaker
+ * declares war (war, met-this-turn and contact bits) with the grudge bits — when the breaker is a
+ * computer player only for a human victim; when the breaker is human always, the ally's attitude
+ * toward the breaker jumping to the maximum, the victim's word gaining the grudge bits too and
+ * the breaker's last-war turn toward the ally noted.
+ */
+export function alliesJoinWar(
+  world: World,
+  victim: number,
+  breaker: number,
+  ctx: DiplomacyContext,
+  events: DiplomacyEvent[],
+): void {
+  if (!hasTreaty(world, victim, breaker, TREATY.contact)) return;
+  const cv = civOf(world, victim);
+  const cb = civOf(world, breaker);
+  if (!cv || !cb) return;
+  for (let k = 1; k < 8; k++) {
+    if (k === victim || k === breaker) continue;
+    if (!hasTreaty(world, victim, k, TREATY.alliance)) continue;
+    if ((treaty(world, k, breaker) & (TREATY.war | TREATY.alliance)) !== 0) continue;
+    if (!hasTreaty(world, k, breaker, TREATY.contact)) continue;
+    const ck = civOf(world, k);
+    if (!ck) continue;
+    const breakerHuman = ctx.isHuman(breaker);
+    if (!breakerHuman && !ctx.isHuman(victim)) continue;
+    events.push({
+      kind: 'diplomacy',
+      text: `${name(world, k)} join ${name(world, victim)} in war against ${name(world, breaker)}`,
+      a: k,
+      b: breaker,
+    });
+    if (breakerHuman) {
+      adjustAttitude(world, k, breaker, 100);
+      treatiesOf(cv)[breaker] =
+        (treatiesOf(cv)[breaker] ?? 0) | TREATY.grudge | TREATY.grudgeRenewed;
+      lastWarTurnsOf(cb)[k] = ctx.turn;
+    }
+    setTreaty(world, k, breaker, TREATY.war | TREATY.metThisTurn | TREATY.contact);
+    treatiesOf(ck)[breaker] = (treatiesOf(ck)[breaker] ?? 0) | TREATY.grudge | TREATY.grudgeRenewed;
+  }
+}
+
+/**
+ * Cancelling an alliance (VERIFIED 0x0044e525 for the treaty; the unit relocation 0x0044e1e2 is
+ * read only as far as its targets): the alliance bit goes, and each side's units standing in
+ * the other's cities move to the nearest own city (INFERRED: a coastal one for sea units; the
+ * original's further conditions were not read).
+ */
+export function cancelAlliance(world: World, a: number, b: number, events: DiplomacyEvent[]): void {
+  clearTreaty(world, a, b, TREATY.alliance);
+  events.push({
+    kind: 'diplomacy',
+    text: `the alliance between ${name(world, a)} and ${name(world, b)} is cancelled`,
+    a,
+    b,
+  });
+  for (const [owner, host] of [
+    [a, b],
+    [b, a],
+  ] as const) {
+    for (const u of world.units) {
+      if (u.owner !== owner) continue;
+      const city = world.cityAt(u.position.x, u.position.y);
+      if (!city || city.owner !== host) continue;
+      let best: { x: number; y: number } | null = null;
+      let bestD = 9999;
+      for (const c of world.cities) {
+        if (c.owner !== owner) continue;
+        const dd = distance(world, u.position, c.position);
+        if (dd < bestD) {
+          bestD = dd;
+          best = c.position;
+        }
+      }
+      if (best) u.position = { x: best.x, y: best.y };
+    }
+  }
+}
+
+/**
+ * Declaring war (VERIFIED 0x00526d80): the strain and broken bits go; at cease-fire or peace with
+ * a human on either side the treaty is broken (above); peace and alliance go; with contact the
+ * war bit is set, both attitudes jump to the maximum, and the first declaration of the war marks
+ * the declarer's word (bit 12) — the routine answers true then.
+ */
+export function declareWar(
+  world: World,
+  a: number,
+  b: number,
+  ctx: DiplomacyContext,
+  events: DiplomacyEvent[],
+): boolean {
+  clearTreaty(world, a, b, TREATY.strain | TREATY.broken);
+  if (
+    (treaty(world, b, a) & (TREATY.ceaseFire | TREATY.peace)) !== 0 &&
+    (ctx.isHuman(a) || ctx.isHuman(b))
+  )
+    breakTreaty(world, a, b, null, ctx, events);
+  clearTreaty(world, a, b, TREATY.peace | TREATY.alliance);
+  if (!hasTreaty(world, a, b, TREATY.contact)) return false;
+  setTreaty(world, a, b, TREATY.war);
+  const ca = civOf(world, a);
+  const cb = civOf(world, b);
+  if (ca) attitudesOf(ca)[b] = 100;
+  if (cb) attitudesOf(cb)[a] = 100;
+  events.push({
+    kind: 'diplomacy',
+    text: `${name(world, a)} declare war on ${name(world, b)}`,
+    a,
+    b,
+  });
+  if (
+    !hasTreaty(world, b, a, TREATY.warDeclared) &&
+    !hasTreaty(world, a, b, TREATY.warDeclared) &&
+    ca
+  ) {
+    treatiesOf(ca)[b] = (treatiesOf(ca)[b] ?? 0) | TREATY.warDeclared;
+    return true;
+  }
+  return false;
 }
 
 function name(world: World, slot: number): string {

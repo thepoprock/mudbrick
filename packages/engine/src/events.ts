@@ -6,7 +6,7 @@ import { DOMAIN_AIR, DOMAIN_SEA, type EngineRules } from './rules.js';
 import { lookAround } from './sight.js';
 import { ORDER } from './terraform.js';
 import type { Unit, World } from './world.js';
-import { setTreaty, TREATY } from './diplomacy.js';
+import { declareWar, setTreaty, TREATY, type DiplomacyContext } from './diplomacy.js';
 
 /**
  * The scenario event runtime (VERIFIED against the original's evaluators 0x004c37dc …
@@ -41,6 +41,8 @@ export interface EventContext {
   eliminateCityless: () => void;
   /** Wonder movies off (DONTPLAYWONDERS). */
   dontPlayWonders: () => void;
+  /** The diplomacy context, for MAKEAGGRESSION's declaration of war (0x00526d80). */
+  diplomacy?: DiplomacyContext;
 }
 
 export function newEventState(events: ScenarioEvent[]): EventState {
@@ -260,7 +262,8 @@ export class ScenarioEvents {
       const who = resolve(a.makeAggression.who, this.state, i);
       const whom = resolve(a.makeAggression.whom, this.state, i);
       if (who >= 1 && who <= 7 && whom >= 1 && whom <= 7 && ctx.inPlay(who) && ctx.inPlay(whom)) {
-        setTreaty(this.world, who, whom, TREATY.war);
+        if (ctx.diplomacy) declareWar(this.world, who, whom, ctx.diplomacy, []);
+        else setTreaty(this.world, who, whom, TREATY.war);
         out.push({ kind: 'scenario-note', text: `war: ${who} on ${whom}` });
       }
     }

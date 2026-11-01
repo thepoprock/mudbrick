@@ -4,6 +4,14 @@
  * Specification: docs/engine/rules-units.md — pillage and disband VERIFIED (0x0053644e,
  * 0x00535725); fortify VERIFIED (becomes Fortified next turn, 0x00497b7a).
  */
+import {
+  breakTreaty,
+  hasTreaty,
+  setTreaty,
+  TREATY,
+  type DiplomacyContext,
+  type DiplomacyEvent,
+} from './diplomacy.js';
 import { boxRows } from './city.js';
 import { DOMAIN_GROUND, type EngineRules } from './rules.js';
 import { ORDER } from './terraform.js';
@@ -59,9 +67,25 @@ export function pillageOptions(world: World, rules: EngineRules, unit: Unit): Pi
   return options.length === 0 ? { ok: false, reason: 'nothing' } : { ok: true, options };
 }
 
-/** Remove the chosen improvement; the unit's turn ends (INFERRED: the executing routine was not read). */
-export function pillage(world: World, rules: EngineRules, unit: Unit, target: PillageTarget): void {
+/**
+ * Pillage (VERIFIED 0x00498170 after the chooser 0x0053644e): the chosen improvement goes and the
+ * unit's turn ends. Inside another civilization's city radius the treaty is broken first when
+ * not already at war (0x004447be) and war is declared outright; the human is asked before.
+ */
+export function pillage(
+  world: World,
+  rules: EngineRules,
+  unit: Unit,
+  target: PillageTarget,
+  diplomacy?: { ctx: DiplomacyContext; events: DiplomacyEvent[] },
+): void {
   const { x, y } = unit.position;
+  const owner = world.territory[world.index(x, y)] ?? 0;
+  if (diplomacy && owner !== 0 && owner !== unit.owner) {
+    if (!hasTreaty(world, unit.owner, owner, TREATY.war))
+      breakTreaty(world, unit.owner, owner, null, diplomacy.ctx, diplomacy.events);
+    setTreaty(world, unit.owner, owner, TREATY.war);
+  }
   const clear = (f: number) => world.setFlag(x, y, f, false);
   switch (target) {
     case 'farmland':

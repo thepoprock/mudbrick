@@ -194,7 +194,15 @@ export type MoveVerdict =
   | { ok: true; cost: number; partial: boolean; boards: boolean }
   | {
       ok: false;
-      reason: 'impassable' | 'not-adjacent' | 'no-moves' | 'zoc' | 'needs-transport' | 'enemy';
+      reason:
+        | 'impassable'
+        | 'not-adjacent'
+        | 'no-moves'
+        | 'zoc'
+        | 'needs-transport'
+        | 'enemy'
+        | 'amphibious'
+        | 'submarine';
     };
 
 /** Can `unit` attempt the step now? Does not change state. Attacks are reported as 'enemy'. */
@@ -214,7 +222,20 @@ export function checkMove(
   if (left <= 0) return { ok: false, reason: 'no-moves' };
   const there = world.unitsAt(to.x, to.y);
   const city = world.cityAt(to.x, to.y);
-  if (there.some((u) => u.owner !== unit.owner) || (city && city.owner !== unit.owner)) {
+  const foreignUnit = there.some((u) => u.owner !== unit.owner);
+  if (foreignUnit || (city && city.owner !== unit.owner)) {
+    // VERIFIED (the move handler 0x00539099): a ground unit on an ocean square attacks a foreign
+    // unit only with the amphibious flag; a submarine never attacks a land square.
+    if (foreignUnit) {
+      if (
+        type.domain === DOMAIN_GROUND &&
+        !world.isLand(from.x, from.y) &&
+        !type.flags.amphibiousAssault
+      )
+        return { ok: false, reason: 'amphibious' };
+      if (type.flags.submarine && world.isLand(to.x, to.y))
+        return { ok: false, reason: 'submarine' };
+    }
     return { ok: false, reason: 'enemy' };
   }
   const cost = stepCost(world, rules, unit, from, to);
