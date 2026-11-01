@@ -557,6 +557,10 @@ export class Game {
         { attack: leader?.attack ?? 0, civilize: leader?.civilize ?? 0 },
         this.wonderCity(IMPROVEMENT.shakespeares) === city.id,
       );
+      // VERIFIED (the city turn's last line): the civilization remembers its best
+      // `2 × shields − support` over the cities processed this turn.
+      const p2 = shields.produced * 2 - support.shields;
+      if ((civ.bestProduction ?? 0) <= p2) civ.bestProduction = p2;
     }
     return out;
   }
@@ -567,6 +571,7 @@ export class Game {
     const civ = this.civ(slot);
     this.revealFor(slot);
     resetGovernmentScores(civ);
+    civ.bestProduction = 0;
     {
       const events: DiplomacyEvent[] = [];
       contactSweep(this.world, slot, this.diplomacyContext(), events);
@@ -978,6 +983,7 @@ export class Game {
       facts: {
         shields: t.shields.produced,
         support: t.support.shields,
+        bestProduction: civ.bestProduction ?? 0,
         trade: t.raw.trade,
         corruption: t.trade.corruption,
         foodSurplus: t.raw.food - eaten,

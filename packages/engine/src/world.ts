@@ -123,6 +123,9 @@ export interface Civ {
   lastWarTurns?: Int16Array;
   /** Government preference scores, 7 × i16 (record +980). */
   governmentScores?: Int16Array;
+  /** The best `2 × shields − support` over the cities processed so far this turn (+0x3d2),
+   * for the advisor's wonder rule; reset with the government scores. */
+  bestProduction?: number;
   /** The record's leading flag word (+0): bit 0 revolution pending, bit 2 a per-turn toggle. */
   civFlags?: number;
   /** Diplomatic incidents suffered or caused (civilization record +28; bribes +1, incitements +2). */

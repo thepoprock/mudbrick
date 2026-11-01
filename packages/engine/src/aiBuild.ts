@@ -24,6 +24,8 @@ import { OCEAN, SquareFlag, type City, type Civ, type World } from './world.js';
 export interface AiBuildFacts {
   shields: number;
   support: number;
+  /** The civilization's best `2 × shields − support` this turn so far (+0x3d2); defaults to this city's. */
+  bestProduction?: number;
   trade: number;
   corruption: number;
   foodSurplus: number;
@@ -562,7 +564,23 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
       }
       n += othersBuildingWonders * 5;
       if (othersBuildingWonders === 0) n -= 2;
-      n += f.threat >> 1;
+      n += f.plan === 1 ? f.threat + 1 : f.threat >> 1;
+      // VERIFIED (the wonder loop against the civilization's +0x3d2): unless a wonder here
+      // already has forty shields, a city making no more than half the civilization's best
+      // `2 × shields − support` finds every wonder twice as costly (a human's strong city that
+      // is not the best and makes less than 6 too); the best city finds them a third cheaper.
+      const p2 = f.shields * 2 - f.support;
+      const best = f.bestProduction ?? p2;
+      const wonderInProgress =
+        city.production.kind === 'improvement' &&
+        city.production.index >= 39 &&
+        city.shieldsStored > 39;
+      if (!wonderInProgress) {
+        if (best >> 1 < p2) {
+          if (civ.isHuman && best !== p2 && p2 < 6) n <<= 1;
+        } else n <<= 1;
+      }
+      if (best === p2) n -= Math.trunc(n / 3);
       let v = scaleCommon(n, f.expanding, f.civilize, city, barracksOnContinent, shakespeares);
       if (city.improvements[IMPROVEMENT.palace]) v -= Math.trunc(v / 3);
       consider(v, { kind: 'improvement', index: w });
