@@ -121,6 +121,7 @@ import {
   conversation,
   powerRanks,
   relationsTurn,
+  spokenBy,
   type Conversation,
   type NegotiationEnv,
 } from './negotiation.js';
@@ -346,7 +347,7 @@ export class Game {
 
   /** A conversation; answer each yielded dialog with the chosen entry. */
   talkTo(human: number, computer: number, calledByHuman: boolean): Conversation {
-    return conversation(this.negotiationEnv(), human, computer, calledByHuman);
+    return spokenBy(conversation(this.negotiationEnv(), human, computer, calledByHuman), computer);
   }
 
   /** The next queued conversation, if any. */

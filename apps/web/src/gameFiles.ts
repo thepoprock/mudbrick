@@ -12,6 +12,7 @@
  */
 import {
   decodeText,
+  dllGifs,
   parseDescriptions,
   parsePopups,
   parseRules,
@@ -51,6 +52,8 @@ export interface GameFolder {
   popups: Map<string, Popup>;
   /** COUNCIL0–2.TXT as raw text, by era; empty strings when absent. */
   council: string[];
+  /** A picture from one of the folder's DLLs, with its transparent colour removed. */
+  art: (dll: string, id: number) => Promise<string | null>;
   /** Describe.txt, for the Civilopedia. */
   descriptions: Descriptions | null;
   /** Fetch any other file from the folder by name (case-insensitive), e.g. a save. */
@@ -127,6 +130,49 @@ function anchorFor(img: ImageData, r: sprites.Rect, colour: sprites.Rgb): Anchor
   return { x: ax < 0 ? r.w / 2 : ax, y: ay < 0 ? r.h / 2 : ay };
 }
 
+/** Pictures load on demand: the DLLs are large, and most sessions show only a few. */
+function artLoader(lookup: FileSource) {
+  const dlls = new Map<string, Promise<Map<number, Uint8Array>>>();
+  const urls = new Map<string, Promise<string | null>>();
+  const open = (name: string) => {
+    let d = dlls.get(name);
+    if (!d) {
+      d = lookup(name).then(async (f) =>
+        f ? dllGifs(new Uint8Array(await f.arrayBuffer())) : new Map<number, Uint8Array>(),
+      );
+      dlls.set(name, d);
+    }
+    return d;
+  };
+  return (dll: string, id: number): Promise<string | null> => {
+    const key = `${dll}:${id}`;
+    let u = urls.get(key);
+    if (!u) {
+      u = open(dll).then(async (gifs) => {
+        const gif = gifs.get(id);
+        if (!gif) return null;
+        const blob = new Blob([gif.slice()], { type: 'image/gif' });
+        const image = await createImageBitmap(blob);
+        const canvas = document.createElement('canvas');
+        canvas.width = image.width;
+        canvas.height = image.height;
+        const g = canvas.getContext('2d');
+        if (!g) return URL.createObjectURL(blob);
+        g.drawImage(image, 0, 0);
+        const px = g.getImageData(0, 0, image.width, image.height);
+        // The corner colour marks transparency in these pictures.
+        const [r, gn, b] = [px.data[0], px.data[1], px.data[2]];
+        for (let i = 0; i < px.data.length; i += 4)
+          if (px.data[i] === r && px.data[i + 1] === gn && px.data[i + 2] === b) px.data[i + 3] = 0;
+        g.putImageData(px, 0, 0);
+        return canvas.toDataURL('image/png');
+      });
+      urls.set(key, u);
+    }
+    return u;
+  };
+}
+
 async function loadFrom(
   source: FileSource,
   paths: string[] = [],
@@ -195,6 +241,7 @@ async function loadFrom(
     popups,
     council,
     descriptions,
+    art: artLoader(lookup),
     sheets,
     unitFlag,
     cityFlag,

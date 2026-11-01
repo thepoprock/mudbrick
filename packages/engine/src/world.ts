@@ -122,6 +122,8 @@ export interface Civ {
   everExchanged?: boolean;
   /** The Eiffel Tower's one-time amnesty has been used (civilization byte 0 bit 4, 0x004b7d88). */
   eiffelApplied?: boolean;
+  /** Leader picture: the tribe, +21 for a woman; mk.dll picture 220 + this. */
+  portrait?: number;
   /** Units of each type lost so far (record +278). */
   casualties?: number[];
   /** Conversations with humans this round (record +31); the patience counter in negotiation. */

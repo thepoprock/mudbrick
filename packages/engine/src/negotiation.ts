@@ -73,6 +73,8 @@ export interface Dialog {
   amounts?: number[];
   /** Civilizations to pick from, for MUSTATTACK. */
   civs?: number[];
+  /** The civilization speaking: the UI shows its leader. */
+  speaker?: number;
   /** Replaces the section's own text. */
   title?: string;
   /** A list to pick from: the answer is the entry's `value`, or −1 to cancel. */
@@ -295,7 +297,19 @@ export class Talk {
       strings: { 1: '', 2: this.c.leader, 3: this.c.name, 4: this.c.leader },
     };
     this.refused = answer === 1;
-    return !this.refused;
+    if (this.refused) return false;
+    const { env, h, c, cs } = this;
+    // The audience opens (0x004425fa): a greeting, and a word about either side's missiles.
+    yield {
+      key: `GREETINGS${this.vendetta ? 1 : 0}${env.rng.nextInt(4)}`,
+      strings: { 1: c.leader, 3: c.name, 6: h.name },
+    };
+    if (this.nukes(c) !== 0) yield { key: 'NUCLEARWEAPONS' };
+    if (this.nukes(h) !== 0 && (this.hw & (0x100 | TREATY.peace)) !== 0x100) {
+      yield { key: `YOURNUKES${this.nukes(c) === 0 ? 1 : 2}` };
+      treatiesOf(h)[cs] = this.hw | 0x100;
+    }
+    return true;
   }
 
   assess(): void {
@@ -2155,4 +2169,10 @@ export function* relationsTurn(
   for (const u of env.world.units) if (u.owner === human) u.warned = false;
   const change = attitudeDrift(t, drift, raceOn);
   adjustAttitude(env.world, computer, human, change);
+}
+
+/** Mark every dialog of a conversation with who speaks. */
+export function* spokenBy(talk: Conversation, slot: number): Conversation {
+  let step = talk.next();
+  while (!step.done) step = talk.next(yield { ...step.value, speaker: slot });
 }

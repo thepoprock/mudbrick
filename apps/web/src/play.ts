@@ -1560,6 +1560,17 @@ export class PlaySession {
       : gap < 0
         ? []
         : lines.slice(gap + 1).filter((l) => l !== '');
+    if (d.speaker !== undefined) {
+      const civ = this.game.civ(d.speaker);
+      const img = document.createElement('img');
+      img.style.cssText = 'float:left;height:150px;margin:0 10px 6px 0';
+      const index = civ.portrait ?? civ.tribe ?? 0;
+      void this.folder.art('MK.DLL', 220 + index).then((url) => {
+        if (url) img.src = url;
+        else img.remove();
+      });
+      box.appendChild(img);
+    }
     const text = document.createElement('div');
     text.textContent = message.map(fill).join('\n');
     box.appendChild(text);

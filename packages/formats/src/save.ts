@@ -150,6 +150,8 @@ export interface CivRecord {
   patience: number;
   /** Record +278 + type: units of the type lost so far. */
   casualties: number[];
+  /** Record X + 16: leader portrait, the tribe, +21 for a woman (VERIFIED 0x00472c45). */
+  portrait: number;
   /** Record +31: conversations with humans this round (signed). */
   talks: number;
   /** Record +72: reputation forgiven, per civilization (signed). */
@@ -623,6 +625,7 @@ export function parseSave(bytes: Uint8Array): SaveFile {
       reputation: r.u8(o + 30),
       patience: r.u8(o + 22),
       talks: r.i8(o + 31),
+      portrait: r.u8(X + 16),
       casualties: Array.from({ length: 62 }, (_, n) => r.u8(o + 216 + 62 + n)),
       pardons: Array.from({ length: 8 }, (_, n) => r.i8(o + 72 + n)),
       treaties: Array.from({ length: 8 }, (_, n) => {
