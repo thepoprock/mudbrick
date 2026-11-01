@@ -56,7 +56,7 @@ export class Rng {
   }
 
   state(): RngState {
-    return { s0: this.s0, s1: this.s1, s2: this.s2, s3: this.s3 };
+    return { s0: this.s0 >>> 0, s1: this.s1 >>> 0, s2: this.s2 >>> 0, s3: this.s3 >>> 0 };
   }
 
   /** Uniform unsigned 32-bit integer. */

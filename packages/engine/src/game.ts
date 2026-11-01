@@ -99,7 +99,7 @@ import {
   startRevolution,
 } from './government.js';
 import { aiMoveUnits, type AiUnitEvent } from './aiUnits.js';
-import { releaseCitySite } from './fertility.js';
+import { removeCity } from './fertility.js';
 import { civilizationScore, retirementStage, type ScoreBreakdown } from './score.js';
 import { advanceValue, type ResearchValueContext } from './aiResearch.js';
 import { restartCivilization, type NewGameLeader } from './newGame.js';
@@ -748,8 +748,7 @@ export class Game {
     }
     if (growth.starved) push({ kind: 'starved' });
     if (growth.destroyed) {
-      this.world.cities.splice(this.world.cities.indexOf(city), 1);
-      releaseCitySite(this.world, city);
+      removeCity(this.world, this.rules, city);
       push({ kind: 'destroyed' });
       return out;
     }
@@ -968,8 +967,7 @@ export class Game {
       destroyCivilization: (s) => {
         for (const c of [...this.world.cities]) {
           if (c.owner !== s) continue;
-          releaseCitySite(this.world, c);
-          this.world.cities.splice(this.world.cities.indexOf(c), 1);
+          removeCity(this.world, this.rules, c);
         }
         for (const u of [...this.world.units])
           if (u.owner === s) this.world.units.splice(this.world.units.indexOf(u), 1);

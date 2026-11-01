@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { rawYields, shieldTotals, tradeSplit, unitSupport } from '../src/city.js';
+import { removeCity } from '../src/fertility.js';
 import { Game } from '../src/game.js';
 import { applyCityMood, researchableAdvances } from '../src/outcome.js';
 import { Rng } from '../src/rng.js';
@@ -226,6 +227,21 @@ describe('Game turn loop', () => {
     game.playUntilHuman();
     expect(game.state.movingHuman).toBe(1);
     expect(game.state.turn).toBe(11);
+  });
+
+  it('a dead city takes its homed units with it, and routes to it go', () => {
+    const { world, city, rulesFor } = { ...setup(), rulesFor: rules };
+    const other = {
+      ...city,
+      id: 5,
+      position: { x: 2, y: 2 },
+      tradeRoutes: [{ partner: 0, food: false, commodity: 1 }],
+    };
+    world.cities.push(other);
+    removeCity(world, rulesFor, city);
+    expect(world.cities).toEqual([other]);
+    expect(other.tradeRoutes).toEqual([]);
+    expect(world.units).toEqual([]);
   });
 
   it("Darwin's Voyage completes the research target and the next one", () => {

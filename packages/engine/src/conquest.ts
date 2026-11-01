@@ -6,7 +6,7 @@ import { loseShip } from './spaceship.js';
  * capture routine (0x00528720), its plunder formula (0x00526efb) and its conquest-advance routine
  * (0x005273ba). Diplomacy side effects (attitudes, civil war, the Palace escape) are not modelled.
  */
-import { releaseCitySite, remarkTerritory } from './fertility.js';
+import { removeCity, remarkTerritory } from './fertility.js';
 import { initialProduction, canBuildUnit } from './founding.js';
 import { grantAdvance } from './research.js';
 import type { Rng } from './rng.js';
@@ -127,8 +127,7 @@ export function captureCity(
     city.size -= 1;
     lostCitizen = true;
     if (city.size <= 0) {
-      world.cities.splice(world.cities.indexOf(city), 1);
-      releaseCitySite(world, city);
+      removeCity(world, rules, city);
       cityDestroyed = true;
     }
   }

@@ -168,6 +168,36 @@ export function releaseCitySite(world: World, city: City): void {
   for (const other of world.cities) claimCitySite(world, other);
 }
 
+const PARTISANS = 9;
+const ROLE_DEFEND = 1;
+
+/**
+ * Remove a city from the world (VERIFIED 0x00430421). Trade routes to it go. Its Partisans lose
+ * their home and live on. A computer player's unit standing alone defending another of its cities
+ * moves its home there; every other unit homed in the dead city is disbanded with it.
+ */
+export function removeCity(world: World, rules: EngineRules, city: City): void {
+  const at = world.cities.indexOf(city);
+  if (at >= 0) world.cities.splice(at, 1);
+  releaseCitySite(world, city);
+  for (const c of world.cities) c.tradeRoutes = c.tradeRoutes.filter((r) => r.partner !== city.id);
+  for (const u of [...world.units]) {
+    if (u.homeCity !== city.id) continue;
+    if (u.type === PARTISANS) {
+      u.homeCity = null;
+      continue;
+    }
+    const here = world.cityAt(u.position.x, u.position.y);
+    const human = world.civs.find((c) => c.slot === u.owner)?.isHuman === true;
+    const alone = world.unitsAt(u.position.x, u.position.y).length === 1;
+    if (!human && here && here !== city && rules.units[u.type]?.role === ROLE_DEFEND && alone) {
+      u.homeCity = here.id;
+      continue;
+    }
+    world.units.splice(world.units.indexOf(u), 1);
+  }
+}
+
 /**
  * A city changed hands: every square of its radius belongs to the new owner (VERIFIED
  * 0x004ac56a — the transfer routine sets the territory owner of all 21 squares outright).

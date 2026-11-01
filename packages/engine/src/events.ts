@@ -1,5 +1,5 @@
 import type { EventActions, ScenarioEvent, TribeRef, UnitRef } from '@mudbrick/formats';
-import { releaseCitySite } from './fertility.js';
+import { removeCity } from './fertility.js';
 import { grantAdvance } from './research.js';
 import type { Rng } from './rng.js';
 import { DOMAIN_AIR, DOMAIN_SEA, type EngineRules } from './rules.js';
@@ -405,8 +405,7 @@ export class ScenarioEvents {
         if (!w.isSquare(x, y)) continue;
         const city = w.cityAt(x, y);
         if (city) {
-          releaseCitySite(w, city);
-          w.cities.splice(w.cities.indexOf(city), 1);
+          removeCity(w, this.rules, city);
         }
         for (const u of [...w.unitsAt(x, y)]) w.units.splice(w.units.indexOf(u), 1);
         const idx = w.index(x, y);

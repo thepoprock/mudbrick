@@ -369,3 +369,9 @@ Martial law counts every armed unit standing in the city square, wherever it is 
 Communism, at most 3, or 6 under Communism). Units causing unhappiness under Republic and
 Democracy are the city's own: armed air units except fighters, and armed units outside any city,
 unless on a fortress (not an airbase) within 3 of one of the owner's cities.
+
+## A city removed (VERIFIED 0x00430421)
+
+Trade routes to it are cut. Units homed there: Partisans (slot 9) lose their home, a computer
+player's lone defender of another of its cities moves its home there, and every other one is
+disbanded. `removeCity` in fertility.ts does this for every way a city can end.
