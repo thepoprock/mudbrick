@@ -5,6 +5,7 @@
  * Lower numbers win; 999 = never. Inputs the engine does not model yet take the documented
  * INFERRED defaults; every case is named by its improvement or unit role so it can be refined.
  */
+import type { WonderTally } from './aiPurchase.js';
 import { hasTreaty, treaty, TREATY } from './diplomacy.js';
 import { hasLaunched, hasStarted } from './spaceship.js';
 import { boxRows, type CityContext, gridDistance } from './city.js';
@@ -20,11 +21,14 @@ import {
   IMPROVEMENT,
   type EngineRules,
 } from './rules.js';
-import { OCEAN, SquareFlag, type City, type Civ, type World } from './world.js';
+import { landmassStats } from './aiStrategy.js';
+import { NEIGHBOUR_OFFSETS, OCEAN, SquareFlag, type City, type Civ, type World } from './world.js';
 
 export interface AiBuildFacts {
   shields: number;
   support: number;
+  /** Units this city supports (0x0061beac). */
+  homedUnits?: number;
   /** The civilization's best `2 × shields − support` this turn so far (+0x3d2); defaults to this city's. */
   bestProduction?: number;
   trade: number;
@@ -329,6 +333,8 @@ export interface AiBuildEnv {
   wonderCity: (improvement: number) => number | null;
   ownsWonder: (improvement: number) => boolean;
   canBuildImprovement: (improvement: number) => boolean;
+  /** This civilization's wonders of an era against the humans'. */
+  wonderTally?: (era: number) => WonderTally;
   /** Has anyone discovered the advance that expires this wonder? (default: never) */
   wonderExpired?: (improvement: number) => boolean;
   /** The ship's next kind for a request (spaceship.ts aiNextPartKind); negative = nothing to build. */
@@ -505,10 +511,14 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
 
   // Defenders wanted.
   let want: number;
-  const d = f.zocAtCity ? 3 : 4;
-  want = Math.trunc(city.size / d) + (f.expanding ? 1 : 0);
+  // VERIFIED 0x00474edb: a Palace narrows the divisor, a land mass being settled widens it, and a
+  // contested land mass or war footing adds one.
+  let d = f.zocAtCity ? 3 : 4;
+  if (city.improvements[IMPROVEMENT.palace]) d -= 1;
+  else if (f.plan === 5 && !f.zocAtCity) d += 1;
+  const landFlag = civ.strategy?.landFlags[mass] ?? 0;
+  want = Math.trunc(city.size / d) + (f.expanding || landFlag !== 0 ? 1 : 0);
   if (city.improvements[IMPROVEMENT.palace]) {
-    want -= 1;
     let min = 1;
     if (city.size > 3) min = 2;
     if (env.cityCount > 7) min = 3;
@@ -651,6 +661,14 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
     for (let w = 39; w < 67; w++) {
       if (!env.canBuildImprovement(w) || env.wonderCity(w) !== null) continue;
       let n = Math.max(1, wondersOwned + wondersHere + 8 - Math.trunc(civ.treasury / 200));
+      // VERIFIED 0x00474edb: wonders of this era already held count against another, more so past
+      // the human who has fewest; behind the main human, less.
+      const tally = env.wonderTally?.(Math.trunc((w - 39) / 7));
+      if (tally) {
+        n += tally.mine;
+        if (tally.humanLowest < tally.mine) n += 2;
+        if (tally.mine < tally.main) n -= 1;
+      }
       const i = w - 39;
       const size = city.size;
       switch (i) {
@@ -790,12 +808,32 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
   }
 
   // Units.
-  if (urgent === 2) {
-    const d = bestDefender();
-    if (d >= 0) return { kind: 'unit', index: d };
-  }
   const totalUnits = myUnits.length;
-  if (totalUnits < 512) {
+  const militaryUnits = myUnits.filter((x) => (rules.units[x.type]?.role ?? 9) < 5).length;
+  const atWarAnywhere = world.civs.some(
+    (o) => o.slot !== civ.slot && o.slot !== 0 && hasTreaty(world, civ.slot, o.slot, TREATY.war),
+  );
+  const pushing = landFlag & 0x10;
+  const unitsHere = civ.strategy?.unitsOn[mass] ?? 0;
+  const citiesHere = f.citiesOnContinent ?? civ.strategy?.citiesOn[mass] ?? 0;
+  let goalsHere = 0;
+  for (const o of civ.strategy?.goals ?? []) {
+    if (o.type === 1 && world.landmass[world.index(o.x, o.y)] === mass) goalsHere += 1;
+  }
+  if (f.expanding) goalsHere += goalsHere >> 1;
+  const sea = adjacentSea(world, city);
+  const stats = landmassStats(world, rules);
+  const seaWorthy = (role: number): boolean =>
+    coastal &&
+    sea !== 0 &&
+    sea !== 63 &&
+    ((stats.touching[sea] ?? 0) > 1 || (role !== 4 && (stats.oceans[sea] ?? 0) > 47));
+  const settlersTotal = myUnits.filter((x) => (rules.units[x.type]?.role ?? 9) === 5).length;
+  const settlersBuilding = myCities.filter(
+    (c) =>
+      c !== city && c.production.kind === 'unit' && rules.units[c.production.index]?.role === 5,
+  ).length;
+  if (militaryUnits < 512) {
     for (let t = 0; t < rules.units.length; t++) {
       const u = rules.units[t];
       if (!u || !buildable(t) || (u.role > 5 && u.role !== 7 && u.role !== 6)) continue;
@@ -806,13 +844,9 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
         (c) => c !== city && c.production.kind === 'unit' && c.production.index === t,
       ).length;
       if (u.role === 5) {
-        const settlersFood =
-          civ.government <= GOVERNMENT.monarchy
-            ? rules.cosmic.settlersFoodEarlyGovt
-            : rules.cosmic.settlersFoodLateGovt;
-        if (!(f.foodSurplus >= settlersFood || (f.settlersSupported === 0 && building === 0)))
-          continue;
-        if (city.size < 2 || building >= 2) continue;
+        const fed = settlersFoodFor(rules, civ) <= f.foodSurplus;
+        const first = f.settlersSupported === 0 && settlersTotal === 0 && settlersBuilding < 2;
+        if (!(fed || first) || city.size < 2) continue;
       }
       if (t === 2 && civ.government >= GOVERNMENT.monarchy) continue; // Warriors only early
       if (t === 42) continue; // VERIFIED: the Carrier (by index) is never chosen
@@ -821,8 +855,39 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
         myCities.filter((c) => c.production.kind === 'unit' && c.production.index === ty).length;
       if (u.attack >= 99 && !nuclearAllowed(activeOf(t), producing(t))) continue;
       if (u.role === 3 && !fighterAllowed(env.foreign, civ.slot, t, activeOf, producing)) continue;
-      if (u.domain === DOMAIN_SEA && !coastal) continue;
+      const owned = activeOf(t);
+      const queued = producing(t);
+      // VERIFIED 0x00474edb: a land unit is valued by how many there already are, its near
+      // relations counted with it; ships and aircraft are only wanted once the land mass is held
+      // in strength, and valued by their share of the army.
       let n = building * 2 + onContinent;
+      const sum = (o: number) =>
+        myUnits.filter(
+          (x) => x.type === o && world.landmass[world.index(x.position.x, x.position.y)] === mass,
+        ).length +
+        2 *
+          myCities.filter(
+            (c) => c !== city && c.production.kind === 'unit' && c.production.index === o,
+          ).length;
+      if (u.domain === DOMAIN_GROUND) {
+        if (t === 4) n += sum(5);
+        if (f.attack < 0) {
+          if (t === 19) n += sum(18);
+        } else if (t === 18) n += sum(19);
+        if (u.role === 0 && u.attack === 0) {
+          if (f.plan === 0 || f.plan === 1 || f.plan === undefined) continue;
+          const room = f.plan === 4 ? 1 : Math.trunc(((stats.land[mass] ?? 0) + 199) / 200);
+          if (building * 2 + onContinent > room || owned >= 2) continue;
+        }
+      } else {
+        if (unitsHere < (citiesHere < 2 ? 4 : 8)) continue;
+        n = Math.trunc(((owned + queued * 2) * unitsHere) / (totalUnits + 1));
+        if (u.flags.spotsSubmarines) {
+          const human = env.foreign?.mainHuman ?? null;
+          const subs = human !== null ? (env.foreign?.unitCount?.(human, 41) ?? 0) : 0;
+          n = Math.max(0, n - subs);
+        }
+      }
       // VERIFIED: with an urgent defence need nothing but a defender is considered.
       if (need === 2 && u.role !== 1) continue;
       if (u.role === 6) {
@@ -944,7 +1009,7 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
       // VERIFIED: on a full land mass (plan 4) every unit costs `1 − expand` more (twice for
       // non-settlers), halved when an enemy at war has no city there; attackers then shed the
       // attack personality + 1 (doubled with the advance) and clamp to 0–99.
-      if (f.plan === 4 && (u.role !== 0 || u.attack !== 0)) {
+      if (f.plan === 4 && u.domain === DOMAIN_GROUND) {
         let d = (1 - f.expand) * (u.role === 5 ? 1 : 2);
         if (f.warWithoutCitiesHere) d = Math.trunc(d / 2);
         n += d;
@@ -954,7 +1019,26 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
           n = clamp(n - pull, 0, 99);
         }
       }
-      if (u.role === 5) {
+      // VERIFIED 0x00474edb: paratroopers are valued as attackers; a defender while one is needed
+      // is valued by the need alone, anything else waits; attackers and ships off the plan double.
+      const role = u.flags.canParadrop ? 0 : u.role;
+      if (need !== 0) {
+        if (role === 1) {
+          n = Math.trunc(2 / need);
+          if (need === 2 && !city.inDisorder) n = -1;
+        } else if (need === 2) continue;
+      }
+      if (role !== 1 && role !== 5) n <<= role === f.plan ? 1 : 2;
+      if (t === 9 && !(need === 0 && pushing !== 0)) continue;
+      if (u.domain === DOMAIN_SEA && !seaWorthy(role)) continue;
+      if (role === 4) {
+        if (f.plan === 4) n = Math.trunc((n * 3) / 2);
+        else {
+          if (f.plan === 1 || owned !== 0) continue;
+          if (t !== 43) n = (n * 2) << (f.expanding ? 1 : 0);
+        }
+      }
+      if (role === 5) {
         let base =
           city.improvements[IMPROVEMENT.granary] || env.ownsWonder(IMPROVEMENT.pyramids) ? 4 : 6;
         base -= onContinent < (civ.government + 1) >> 1 ? f.civilize : f.expand;
@@ -974,7 +1058,7 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
           f.plan !== 0
         )
           room += 1;
-        n = (base - room) * Math.max(1, n);
+        n = (base - room) * n;
         for (let s = 0; s < f.settlersSupported; s++) n += (s + 1) * (city.size < 4 ? 16 : 8);
         if (city.size < 2) n <<= 1;
         if (onContinent === 0 && f.foodSurplus === settlersFoodFor(rules, civ)) n -= n >> 1;
@@ -990,8 +1074,10 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
                 if (onContinent < clamp(citiesOn >> 1, 1, 3)) n = Math.trunc(n / 2);
                 if (onContinent < Math.trunc(citiesOn / 5)) n = Math.trunc(n / 2);
               }
-            } else if (onContinent < clamp(citiesOn - 1, 1, 6)) n = Math.trunc(n / 2);
-            if (onContinent < citiesOn >> 2) n = Math.trunc(n / 2);
+            } else {
+              if (onContinent < clamp(citiesOn - 1, 1, 6)) n = Math.trunc(n / 2);
+              if (onContinent < citiesOn >> 2) n = Math.trunc(n / 2);
+            }
           }
           if (onContinent === 0 && building === 0) {
             n = Math.trunc(n / 2);
@@ -1004,19 +1090,9 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
           }
         }
       } else {
-        // VERIFIED (0x00474edb, the else of the settlers branch): every other unit is
-        // scaled sixteen-fold before the cost and strength terms — this is what lets
-        // settlers (and improvements) outrank cheap defenders.
-        if (u.role === 1 && need > 0) {
-          n = Math.trunc(2 / need);
-          if (need === 2 && !city.inDisorder) n = -1;
-        } else if (u.role !== 1) {
-          n <<= 1;
-          if (f.plan !== undefined && u.role !== f.plan) n <<= 1;
-        }
         n <<= 4;
       }
-      n = (u.costRows + 2) * Math.max(0, n);
+      n = (u.costRows + 2) * n;
       if (u.attack === 0 && u.defence === 0) n = 0;
       else {
         const fp = f.simplifiedCombat ? 2 : clamp(u.hitPointsTens + u.firepower, 2, 4);
@@ -1025,34 +1101,87 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
         if (t === 9) strength += 1;
         n = Math.trunc(n / Math.max(1, Math.trunc(((u.move + 1) * strength) / 2)));
       }
-      if (u.domain === DOMAIN_SEA) {
+      if (role === 2) {
+        if (f.plan === 4 && n > 0) n -= Math.trunc(n / 4);
         n = f.expanding ? n << 2 : n << 1;
-        if (city.improvements[IMPROVEMENT.portFacility]) n -= n >> 2;
+        if (city.improvements[IMPROVEMENT.portFacility]) n -= Math.trunc(n / 4);
       }
       if (u.domain === DOMAIN_AIR) {
         n <<= 1;
-        if (city.improvements[IMPROVEMENT.airport]) n -= n >> 2;
+        if (city.improvements[IMPROVEMENT.airport]) n -= Math.trunc(n / 4);
       }
+      if (role === 1) n -= (goalsHere + 1) >> 1;
       if (totalUnits > 119) n <<= 2;
-      if (need === 0 && u.role < 6) {
+      if (need === 0 && role < 6) {
         let extra = 0;
         if (f.support !== 0 && f.shields !== 0)
           extra = Math.trunc(((3 - (f.expanding ? 1 : 0)) * (f.support + 1) * n) / f.shields);
-        if (u.role === 5) extra >>= 1;
-        else if (!f.expanding && f.shields <= f.support) n <<= 1;
+        if (role === 5) {
+          if (owned + building === 0 && 3 - f.expand < city.size) {
+            extra = 0;
+            if (f.shields <= (f.expand >= 0 ? 1 : 0) + f.support * 2) n -= Math.trunc(n / 3);
+          } else extra = Math.trunc(extra / 2);
+        } else if ((!f.expanding && f.shields <= (f.homedUnits ?? 0)) || !atWarAnywhere) n <<= 1;
         n += extra;
       }
-      consider(n, { kind: 'unit', index: t });
+      const notUnit = pick === null || (pick as Production).kind !== 'unit';
+      if (
+        n < best ||
+        (notUnit &&
+          !city.inDisorder &&
+          (need > 1 || (urgent !== 0 && !city.inDisorder && pushing !== 0)))
+      ) {
+        env.trace?.(n, { kind: 'unit', index: t });
+        best = n;
+        pick = { kind: 'unit', index: t };
+      }
     }
   }
 
-  if (pick === null) {
-    if (!city.improvements[IMPROVEMENT.temple] && env.canBuildImprovement(IMPROVEMENT.temple))
-      return { kind: 'improvement', index: IMPROVEMENT.temple };
+  // VERIFIED 0x00474edb, the end: the Palace in hand stays; a wonder waits for a Temple; a wonder
+  // under way, with no other city on it and defended, is not dropped for something lesser.
+  const current = city.production;
+  if (current.kind === 'improvement' && current.index === IMPROVEMENT.palace) return current;
+  const chosen = currentPick();
+  if (chosen === null) {
     const d = bestDefender();
     return { kind: 'unit', index: d >= 0 ? d : 0 };
   }
-  return pick;
+  if (chosen.kind === 'improvement' && chosen.index > 38) {
+    if (!city.improvements[IMPROVEMENT.temple] && env.canBuildImprovement(IMPROVEMENT.temple))
+      return { kind: 'improvement', index: IMPROVEMENT.temple };
+  } else if (
+    current.kind === 'improvement' &&
+    current.index > 38 &&
+    need < 2 &&
+    env.wonderCity(current.index) === null &&
+    !(env.wonderExpired?.(current.index) ?? false) &&
+    (urgent === 0 || city.attacked !== true) &&
+    f.defendersInCity > 1 &&
+    !myCities.some(
+      (c) =>
+        c !== city && c.production.kind === 'improvement' && c.production.index === current.index,
+    )
+  ) {
+    return current;
+  }
+  return chosen;
+}
+
+/** The sea a city's ships sail (0x0043177d): the last one found, stepping as the original does. */
+function adjacentSea(world: World, city: City): number {
+  let sea = 0;
+  for (let i = 0; i < 8; i++) {
+    const o = NEIGHBOUR_OFFSETS[i];
+    if (!o) continue;
+    const y = city.position.y + o.y;
+    if (y < 0 || y >= world.rows) continue;
+    const x = world.wrapX(city.position.x + o.x, y);
+    if (x === null || world.terrainAt(x, y) !== OCEAN) continue;
+    sea = (world.landmass[world.index(x, y)] ?? 0) & 63;
+    i += 1 - (i & 1) + 1;
+  }
+  return sea;
 }
 
 function settlersFoodFor(rules: EngineRules, civ: Civ): number {

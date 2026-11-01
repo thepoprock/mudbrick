@@ -30,7 +30,12 @@ import {
   researchableAdvances,
   type CityEvent,
 } from './outcome.js';
-import { processProduction, type ProductionContext, type ProductionEvent } from './production.js';
+import {
+  processProduction,
+  shieldPrice,
+  type ProductionContext,
+  type ProductionEvent,
+} from './production.js';
 import {
   addScience,
   aiRates,
@@ -65,6 +70,7 @@ import {
   type PollutionEvent,
 } from './pollution.js';
 import { aiChooseProduction } from './aiBuild.js';
+import { computerPurchase, type PurchaseContext, type WonderTally } from './aiPurchase.js';
 import { runStrategy, type StrategyEvent } from './aiStrategy.js';
 import { gameYear, formatYear, type CalendarOptions } from './calendar.js';
 import { routeIncomeTotal, type TradeContext, routeModifier } from './trade.js';
@@ -809,6 +815,52 @@ export class Game {
     this.answerHelpCall(call, answer !== 0);
   }
 
+  /** Wonders by era, this civilization against the humans (0x005d12d7, 0x0046ab4b). */
+  wonderTally(slot: number, era: number): WonderTally {
+    const count = (s: number) => {
+      let n = 0;
+      for (let w = 0; w < 28; w++) {
+        if (Math.trunc(w / 7) === era && this.ownsWonder(s, 39 + w)) n += 1;
+      }
+      return n;
+    };
+    let humanLowest = 99;
+    let humanHighest = 0;
+    for (const c of this.world.civs) {
+      if (!c.isHuman || c.slot === 0) continue;
+      const n = count(c.slot);
+      humanLowest = Math.min(humanLowest, n);
+      humanHighest = Math.max(humanHighest, n);
+    }
+    const main = this.world.civs.find((c) => c.isHuman && c.slot !== 0)?.slot;
+    return {
+      mine: count(slot),
+      humanLowest,
+      humanHighest,
+      main: main !== undefined ? count(main) : 0,
+    };
+  }
+
+  private purchaseContext(city: City, surplus: number): PurchaseContext {
+    const civ = this.civ(city.owner);
+    const humans = this.world.civs.filter((c) => c.isHuman && c.slot !== 0);
+    const rows = this.productionContext(city).shieldRows;
+    const land = this.world.landmass[this.world.index(city.position.x, city.position.y)] ?? 0;
+    return {
+      surplus: city.inDisorder ? 0 : Math.max(0, surplus),
+      cost: shieldPrice(this.rules, city.production, rows),
+      difficulty: this.state.difficulty,
+      topHumanRank: humans.reduce((m, h) => Math.max(m, this.powerRank(h.slot)), 0),
+      mainTreasury: humans[0]?.treasury ?? 0,
+      plan: civ.strategy?.plans[land] ?? 0,
+      wonderTally: (era) => this.wonderTally(civ.slot, era),
+      anyHumanLaunched: humans.some((h) => hasLaunched(h)),
+      spaceRacePressure: this.spaceRace(civ).pressure,
+      unitCount: (type) =>
+        this.world.units.filter((u) => u.owner === civ.slot && u.type === type).length,
+    };
+  }
+
   /** A civilization's military strength, summed in the strategy pass (0x005d132e). */
   private civStrength(slot: number): number {
     return this.civ(slot).strategy?.strengthSum ?? 0;
@@ -1162,6 +1214,19 @@ export class Game {
         this.aiChooseProduction(city, t); // the original re-chooses after every completion (0x00430b61 with 99)
       }
     }
+    if (!civ.isHuman) {
+      // VERIFIED 0x004b7e74: an attacked or empty city thinks again, then the treasury helps.
+      const empty = this.world.unitsAt(city.position.x, city.position.y).length === 0;
+      if (city.attacked === true || empty) this.aiChooseProduction(city, t);
+      computerPurchase(
+        this.world,
+        this.rules,
+        city,
+        civ,
+        this.purchaseContext(city, t.shields.surplus),
+      );
+    }
+    delete city.attacked;
     for (const e of disbandForShortage(this.world, this.rules, city, ctx, t.raw.shields)) push(e);
     for (const e of disbandForDisorder(this.world, this.rules, city, {
       turn: this.state.turn,
@@ -2206,6 +2271,7 @@ export class Game {
       facts: {
         shields: t.shields.produced,
         support: t.support.shields,
+        homedUnits: homed.length,
         bestProduction: civ.bestProduction ?? 0,
         trade: t.raw.trade,
         corruption: t.trade.corruption,
@@ -2287,6 +2353,7 @@ export class Game {
       ...(this.buildTrace ? { trace: (n, p) => this.buildTrace?.(city, n, p) } : {}),
       canBuildImprovement: (i) => this.canBuildImprovement(city, i),
       wonderExpired: (w) => this.wonderExpired(w),
+      wonderTally: (era) => this.wonderTally(civ.slot, era),
       nextShipKind: (kind) => aiNextPartKind(this.world, civ, kind, this.shipContext()),
       foreign: {
         mainHuman: this.world.civs.find((c) => c.isHuman && c.slot !== 0)?.slot ?? null,

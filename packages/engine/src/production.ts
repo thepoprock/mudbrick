@@ -76,7 +76,7 @@ export type ProductionEvent =
   | { kind: 'ghost-town'; unit: Unit }
   | { kind: 'waiting'; reason: 'last-city-settlers' | 'ghost-town-declined' };
 
-function cost(rules: EngineRules, p: Production, rows: number): number {
+export function shieldPrice(rules: EngineRules, p: Production, rows: number): number {
   if (p.kind === 'unit') return (rules.units[p.index]?.costRows ?? 1) * rows;
   return (rules.improvements[p.index]?.costRows ?? 1) * rows;
 }
@@ -163,7 +163,7 @@ export function processProduction(
       events.push({ kind: 'bad-space', production: p });
       return events;
     }
-    const c = cost(rules, p, ctx.shieldRows);
+    const c = shieldPrice(rules, p, ctx.shieldRows);
     if (city.shieldsStored < c) return events;
     // VERIFIED 0x004b7e74: a computer city completing a wonder nobody has built yet does nothing
     // this turn when a human city is building the same wonder with shields enough for it.
@@ -191,7 +191,7 @@ export function processProduction(
         if (want !== kind) {
           kind = want;
           city.production = { kind: 'improvement', index: 35 + want };
-          partCost = cost(rules, city.production, ctx.shieldRows);
+          partCost = shieldPrice(rules, city.production, ctx.shieldRows);
           if (city.shieldsStored < partCost) return events;
         }
       }

@@ -215,6 +215,8 @@ export interface CityRecord {
   id: number;
   position: Point;
   civilDisorder: boolean;
+  /** Flag bit 5: attacked since its last city turn. */
+  attacked: boolean;
   /** Byte 5 bit 0: the city has completed a wonder (set at completion, 0x004b7e74). */
   wonderCity: boolean;
   weLoveTheKingDay: boolean;
@@ -775,6 +777,7 @@ export function parseSave(bytes: Uint8Array): SaveFile {
       id,
       position: r.point(o),
       civilDisorder: r.bit(o + 4, 0),
+      attacked: r.bit(o + 4, 5),
       wonderCity: r.bit(o + 5, 0),
       weLoveTheKingDay: r.bit(o + 4, 1),
       improvementSoldThisTurn: r.bit(o + 4, 2),

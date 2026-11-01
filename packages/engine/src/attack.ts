@@ -103,6 +103,7 @@ export function resolveAttack(
   const defender = chooseDefender(world, rules, enemies, attacker, combatCtx);
   if (!defender) return { kind: 'no-defender' };
   ctx.onAttacked?.(attacker.owner, defender.owner);
+  if (city) city.attacked = true; // VERIFIED 0x0052d472
   const result = resolveCombat(world, rules, rng, attacker, defender, combatCtx);
   applyCombat(rules, result, attacker, defender);
   // VERIFIED 0x0052d472: a Coastal Fortress that doubled the defence against a ship is now known.

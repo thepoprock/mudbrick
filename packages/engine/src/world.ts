@@ -187,6 +187,8 @@ export interface City {
   specialists: Specialists;
   production: Production;
   inDisorder: boolean;
+  /** Attacked since its last city turn (city flag bit 5). */
+  attacked?: boolean;
   /** An improvement was sold this turn (city flag bit 2). */
   soldThisTurn?: boolean;
   /** Used for an airlift this turn (city flag bit 16). */
@@ -302,7 +304,7 @@ export class World {
   /** Per square: fertility rating 0 or 8–15 (map byte 5, low nibble; fertility.ts). */
   readonly fertility: Uint8Array;
   /** Land and rated squares per land mass, computed on first use (aiStrategy.ts). */
-  landmassStats?: { land: number[]; rated: number[]; oceans: number[] };
+  landmassStats?: { land: number[]; rated: number[]; oceans: number[]; touching: number[] };
   readonly civs: Civ[] = [];
   /** A battle between two civilizations happened this turn (resets the turns of peace). */
   peaceBroken = false;

@@ -110,6 +110,8 @@ export interface LandmassStats {
   land: number[];
   rated: number[];
   oceans: number[];
+  /** How many land masses each sea touches (0x0055999f). */
+  touching: number[];
 }
 
 export function landmassStats(world: World, rules: EngineRules): LandmassStats {
@@ -127,7 +129,18 @@ export function landmassStats(world: World, rules: EngineRules): LandmassStats {
     const p = world.position(i);
     if (fertilityAt(world, rules, p.x, p.y) !== 0) rated[lm] = (rated[lm] ?? 0) + 1;
   }
-  world.landmassStats = { land, rated, oceans };
+  const shores = Array.from({ length: 64 }, () => new Set<number>());
+  for (let i = 0; i < world.area; i++) {
+    if (world.terrain[i] !== OCEAN) continue;
+    const { x, y } = world.position(i);
+    const sea = (world.landmass[i] ?? 0) & 63;
+    for (const n of world.neighbours(x, y)) {
+      if (n && world.terrainAt(n.x, n.y) !== OCEAN)
+        shores[sea]?.add((world.landmass[world.index(n.x, n.y)] ?? 0) & 63);
+    }
+  }
+  const touching = shores.map((set) => set.size);
+  world.landmassStats = { land, rated, oceans, touching };
   return world.landmassStats;
 }
 

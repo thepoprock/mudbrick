@@ -403,3 +403,39 @@ counter restarts. For warming `n` counting from 0, each desert, plains, grasslan
 with under `7 − n` ocean squares among its 20 neighbours goes, when `(3x − 3y) & 7` equals `n`, to
 desert (from desert or plains) or plains. With more ocean near it becomes swamp, or jungle from
 forest, and loses irrigation and mines.
+
+## Computer purchases (VERIFIED 0x004b7e74, tail)
+
+After production a computer city that was attacked since its last turn, or holds no units, chooses
+again. Then it spends a share of treasury `t`, applied in this order, each replacing the last:
+
+| Condition                                                                               | Share    |
+| --------------------------------------------------------------------------------------- | -------- |
+| Building a unit whose role equals the land mass plan (0, 1 or 4), with a shield surplus | `t >> 6` |
+| Wonder, none yet of its era or fewer than the fewest any human holds                    | `t >> 6` |
+| Wonder, over one past the most any human holds                                          | `t >> 8` |
+| Other wonder (doubled when `t` is 2500 or more)                                         | `t >> 7` |
+| Spaceship part once a human has launched (doubled under space race pressure)            | `t >> 7` |
+| In disorder, building an improvement, shields in hand                                   | `t >> 3` |
+| Attacked or empty, building a unit, shields in hand                                     | `t >> 3` |
+| Palace, shields in hand                                                                 | `t >> 3` |
+| Its first Nuclear Missile, shields in hand                                              | `t >> 4` |
+
+Above 2000 gold it adds `t >> 9`, and the share stops at what the box still needs. Shields rise by
+the share. The treasury pays the share less a refund of `difficulty × share / 10 / (8 − r)`, with `r`
+the highest human power rank; the refund halves when the civilization is richer than the main human
+and has 1000 gold, and vanishes at 2000. Not traced: the flag is also raised on cities receiving
+units displaced by a conquest (0x00528720).
+
+## The computer's choice of units (VERIFIED 0x00474edb)
+
+A land unit starts from `building × 2 + on this land mass`, Archers counting Legion, and Crusaders or
+Knights counting each other by attack personality. A land unit with no attack and role 0 (Explorer)
+is wanted only away from attack and defend plans, while few exist. Ships and aircraft are considered
+only with 4 units on the land mass (8 with two or more cities), and start from
+`(owned + building × 2) × units here / (all units + 1)`; ships also need a sea that touches two land
+masses, or one of over 47 squares for anything but a transport. Transports are wanted on full land
+masses, or as the first of their type elsewhere. After the score a chosen wonder gives way to a
+Temple if the city has none; a Palace under way is kept; and a wonder under way that no other city is
+building, in a defended city, is not dropped for anything less. `scripts/compare-builds.ts` measures
+the chooser against the original's saves.

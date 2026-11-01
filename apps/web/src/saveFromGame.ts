@@ -87,6 +87,7 @@ export function saveFromGame(original: Uint8Array, parsed: SaveFile, game: Game)
       improvements: c.improvements,
       production: c.production,
       civilDisorder: c.inDisorder,
+      attacked: c.attacked === true,
       soldThisTurn: c.soldThisTurn ?? false,
       airlifted: c.airlifted ?? false,
       weLoveTheKingDay: c.celebrating,

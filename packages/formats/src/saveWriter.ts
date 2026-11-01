@@ -74,6 +74,7 @@ export interface CityWrite {
   improvements: boolean[];
   production: { kind: 'unit' | 'improvement'; index: number };
   civilDisorder: boolean;
+  attacked?: boolean;
   soldThisTurn?: boolean;
   airlifted?: boolean;
   weLoveTheKingDay: boolean;
@@ -268,6 +269,7 @@ export function cityWrite(c: CityRecord): CityWrite {
     improvements: c.improvements,
     production: c.production,
     civilDisorder: c.civilDisorder,
+    attacked: c.attacked,
     weLoveTheKingDay: c.weLoveTheKingDay,
     wonderCity: c.wonderCity,
     totals: {
@@ -462,6 +464,7 @@ export function writeSave(original: Uint8Array, save: SaveFile, patch: SavePatch
     w.u16(b, c.x);
     w.u16(b + 2, c.y);
     w.bit(b + 4, 0, c.civilDisorder);
+    w.bit(b + 4, 5, c.attacked === true);
     w.bit(b + 4, 1, c.weLoveTheKingDay);
     if (c.objective) w.bit(b + 7, 2, true);
     if (c.wonderCity !== undefined) w.bit(b + 5, 0, c.wonderCity);

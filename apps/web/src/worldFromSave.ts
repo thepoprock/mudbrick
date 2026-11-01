@@ -137,6 +137,7 @@ export function worldFromSave(save: SaveFile, rules: Rules): World {
       specialists,
       production: c.production,
       inDisorder: c.civilDisorder,
+      ...(c.attacked ? { attacked: true } : {}),
       celebrating: c.weLoveTheKingDay,
       soldThisTurn: c.improvementSoldThisTurn,
       airlifted: c.airlifted,
