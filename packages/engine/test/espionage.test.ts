@@ -207,12 +207,15 @@ describe('espionage', () => {
     const d = unit(w, 46, 7, 7, 1);
     const me = w.civs[1];
     if (me) me.treasury = 300;
-    const ev = bribeUnit(w, rules, d, t, ctx(w, { isHuman: () => true }));
+    const ev = bribeUnit(w, rules, d.owner, t, ctx(w, { isHuman: () => true }));
     expect(ev.some((e) => e.text.includes('deserts'))).toBe(true);
     expect(t.owner).toBe(1);
     expect(me?.treasury).toBe(113);
     if (them) them.government = 6;
     const t2 = unit(w, 0, 14, 14, 2);
+    // A Democracy's units cannot be bought by a human; a computer player can buy them.
+    expect(bribeCost(w, rules, t2, 1)).not.toBeNull();
+    if (me) me.isHuman = true;
     expect(bribeCost(w, rules, t2, 1)).toBeNull();
   });
 });

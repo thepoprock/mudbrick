@@ -13,6 +13,7 @@ import { captureCity } from './conquest.js';
 import { distance, gridDistance } from './city.js';
 import { combatOdds, hitPoints, maxHitPoints } from './combat.js';
 import { chooseDefender } from './defender.js';
+import { attitude, hasTreaty, TREATY } from './diplomacy.js';
 import { landValue } from './fertility.js';
 import { canFoundCity, foundCity } from './founding.js';
 import {
@@ -165,6 +166,74 @@ function sumCost(rules: EngineRules, units: Unit[]): number {
 
 function sumAttack(rules: EngineRules, units: Unit[]): number {
   return units.reduce((s, u) => s + (rules.units[u.type]?.attack ?? 0), 0);
+}
+
+function landOf(world: World, p: Point): number {
+  return (world.landmass[world.index(p.x, p.y)] ?? 0) & 63;
+}
+
+function buyUnit(
+  world: World,
+  rules: EngineRules,
+  me: number,
+  target: Unit,
+  ctx: AiUnitContext,
+): void {
+  if (ctx.espionage) bribeUnit(world, rules, me, target, ctx.espionage);
+}
+
+/**
+ * Does a computer unit buy a lone foreign unit it may not attack (0x004f44cc)? A treaty partner's
+ * Diplomat beside one of our cities is left to the other test. Above Prince, an agent, or a unit
+ * whose nearest city is its own, on a land mass with no human presence, buys one time in eight,
+ * or always when a human's city is the nearest.
+ */
+function bribeAtPeace(
+  world: World,
+  rules: EngineRules,
+  unit: Unit,
+  target: Unit,
+  nearestAny: City | null,
+  nearestOwn: City | null,
+  ctx: AiUnitContext,
+): boolean {
+  const me = unit.owner;
+  const them = target.owner;
+  const type = rules.units[unit.type];
+  if (type?.domain !== DOMAIN_GROUND || ctx.difficulty <= 2) return false;
+  const role = type.role;
+  const lm = landOf(world, unit.position);
+  const plan = ctx.planOf?.(me, lm) ?? -1;
+  const treaty = hasTreaty(world, me, them, TREATY.ceaseFire | TREATY.peace);
+  if (
+    treaty &&
+    rules.units[target.type]?.role === ROLE_DIPLOMAT &&
+    type.attack !== 0 &&
+    nearestAny?.owner === me
+  )
+    return false;
+  if (role === ROLE_DIPLOMAT) {
+    if (plan !== 0 && plan !== 5 && treaty) return false;
+  } else {
+    if (plan !== 0 || role !== ROLE_ATTACK) return false;
+    if (nearestAny !== nearestOwn) return false;
+  }
+  const human = (slot: number) => world.civs.find((c) => c.slot === slot)?.isHuman === true;
+  // 0x0044e123: at war, or in contact with neither peace nor alliance and an attitude above 49.
+  const hostile = (a: number, b: number) =>
+    hasTreaty(world, a, b, TREATY.war) ||
+    (!hasTreaty(world, a, b, TREATY.alliance) &&
+      hasTreaty(world, a, b, TREATY.contact) &&
+      !hasTreaty(world, a, b, TREATY.peace) &&
+      attitude(world, a, b) > 49);
+  const humans = world.civs.filter((c) => c.isHuman && c.slot !== 0);
+  let free = !human(them) && humans.some((h) => !hostile(them, h.slot));
+  if (!free)
+    free = !humans.some((h) =>
+      world.units.some((u) => u.owner === h.slot && landOf(world, u.position) === lm),
+    );
+  if (!free) return false;
+  return ctx.rng.nextInt(8) === 0 || (nearestAny !== null && human(nearestAny.owner));
 }
 
 function nearestCity(world: World, from: Point, pick: (c: City) => boolean): City | null {
@@ -372,7 +441,13 @@ export function chooseDirection(
       if (role === ROLE_SETTLE || role === ROLE_TRADE) continue;
       // VERIFIED (ai-units.md): a ground unit at sea attacks only with the amphibious flag.
       if (hereOcean && type.domain === DOMAIN_GROUND && !type.flags.amphibiousAssault) continue;
-      if (!canAttack(occupantOwner)) continue; // at peace or cease-fire a unit never attacks
+      if (!canAttack(occupantOwner)) {
+        // At peace or cease-fire a unit never attacks; it may buy the unit instead.
+        const lone = occupants.length === 1 ? occupants[0] : undefined;
+        if (lone && !city && bribeAtPeace(world, rules, unit, lone, nearestAny, nearestOwn, ctx))
+          buyUnit(world, rules, me, lone, ctx);
+        continue;
+      }
       if (type.attack === 0) continue;
       const defender = chooseDefender(world, rules, occupants, unit, {
         defenderFortified: occupants.some((u) => u.fortified),
@@ -429,7 +504,23 @@ export function chooseDirection(
         else if (dType.role > ROLE_TRANSPORT) odds += 12;
       } else if (dType.role === ROLE_DIPLOMAT) odds *= 2;
       const threshold = occupantOwner === 0 ? 12 : 6;
-      if (odds < threshold) continue;
+      if (odds < threshold) {
+        // A dug-in lone unit too strong to attack is bought one time in four (0x004f44cc).
+        if (
+          !city &&
+          role === ROLE_ATTACK &&
+          type.domain === DOMAIN_GROUND &&
+          ctx.planOf?.(me, landOf(world, unit.position)) === 0 &&
+          (defender.veteran || defender.fortified) &&
+          occupants.length === 1 &&
+          ((rules.terrain[world.terrainAt(to.x, to.y)]?.defenceHalves ?? 0) > 3 ||
+            (world.hasFlag(to.x, to.y, SquareFlag.Fortress) &&
+              !world.hasFlag(to.x, to.y, SquareFlag.Airbase))) &&
+          ctx.rng.nextInt(4) === 0
+        )
+          buyUnit(world, rules, me, defender, ctx);
+        continue;
+      }
       score += odds * 4;
       attack = true;
     }
@@ -660,7 +751,7 @@ function agentArrives(
       events.push({ kind: 'ai-unit', text: e.text });
     return false;
   }
-  for (const e of bribeUnit(world, rules, unit, r.target, ctx.espionage))
+  for (const e of bribeUnit(world, rules, unit.owner, r.target, ctx.espionage))
     events.push({ kind: 'ai-unit', text: e.text });
   return false;
 }

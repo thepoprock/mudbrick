@@ -12,13 +12,14 @@ import { distance } from './city.js';
 import { adjustAttitude, clearTreaty, hasTreaty, setTreaty, TREATY } from './diplomacy.js';
 import { nuclearStrike } from './nuclear.js';
 import { grantAdvance } from './research.js';
-import { GOVERNMENT, IMPROVEMENT, type EngineRules } from './rules.js';
+import { advanceIndex, GOVERNMENT, IMPROVEMENT, type EngineRules } from './rules.js';
 import type { Rng } from './rng.js';
 import type { City, Civ, Unit, World } from './world.js';
 
 /** The original tests unit type 47 for "is a Spy" (VERIFIED hard-coded). */
 export const SPY_TYPE = 47;
 const ROLE_DIPLOMAT = 6;
+const DIPLOMAT = 46;
 const ROLE_SETTLERS = 5;
 const ROLE_TRADE = 7;
 /** Improvements that cannot be sabotaged (0, the Palace, and SDI Defense — VERIFIED skip list). */
@@ -531,7 +532,9 @@ export function bribeCost(
   const owner = civOf(world, target.owner);
   const type = rules.units[target.type];
   if (!owner || !type) return null;
-  if (owner.government === GOVERNMENT.democracy) return null;
+  // Incorruptible, but only to a human: the original's test names the briber (0x0049c5c6).
+  if (owner.government === GOVERNMENT.democracy && civOf(world, briber)?.isHuman === true)
+    return null;
   let dist = capitalDistance(world, target.owner, target.position);
   if (civOf(world, briber)?.government === GOVERNMENT.communism && dist > 9) dist = 10;
   let cost = type.costRows * Math.trunc((owner.treasury + 750) / (dist + 2));
@@ -540,20 +543,24 @@ export function bribeCost(
   return cost;
 }
 
-/** Bribe a unit: it changes sides, homed to the nearest own city when the square holds one. */
+/**
+ * Bribe a unit (0x0049c5c6): a civilization buys it, Diplomat or none. The computer players do this
+ * from their move chooser with no agent at hand, once they know what a Diplomat needs.
+ */
 export function bribeUnit(
   world: World,
   rules: EngineRules,
-  diplomat: Unit,
+  me: number,
   target: Unit,
   ctx: EspionageContext,
 ): EspionageEvent[] {
   const events: EspionageEvent[] = [];
-  const me = diplomat.owner;
   const meCiv = civOf(world, me);
   const type = rules.units[target.type];
   if (!meCiv || !type) return events;
   if (type.role === ROLE_TRADE && !ctx.isHuman(me)) return events;
+  const needed = advanceIndex(rules.units[DIPLOMAT]?.preq);
+  if (!ctx.isHuman(me) && needed !== null && !ctx.knows(me, needed)) return events;
   const cost = bribeCost(world, rules, target, me);
   if (cost === null) {
     events.push({ kind: 'espionage', text: 'that unit cannot be bribed' });

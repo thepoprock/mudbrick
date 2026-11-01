@@ -2005,7 +2005,7 @@ export class PlaySession {
       title.textContent = `${this.unitName(unit)} meets a lone ${this.unitName(target)}:`;
       box.appendChild(title);
       button(cost === null ? 'Bribe (impossible)' : `Bribe for ${cost} gold`, () =>
-        bribeUnit(this.world, this.rules, unit, target, ctx),
+        bribeUnit(this.world, this.rules, unit.owner, target, ctx),
       );
       if (unit.type === SPY_TYPE)
         button('Sabotage the unit', () => sabotageUnit(this.world, this.rules, unit, target, ctx));

@@ -264,10 +264,12 @@ stack + 1) / own cost`, ×3 for a city, ×2 for a naval unit attacking a transpo
    ×3 against a defender type with flag bit 3; a unit needed as a defender halves the odds and
    drops to 0 unless its attack beats the target's. Against barbarians non-combat targets +12;
    diplomats double. Odds of 6 or more (12 against barbarians) add `4 × odds`; below that the
-   direction is out, and a fortified lone enemy on rough ground is instead subject to the demand
-   routine (0x0049c5c6, INFERRED a diplomatic demand) one time in three. At peace or cease-fire a
+   direction is out, and a lone enemy that is veteran or fortified, on terrain defending above 1.5 or in a
+   fortress and not in a city, is instead **bought** (the bribe, 0x0049c5c6, with no Diplomat) one
+   time in four, by a ground unit of role 0 on plan 0. At peace or cease-fire a
    unit never attacks; against a treaty partner on plan 0 or beside an own city at Prince and above
-   the demand routine runs instead (one time in eight, always when a human's city is nearest).
+   the bribe runs instead (one time in eight, always when a human's city is nearest; only where
+   no human has a unit on the land mass, or the victim is a computer on bad terms with no human).
 8. **Fatigue.** An attack reached with less than a full move left keeps the score only in a
    city; when the best score came from such an attack the unit waits for next turn.
 

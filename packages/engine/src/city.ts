@@ -4,7 +4,7 @@
  * Specification: docs/engine/rules-city.md — VERIFIED against the original executable's
  * per-city turn code: square yields, shield multipliers, waste, corruption, the trade split,
  * happiness, unit support, growth and starvation. The arithmetic mirrors the original's integer
- * operations. Production completion is still INFERRED (0x004b7e74 not yet read).
+ * operations. Production completion is in production.ts (0x004b7e74).
  */
 import {
   DOMAIN_AIR,

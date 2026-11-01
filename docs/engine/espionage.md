@@ -65,8 +65,10 @@ suffers a Senate scandal and falls into anarchy.
 
 ## Bribing a unit (0x0049c5c6)
 
-Only a lone unit; never one of a Democracy; computer bribers need Writing's successor advance
-(INFERRED name) and never bribe caravans. Cost `unit cost rows × (owner's treasury + 750) /
+The routine takes the unit and the civilization buying it, so no Diplomat need be present: the
+computer's move chooser calls it directly (ai-units.md). Only a lone unit; a human can never buy a
+Democracy's, a computer can; computer bribers need the Diplomat's prerequisite advance and never
+bribe caravans. Cost `unit cost rows × (owner's treasury + 750) /
 (distance from the owner's capital + 2)` (Communism counts at most 10), halved for anything but
 settlers; the computer pays only from half its treasury. The unit changes sides with no moves
 left, homed to the city it stands in when the briber owns it; the victim's incident count rises.

@@ -4,8 +4,7 @@
  * Specification: docs/engine/rules-turn.md and rules-city.md. Every step marked VERIFIED there
  * is implemented in the original's order; steps the original performs that are not yet decoded
  * are listed in the docs and skipped here. Choices the original leaves to the player are
- * surfaced as events for the UI; the AI's choices here are deliberate placeholders (INFERRED)
- * until the AI routines are read.
+ * surfaced as events for the UI.
  */
 import {
   boxRows,
