@@ -1285,7 +1285,7 @@ export class Game {
     city: City,
     totals?: {
       raw: { food: number; shields: number; trade: number };
-      support: { shields: number; settlers: number; inCity: number };
+      support: { shields: number; settlers: number; inCity: number; abroad: number };
       shields: { produced: number };
       trade: { corruption: number };
       mood: { happy: number; unhappy: number };
@@ -1342,6 +1342,7 @@ export class Game {
         happy: t.mood.happy,
         unhappy: t.mood.unhappy,
         settlersSupported: t.support.settlers,
+        unitsAway: t.support.abroad,
         defendersInCity: defenders,
         threat,
         zocAtCity: inEnemyZoc(this.world, city.position.x, city.position.y, city.owner),
@@ -1418,6 +1419,15 @@ export class Game {
         return e?.kind === 'advance' && (this.state.firstDiscoveredBy[e.index] ?? 0) !== 0;
       },
       nextShipKind: (kind) => aiNextPartKind(this.world, civ, kind, this.shipContext()),
+      foreign: {
+        mainHuman: this.world.civs.find((c) => c.isHuman && c.slot !== 0)?.slot ?? null,
+        isHumanSlot: (s) => this.world.civs.find((c) => c.slot === s)?.isHuman ?? false,
+        unitCount: (s, type) =>
+          this.world.units.reduce((n, u) => (u.owner === s && u.type === type ? n + 1 : n), 0),
+        atWar: (x, y) => hasTreaty(this.world, x, y, TREATY.war),
+        vendettaAgainst: (x, y) => hasTreaty(this.world, x, y, TREATY.vendetta),
+        reputationOf: (s) => this.world.civs.find((c) => c.slot === s)?.reputation ?? 0,
+      },
     });
   }
 

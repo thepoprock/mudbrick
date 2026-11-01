@@ -50,6 +50,10 @@ export interface AiBuildFacts {
   spaceRace: number;
   /** The civilization has its first city (a capital exists somewhere). */
   hasCapital: boolean;
+  /** Units of the city causing military unhappiness (the support pass's count, 0x004b6359). */
+  unitsAway?: number;
+  /** City record byte 6 bit 2 (meaning unknown; the engine never sets it) — SAM Battery −3. */
+  samPenalty?: boolean;
   /** Land-mass flag: expanding continent (INFERRED default: fewer than 4 cities). */
   expanding: boolean;
   /** Continent plan of the city's land mass (aiStrategy.ts PLAN); undefined before the first pass. */
@@ -97,7 +101,7 @@ export function improvementPriority(
     scienceRate: number;
     government: number;
     isHuman: boolean;
-  },
+  } & ForeignStrengthEnv,
 ): { n: number; military: boolean } | null {
   const has = (i: number) => city.improvements[i] === true;
   const disorder = city.inDisorder;
@@ -213,14 +217,32 @@ export function improvementPriority(
     case im.researchLab:
       if (env.scienceRate !== 0) n = clamp(11 - (f.trade >> 2), 2, 10);
       break;
-    case im.samBattery:
-      n = 12; // INFERRED: the human's air strength is not tracked → full value
-      military = true;
+    case im.samBattery: {
+      // VERIFIED: Stealth Bombers and Bombers ×2, Cruise Missiles and Helicopters, all ×2 for
+      // the main human; the plain sum of the four for other civilizations (RULES indices 31, 28,
+      // 44, 29). Then 12 − that, within 1 … 12.
+      const v = foreignStrength(
+        env,
+        (c) => (c(31) * 2 + c(28) * 2 + c(44) + c(29)) * 2,
+        (c) => c(44) + c(28) + c(29) + c(31),
+      );
+      n = v === null ? 12 : clamp(12 - v, 1, 12);
+      if (f.samPenalty) n -= 3;
+      military = humanThreat(env) ? f.expanding : true;
       break;
+    }
     case im.coastalFortress:
       if (env.coastal) {
-        n = 12; // INFERRED: the human's navy is not tracked → full value
-        military = true;
+        // VERIFIED: AEGIS Cruisers and Cruisers ×3, Battleships ×5, Ironclads and Destroyers
+        // for the main human; half the Ironclads and Destroyers, Battleships ×2, Cruisers and
+        // AEGIS for others (RULES indices 36–40). Then 12 − that, within 1 … 12.
+        const v = foreignStrength(
+          env,
+          (c) => c(39) * 3 + c(38) * 3 + c(40) * 5 + c(36) + c(37),
+          (c) => (c(36) >> 1) + (c(37) >> 1) + c(40) * 2 + c(38) + c(39),
+        );
+        n = v === null ? 12 : clamp(12 - v, 1, 12);
+        military = humanThreat(env) ? f.expanding : true;
       }
       break;
     case im.harbour:
@@ -248,7 +270,7 @@ export function improvementPriority(
       break;
     case im.policeStation:
       if (!env.ownsWonder(im.womensSuffrage)) {
-        let w = 0; // INFERRED: military unhappiness count not tracked here
+        let w = f.unitsAway ?? 0; // VERIFIED: the support pass's military-unhappiness count
         if (env.government === GOVERNMENT.democracy) w <<= 1;
         if (env.government > GOVERNMENT.fundamentalism && w !== 0 && f.happy - f.unhappy < 2)
           w += 2;
@@ -306,8 +328,63 @@ export interface AiBuildEnv {
   wonderExpired?: (improvement: number) => boolean;
   /** The ship's next kind for a request (spaceship.ts aiNextPartKind); negative = nothing to build. */
   nextShipKind?: (kind: number) => number;
+  /** Other civilizations' strength for the defence valuations. */
+  foreign?: Omit<ForeignStrengthEnv, 'slot'>;
   /** Debug hook: every candidate and its score (lower wins). */
   trace?: (score: number, p: Production) => void;
+}
+
+/** What the defence valuations (SAM Battery, Coastal Fortress) read about other civilizations. */
+export interface ForeignStrengthEnv {
+  slot: number;
+  /** The main human's slot (null without one). */
+  mainHuman?: number | null;
+  isHumanSlot?: (slot: number) => boolean;
+  /** Active units of a type a civilization has (the civilization record's per-type counts). */
+  unitCount?: (slot: number, type: number) => number;
+  atWar?: (a: number, b: number) => boolean;
+  /** `a` holds a vendetta against `b`. */
+  vendettaAgainst?: (a: number, b: number) => boolean;
+  reputationOf?: (slot: number) => number;
+}
+
+/**
+ * Foreign strength of a kind (VERIFIED 0x00474edb, the SAM Battery and Coastal Fortress cases):
+ * a computer player weighs the main human's units with `mine`; a human player sums every other
+ * civilization's with `others`, halved unless it is at war with that civilization or that
+ * civilization holds a vendetta against it. Null when the context brings no unit counts.
+ */
+function foreignStrength(
+  env: ForeignStrengthEnv,
+  mine: (count: (type: number) => number) => number,
+  others: (count: (type: number) => number) => number,
+): number | null {
+  const unitCount = env.unitCount;
+  const isHuman = env.isHumanSlot;
+  if (!unitCount || !isHuman) return null;
+  const me = env.slot;
+  const counter = (slot: number) => (type: number) => unitCount(slot, type);
+  if (!isHuman(me)) {
+    const h = env.mainHuman ?? null;
+    return h === null ? 0 : mine(counter(h));
+  }
+  let total = 0;
+  for (let s = 1; s < 8; s++) {
+    if (s === me) continue;
+    let v = others(counter(s));
+    if (!env.atWar?.(me, s) && !env.vendettaAgainst?.(s, me)) v = Math.trunc(v / 2);
+    total += v;
+  }
+  return total;
+}
+
+/** A human of reputation above 4, or one we are at war with (the defence cases' "military" test). */
+function humanThreat(env: ForeignStrengthEnv): boolean {
+  for (let s = 1; s < 8; s++) {
+    if (!env.isHumanSlot?.(s)) continue;
+    if ((env.reputationOf?.(s) ?? 0) > 4 || env.atWar?.(env.slot, s)) return true;
+  }
+  return false;
 }
 
 /** Choose what a computer-controlled city builds next. */
@@ -452,6 +529,8 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
       scienceRate: civ.scienceRate,
       government: civ.government,
       isHuman: civ.isHuman,
+      slot: civ.slot,
+      ...(env.foreign ?? {}),
     });
     if (!r) continue;
     consider(

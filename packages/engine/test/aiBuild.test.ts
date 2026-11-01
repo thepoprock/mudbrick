@@ -105,6 +105,7 @@ function civ(over: Partial<Civ> = {}): Civ {
     government: GOVERNMENT.monarchy,
     treasury: 100,
     isHuman: false,
+    slot: 1,
     inPlay: true,
     scienceStored: 0,
     researching: null,
@@ -200,6 +201,7 @@ describe('AI production choice (verified structure)', () => {
         scienceRate: 5,
         government: 2,
         isHuman: false,
+        slot: 1,
       }),
     ).toEqual({ n: 9, military: false });
     c.inDisorder = true;
@@ -220,6 +222,7 @@ describe('AI production choice (verified structure)', () => {
       scienceRate: 5,
       government: 2,
       isHuman: false,
+      slot: 1,
     });
     expect(r?.n).toBe(-5);
     const pick = aiChooseProduction(env(w, c, facts({ unhappy: 3, happy: 0 })));
@@ -268,5 +271,69 @@ describe('AI production choice (verified structure)', () => {
     expect(
       aiChooseProduction(env(w, c, facts(), civ({ government: GOVERNMENT.despotism }))),
     ).toEqual({ kind: 'unit', index: 3 });
+  });
+});
+
+describe('defence valuations (0x00474edb)', () => {
+  it("SAM Battery and Coastal Fortress weigh the main human's air and naval units", () => {
+    const w = new World({ columns: 20, rows: 30, flatEarth: true });
+    w.terrain.fill(2);
+    const c = city(w, 5);
+    const counts: Record<string, number> = { '2:28': 2, '2:31': 1, '2:40': 1 };
+    const base = {
+      rules,
+      cityCount: 3,
+      continentCities: 3,
+      barracksOnContinent: 0,
+      airportsOnContinent: 0,
+      portsOnContinent: 0,
+      oceanSquares: 0,
+      farmlandSquares: 0,
+      coastal: true,
+      distanceToCapital: 5,
+      knows: () => false,
+      ownsWonder: () => false,
+      wonderBuilt: () => false,
+      scienceRate: 5,
+      government: 2,
+      isHuman: false,
+      slot: 1,
+      mainHuman: 2,
+      isHumanSlot: (s: number) => s === 2,
+      unitCount: (s: number, ty: number) => counts[`${s}:${ty}`] ?? 0,
+      atWar: () => false,
+      vendettaAgainst: () => false,
+      reputationOf: () => 0,
+    };
+    // (Stealth Bombers × 2 + Bombers × 2) × 2 = 12 → 12 − 12 = 0 → at least 1.
+    expect(improvementPriority(IMPROVEMENT.samBattery, c, facts(), base)).toEqual({
+      n: 1,
+      military: true,
+    });
+    // One Battleship × 5 → 7.
+    expect(improvementPriority(IMPROVEMENT.coastalFortress, c, facts(), base)).toEqual({
+      n: 7,
+      military: true,
+    });
+    // A human owner sums the others, halved without war or vendetta: 2 + 1 = 3 → 1 → 11.
+    const human = {
+      ...base,
+      isHuman: true,
+      slot: 3,
+      isHumanSlot: (s: number) => s === 2 || s === 3,
+    };
+    expect(improvementPriority(IMPROVEMENT.samBattery, c, facts(), human)?.n).toBe(11);
+    // With a human of reputation above 4 the military flag follows the expanding flag.
+    const rep = { ...base, reputationOf: () => 5 };
+    expect(
+      improvementPriority(IMPROVEMENT.samBattery, c, facts({ expanding: false }), rep)?.military,
+    ).toBe(false);
+    // Police Station: 10 − the units away, doubled under Democracy, +2 when barely content.
+    expect(
+      improvementPriority(IMPROVEMENT.policeStation, c, facts({ unitsAway: 2 }), {
+        ...base,
+        government: GOVERNMENT.democracy,
+      })?.n,
+    ).toBe(4);
   });
 });
