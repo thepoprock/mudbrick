@@ -7,7 +7,7 @@
  */
 import type { Rng } from './rng.js';
 import { DOMAIN_AIR, DOMAIN_GROUND, DOMAIN_SEA, type EngineRules } from './rules.js';
-import { OCEAN, SquareFlag, type Point, type Unit, type World } from './world.js';
+import { OCEAN, SquareFlag, type City, type Point, type Unit, type World } from './world.js';
 
 export const THIRDS = 3;
 
@@ -336,6 +336,12 @@ export type MoveResult =
   | { kind: 'boarded'; ship: Unit }
   | { kind: 'failed-roll' }
   | { kind: 'attack' }
+  /** A diplomat or spy at a foreign city: the espionage menu (espionage.ts). */
+  | { kind: 'diplomat'; city: City }
+  /** A diplomat or spy next to a lone foreign unit: bribe or sabotage it. */
+  | { kind: 'diplomat-unit'; target: Unit }
+  /** A caravan at a foreign city: a trade route (trade.ts). */
+  | { kind: 'caravan'; city: City }
   | { kind: 'refused'; reason: Exclude<MoveVerdict, { ok: true }>['reason'] };
 
 export function tryMove(
@@ -348,6 +354,21 @@ export function tryMove(
 ): MoveResult {
   const verdict = checkMove(world, rules, unit, to, ctx);
   if (!verdict.ok) {
+    if (verdict.reason === 'enemy' && unit.owner !== 0) {
+      // VERIFIED: the handler sends diplomats and caravans entering foreign cities to their own
+      // routines before any combat; a diplomat next to a lone foreign unit gets the bribe menu.
+      const role = rules.units[unit.type]?.role;
+      const city = world.cityAt(to.x, to.y);
+      if (city && city.owner !== unit.owner) {
+        if (role === 6) return { kind: 'diplomat', city };
+        if (role === 7) return { kind: 'caravan', city };
+      } else if (role === 6) {
+        const there = world.unitsAt(to.x, to.y);
+        const target = there[0];
+        if (target && there.length === 1 && target.owner !== unit.owner)
+          return { kind: 'diplomat-unit', target };
+      }
+    }
     return verdict.reason === 'enemy'
       ? { kind: 'attack' }
       : { kind: 'refused', reason: verdict.reason };

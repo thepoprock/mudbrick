@@ -65,6 +65,8 @@ export interface AiBuildFacts {
   cityHasCaravan?: boolean;
   /** The civilization's caravans on the city's land mass (the strategic tally). */
   caravansOnContinent?: number;
+  /** Slots the civilization has met (contact), for the diplomat rule. */
+  metSlots?: number[];
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -543,7 +545,7 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
   if (totalUnits < 512) {
     for (let t = 0; t < rules.units.length; t++) {
       const u = rules.units[t];
-      if (!u || !buildable(t) || (u.role > 5 && u.role !== 7)) continue;
+      if (!u || !buildable(t) || (u.role > 5 && u.role !== 7 && u.role !== 6)) continue;
       const onContinent = myUnits.filter(
         (x) => x.type === t && world.landmass[world.index(x.position.x, x.position.y)] === mass,
       ).length;
@@ -566,6 +568,23 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
       let n = building * 2 + onContinent;
       // VERIFIED: with an urgent defence need nothing but a defender is considered.
       if (need === 2 && u.role !== 1) continue;
+      if (u.role === 6) {
+        // VERIFIED shape (ai-city.md): 11, or `clamp(10 − (their advances − ours), 2, 10)` against
+        // a civilization ahead of us that we have met; never with one already on the land mass
+        // (INFERRED: the space-race halving is left out). Then the non-combat scaling.
+        if (onContinent > 0) continue;
+        let v = 11;
+        for (const other of world.civs) {
+          if (other.slot === 0 || other.slot === civ.slot || !other.inPlay) continue;
+          if (!(f.metSlots?.includes(other.slot) ?? false)) continue;
+          const ahead = other.advancesCount - civ.advancesCount;
+          if (ahead > 0) v = Math.min(v, clamp(10 - ahead, 2, 10));
+        }
+        v = Math.trunc(((f.expanding ? 20 : 10) * v * 3) / (f.civilize + 3));
+        if (city.improvements[IMPROVEMENT.barracks]) v += v >> 2;
+        consider(v, { kind: 'unit', index: t });
+        continue;
+      }
       if (u.role === 7) {
         // VERIFIED caravans (0x00474edb): `10 − (5 − expand) × trade / 10` while the city has
         // fewer than three routes, +2 per route, at least 2, plus the civilization's caravans on

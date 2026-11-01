@@ -59,7 +59,7 @@ civilizations, tribe, barbarians) and start at 4000 BC. **Save** writes a `.SAV`
 format when one was loaded, else Mudbrick's own `.mudbrick.json`, which "Map or game" reloads. Click a unit to select it; the side panel lists the keys (arrows or the number pad
 to move, `f` fortify, `s` sleep, `g` go to, `b` build or join a city, `r`/`i`/`m`/`o` for roads,
 irrigation, mines and transforming, `F` fortress, `E` airbase, `p` clean pollution, `P` pillage,
-`D` disband, `t` trade route and `h` help wonder for caravans, `Tab` next unit, `Enter` end turn). Click a city for its yields, mood and production
+`D` disband, `t` trade route and `h` help wonder for caravans, diplomats and spies get a mission menu at a foreign city or next to a lone foreign unit, `Tab` next unit, `Enter` end turn). Click a city for its yields, mood and production
 menu; the research panel sets the research target.
 
 Everything the player does runs through the engine's verified rules; the log says INFERRED where

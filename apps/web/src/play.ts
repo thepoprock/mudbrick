@@ -51,6 +51,15 @@ import {
   establishTradeRoute,
   helpWonder,
   type TradeEvent,
+  bribeCost,
+  bribeUnit,
+  espionageOptions,
+  inciteCost,
+  performEspionage,
+  sabotageUnit,
+  SPY_TYPE,
+  type EspionageAction,
+  type EspionageEvent,
 } from '@mudbrick/engine';
 import { ADVANCE, IMPROVEMENT } from '@mudbrick/engine';
 import { sprites } from '@mudbrick/formats';
@@ -104,6 +113,8 @@ export class PlaySession {
   governmentChoiceDue = false;
   /** The government chosen when the revolution started, applied when anarchy ends. */
   wantedGovernment: number | null = null;
+  /** A diplomat or spy waiting for the player's choice at a foreign city or unit. */
+  pendingAgent: { unit: Unit; city: City } | { unit: Unit; target: Unit } | null = null;
   selected: Unit | null = null;
   openCity: City | null = null;
   gotoMode = false;
@@ -322,6 +333,25 @@ export class PlaySession {
       case 'failed-roll':
         this.log(`${this.unitName(unit)} runs out of movement before reaching the square.`);
         break;
+      case 'diplomat':
+        this.pendingAgent = { unit, city: r.city };
+        this.log(
+          `${this.unitName(unit)} at the gates of ${r.city.name}: choose a mission in the unit panel.`,
+        );
+        break;
+      case 'diplomat-unit':
+        this.pendingAgent = { unit, target: r.target };
+        this.log(
+          `${this.unitName(unit)} approaches a lone ${this.unitName(r.target)}: choose in the unit panel.`,
+        );
+        break;
+      case 'caravan': {
+        const events: TradeEvent[] = [];
+        establishTradeRoute(this.world, this.rules, unit, r.city, this.game.tradeContext(), events);
+        for (const e of events) this.log(`${e.text}.`);
+        this.selected = null;
+        break;
+      }
       case 'attack':
         this.attack(unit, to);
         break;
@@ -748,6 +778,11 @@ export class PlaySession {
       u.homeCity === null
         ? 'none'
         : (this.world.cities.find((c) => c.id === u.homeCity)?.name ?? '?');
+    const pending = this.pendingAgent;
+    if (pending && pending.unit === u && this.world.units.includes(u)) {
+      el.replaceChildren(this.agentMenu(pending));
+      return;
+    }
     el.textContent =
       `${this.unitName(u)}${u.veteran ? ' (veteran)' : ''} at (${u.position.x}, ${u.position.y})\n` +
       `moves ${Math.floor(left / 3)}${left % 3 ? ` ${left % 3}/3` : ''} · HP ${hp}/${type ? type.hitPointsTens * 10 : '?'} · home ${home}\n` +
@@ -755,6 +790,90 @@ export class PlaySession {
       `keys: arrows/numpad move · f fortify · s sleep · g go to · w wait · b build city\n` +
       `r road · i irrigate · m mine · o transform · F fortress · E airbase · p clean pollution\n` +
       `P pillage · D disband · t trade route · h help wonder · Tab next unit · c centre · Enter end turn`;
+  }
+
+  /** Buttons for a diplomat's or spy's mission (espionage.ts). */
+  private agentMenu(
+    pending: { unit: Unit; city: City } | { unit: Unit; target: Unit },
+  ): HTMLElement {
+    const box = document.createElement('div');
+    const title = document.createElement('div');
+    const ctx = this.game.espionageContext();
+    const button = (label: string, run: () => EspionageEvent[]) => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.addEventListener('click', () => {
+        const events = run();
+        for (const e of events) {
+          this.log(`${e.text}.`);
+          if (e.investigated !== undefined) {
+            const c = this.world.cities.find((x) => x.id === e.investigated);
+            if (c) this.openCity = c;
+          }
+        }
+        this.pendingAgent = null;
+        if (!this.world.units.includes(pending.unit)) this.selected = null;
+        this.refresh();
+      });
+      box.appendChild(b);
+    };
+    const cancel = () => {
+      this.pendingAgent = null;
+      this.refresh();
+    };
+    if ('city' in pending) {
+      const { unit, city } = pending;
+      title.textContent = `${this.unitName(unit)} at ${city.name} (${this.world.civs[city.owner]?.name ?? '?'}):`;
+      box.appendChild(title);
+      for (const action of espionageOptions(this.world, unit, city, ctx)) {
+        if (action === 'incite') {
+          const cost = inciteCost(this.world, unit, city);
+          button(`Incite a revolt (${cost} gold)`, () =>
+            performEspionage(this.world, this.rules, unit, city, 'incite', ctx, 1),
+          );
+          continue;
+        }
+        if (action === 'sabotage' && unit.type === SPY_TYPE) {
+          button('Sabotage (random)', () =>
+            performEspionage(this.world, this.rules, unit, city, 'sabotage', ctx),
+          );
+          for (let i = 2; i < 39; i++) {
+            if (!city.improvements[i] || i === 17) continue;
+            button(`Sabotage ${this.rules.improvements[i]?.name ?? i}`, () =>
+              performEspionage(this.world, this.rules, unit, city, 'sabotage', ctx, i),
+            );
+          }
+          continue;
+        }
+        const labels: Record<EspionageAction, string> = {
+          embassy: 'Establish an embassy',
+          investigate: 'Investigate the city',
+          steal: 'Steal technology',
+          sabotage: 'Sabotage',
+          poison: 'Poison the water supply',
+          nuke: 'Plant a nuclear device',
+          incite: 'Incite a revolt',
+        };
+        button(labels[action], () =>
+          performEspionage(this.world, this.rules, unit, city, action, ctx),
+        );
+      }
+    } else {
+      const { unit, target } = pending;
+      const cost = bribeCost(this.world, this.rules, target, unit.owner);
+      title.textContent = `${this.unitName(unit)} meets a lone ${this.unitName(target)}:`;
+      box.appendChild(title);
+      button(cost === null ? 'Bribe (impossible)' : `Bribe for ${cost} gold`, () =>
+        bribeUnit(this.world, this.rules, unit, target, ctx),
+      );
+      if (unit.type === SPY_TYPE)
+        button('Sabotage the unit', () => sabotageUnit(this.world, this.rules, unit, target, ctx));
+    }
+    const c = document.createElement('button');
+    c.textContent = 'Keep moving';
+    c.addEventListener('click', cancel);
+    box.appendChild(c);
+    return box;
   }
 
   private renderCityPanel(): void {

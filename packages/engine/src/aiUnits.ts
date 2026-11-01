@@ -30,6 +30,12 @@ import { DOMAIN_AIR, DOMAIN_GROUND, IMPROVEMENT, type EngineRules, DOMAIN_SEA } 
 import { ORDER } from './terraform.js';
 import { workerRules } from './aiTerraform.js';
 import { applyShipDecision, transportDecision } from './aiShips.js';
+import {
+  aiEspionageChoice,
+  bribeUnit,
+  performEspionage,
+  type EspionageContext,
+} from './espionage.js';
 import { hutAt } from './terrainSpecials.js';
 import {
   aiCaravanDestination,
@@ -79,6 +85,8 @@ export interface AiUnitContext extends MovementContext {
   attitude?: (slot: number) => number;
   /** Allied with a slot (transports ferrying to friends). */
   isAlly?: (slot: number) => boolean;
+  /** Espionage context for diplomats and spies (espionage.ts); without it they only guard. */
+  espionage?: EspionageContext;
   /** Human-controlled slot (the cargo rule differs); the game passes it. */
   isHuman?: (slot: number) => boolean;
   /** The civilization's continent plan for a land mass (cargo on a "defend" land mass stays home). */
@@ -558,6 +566,9 @@ function act(
       return true;
     }
   }
+  if (r.kind === 'diplomat' || r.kind === 'diplomat-unit' || r.kind === 'caravan') {
+    return agentArrives(world, rules, unit, r, ctx, events);
+  }
   return false;
 }
 
@@ -583,6 +594,99 @@ function takeCityHere(
     kind: 'ai-unit',
     text: ev.cityDestroyed ? `destroys ${city.name}` : `captures ${city.name}`,
   });
+}
+
+/** A diplomat, spy or caravan that reached a foreign city or a lone foreign unit (the handler's special cases). */
+function agentArrives(
+  world: World,
+  rules: EngineRules,
+  unit: Unit,
+  r:
+    | { kind: 'diplomat'; city: City }
+    | { kind: 'diplomat-unit'; target: Unit }
+    | { kind: 'caravan'; city: City },
+  ctx: AiUnitContext,
+  events: AiUnitEvent[],
+): boolean {
+  if (r.kind === 'caravan') {
+    if (!ctx.trade) return false;
+    const tradeEvents: TradeEvent[] = [];
+    establishTradeRoute(world, rules, unit, r.city, ctx.trade, tradeEvents);
+    for (const e of tradeEvents) events.push({ kind: 'ai-unit', text: e.text });
+    return false;
+  }
+  if (!ctx.espionage) {
+    sentry(unit);
+    return false;
+  }
+  if (r.kind === 'diplomat') {
+    const action = aiEspionageChoice(world, unit, r.city, ctx.espionage);
+    for (const e of performEspionage(world, rules, unit, r.city, action, ctx.espionage))
+      events.push({ kind: 'ai-unit', text: e.text });
+    return false;
+  }
+  for (const e of bribeUnit(world, rules, unit, r.target, ctx.espionage))
+    events.push({ kind: 'ai-unit', text: e.text });
+  return false;
+}
+
+/**
+ * A diplomat picks a city (VERIFIED scoring, docs/engine/ai-units.md "Diplomats"): own cities
+ * `99 − distance`; foreign cities `100 + attitude (or 100 at war)` over `distance + 1`, halved
+ * when worked already, halved when the owner is six or more advances ahead, halved for treaty
+ * partners (INFERRED: the long fair-target list is reduced to "not at war"), then +100. The
+ * best becomes the go-to; next to a foreign target the unit steps in.
+ */
+function diplomatAct(
+  world: World,
+  rules: EngineRules,
+  unit: Unit,
+  ctx: AiUnitContext,
+  events: AiUnitEvent[],
+): boolean {
+  const here = unit.position;
+  const me = unit.owner;
+  const myAdvances = ctx.civ.advancesCount;
+  let best: City | null = null;
+  let bestScore = -1;
+  for (const c of world.cities) {
+    const d = distance(world, here, c.position);
+    let score: number;
+    if (c.owner === me) score = 99 - d;
+    else {
+      if (c.owner === 0) continue;
+      const war = ctx.atWar(c.owner);
+      const canAct = ctx.canAttack ? ctx.canAttack(c.owner) : war;
+      if (!war && !(ctx.attitude && ctx.espionage)) continue;
+      score = Math.trunc((100 + (war ? 100 : (ctx.attitude?.(c.owner) ?? 50))) / (d + 1));
+      if (c.techStolen) score >>= 1;
+      const theirs = world.civs.find((x) => x.slot === c.owner)?.advancesCount ?? 0;
+      if (theirs - myAdvances >= 6) score >>= 1;
+      if (!war && !canAct) score >>= 1;
+      score += 100;
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      best = c;
+    }
+  }
+  if (!best) {
+    sentry(unit);
+    return false;
+  }
+  if (best.owner !== me && distance(world, here, best.position) <= 1) {
+    const r = tryMove(world, rules, ctx.rng, unit, best.position, ctx);
+    if (r.kind === 'diplomat') return agentArrives(world, rules, unit, r, ctx, events);
+    sentry(unit);
+    return false;
+  }
+  if (best.position.x === here.x && best.position.y === here.y) {
+    sentry(unit);
+    return false;
+  }
+  if (stepToward(world, rules, unit, best.position, ctx)) return true;
+  sentry(unit);
+  return false;
 }
 
 /** Move every unit of a computer civilization once. */
@@ -645,6 +749,10 @@ export function aiMoveUnits(
       }
       if (type.role === ROLE_TRADE) {
         if (!caravanAct(world, rules, unit, ctx, events)) break;
+        continue;
+      }
+      if (type.role === ROLE_DIPLOMAT) {
+        if (!diplomatAct(world, rules, unit, ctx, events)) break;
         continue;
       }
       if (type.role === ROLE_DEFEND) {

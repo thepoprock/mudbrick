@@ -46,6 +46,7 @@ import { aiChooseProduction } from './aiBuild.js';
 import { runStrategy, type StrategyEvent } from './aiStrategy.js';
 import { gameYear } from './calendar.js';
 import { routeIncomeTotal, type TradeContext } from './trade.js';
+import type { EspionageContext } from './espionage.js';
 import { computeSupplyDemand, supplyDemandDue } from './supplyDemand.js';
 import { terraformTasks } from './aiTerraform.js';
 import {
@@ -73,6 +74,7 @@ import {
   civGovernmentScores,
   resetGovernmentScores,
   type GovernmentEvent,
+  startRevolution,
 } from './government.js';
 import { aiMoveUnits, type AiUnitEvent } from './aiUnits.js';
 import { releaseCitySite } from './fertility.js';
@@ -167,6 +169,26 @@ export class Game {
 
   /** The human's answer to a computer proposal; unset accepts peace and declines alliances. */
   humanAccepts?: (kind: 'peace' | 'alliance', human: number, other: number) => boolean;
+
+  espionageContext(): EspionageContext {
+    return {
+      turn: this.state.turn,
+      difficulty: this.state.difficulty,
+      rng: this.rng,
+      isHuman: (s) => this.world.civs.find((c) => c.slot === s)?.isHuman ?? false,
+      knows: (s, a) => this.knows(s, a),
+      ownsWonder: (s, i) => this.ownsWonder(s, i),
+      wonderBuilt: (i) => this.world.cities.some((c) => c.improvements[i]),
+      researchable: (a) => {
+        const adv = this.rules.advances[a];
+        return adv !== undefined && adv.preq1.kind !== 'never' && adv.preq2.kind !== 'never';
+      },
+      revolution: (s) => {
+        const c = this.world.civs.find((x) => x.slot === s);
+        if (c) startRevolution(this.world, c);
+      },
+    };
+  }
 
   tradeContext(): TradeContext {
     return {
@@ -637,6 +659,7 @@ export class Game {
         trade: this.tradeContext(),
         attitude: (other) => attitude(this.world, slot, other),
         isAlly: (other) => hasTreaty(this.world, slot, other, TREATY.alliance),
+        espionage: this.espionageContext(),
         isHuman: (s) => this.world.civs.find((c) => c.slot === s)?.isHuman ?? false,
         planOf: (s, lm) => this.world.civs.find((c) => c.slot === s)?.strategy?.plans[lm] ?? 5,
         nuclearPower: this.knows(slot, ADVANCE.nuclearPower),
@@ -914,6 +937,14 @@ export class Game {
               (u) => u.homeCity === city.id && this.rules.units[u.type]?.role === 7,
             ),
             caravansOnContinent: civ.strategy?.caravansOn[lm] ?? 0,
+            metSlots: this.world.civs
+              .filter(
+                (o) =>
+                  o.slot !== 0 &&
+                  o.slot !== civ.slot &&
+                  hasTreaty(this.world, civ.slot, o.slot, TREATY.contact),
+              )
+              .map((o) => o.slot),
           };
         })(),
         expanding: (() => {

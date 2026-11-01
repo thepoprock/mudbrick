@@ -125,6 +125,8 @@ export interface Civ {
   governmentScores?: Int16Array;
   /** The record's leading flag word (+0): bit 0 revolution pending, bit 2 a per-turn toggle. */
   civFlags?: number;
+  /** Diplomatic incidents suffered or caused (civilization record +28; bribes +1, incitements +2). */
+  incidents?: number;
 }
 
 export type Production = { kind: 'unit'; index: number } | { kind: 'improvement'; index: number };
@@ -170,6 +172,10 @@ export interface City {
   recomputeTrade?: boolean;
   /** AI: the city has a terrain-work objective out (city flag bit 19). */
   terraformTask?: boolean;
+  /** An advance was stolen from here (city flag bit 3); a second theft is harder. */
+  techStolen?: boolean;
+  /** A spy has investigated the city (city flag bit 22). */
+  investigated?: boolean;
   /** AI: a wanted settler stands within four squares (city flag 0x40). */
   workerNearby?: boolean;
 }
