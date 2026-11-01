@@ -1,7 +1,8 @@
 # What the difficulty level changes
 
 Every place the original reads the difficulty (0x005da728), found by searching the decompiled rules
-routines, levels numbered 0 (easiest) to 5. VERIFIED unless marked. All of these are deliberate: a
+routines, levels numbered 0 (easiest) to 5. The conditions are VERIFIED; a row marked INFERRED is sure of
+the test but not of what it is for. All of these are deliberate: a
 port that drops one changes how hard the game is, so check here before changing any of them.
 
 ## The computer's economy
@@ -11,7 +12,7 @@ port that drops one changes how hard the game is, so check here before changing 
 | Shield and food box rows for computers: `13 − level`, 14 at level 0, one more below level 3                                                                                                        | 0x004b3b24                       | `boxRows`                             |
 | From turn 200 at level 2 or above, while a human is the strongest, computer boxes lose up to 2 rows; Manhattan Project with Rocketry among computers, or Apollo with Space Flight, gives rows back | 0x004b3b24                       | `rowsRelief`                          |
 | Treasury purchases refund `level × share / 10 / (8 − top human rank)`                                                                                                                              | 0x004b7e74                       | `computerPurchase`                    |
-| Science: first advances and research cost by level                                                                                                                                                 | 0x004b6359 and research routines | `cityScienceToCiv`, `researchCostFor` |
+| INFERRED: science, research cost by level                                                                                                                                                          | 0x004b6359 and research routines | `cityScienceToCiv`, `researchCostFor` |
 
 ## What the computer will build
 
@@ -39,14 +40,14 @@ in part: the base of 4 or 2 is there, the level-dependent reduction and the shie
 
 ## Behaviour
 
-| Rule                                                                                                                                         | Where      | Engine       |
-| -------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------ |
-| Harder levels: `rand % 10 <= level` puts a new computer agent at the front                                                                   | 0x004b7e74 | `placeAgent` |
-| Level 3 and above: a stronger human's unit in a computer's country at peace may provoke a break                                              | 0x004f44cc | `aiUnits`    |
-| Level 3 and above: ground units attack treaty partners' agents                                                                               | 0x004f44cc | `aiUnits`    |
-| `level × turn > 200`: the computer sees further when picking targets                                                                         | 0x004ed2dd | `aiStrategy` |
-| Not ported yet: level 1 and above, a settler near a richer human's city may found a city to block it (0x004f44cc, the test above 0x00497dbe) |            |              |
-| Human upkeep and happiness base by level                                                                                                     | 0x004b6359 | `mood`       |
+| Rule                                                                                                                                               | Where      | Engine       |
+| -------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------ |
+| Harder levels: `rand % 10 <= level` puts a new computer agent at the front                                                                         | 0x004b7e74 | `placeAgent` |
+| Level 3 and above: a stronger human's unit in a computer's country at peace may provoke a break                                                    | 0x004f44cc | `aiUnits`    |
+| INFERRED: level 3 and above, ground units attack treaty partners' agents                                                                           | 0x004f44cc | `aiUnits`    |
+| INFERRED: `level × turn > 200` lets the computer see further when picking targets                                                                  | 0x004ed2dd | `aiStrategy` |
+| Not ported, INFERRED: level 1 and above, a settler near a richer human's city may found a city to block it (0x004f44cc, the test above 0x00497dbe) |            |              |
+| INFERRED: happiness base by level                                                                                                                  | 0x004b6359 | `mood`       |
 
 ## Calibrating
 
