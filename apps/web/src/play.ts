@@ -111,6 +111,10 @@ import {
   declareWar,
   treaty,
   TREATY,
+  adjustAttitude,
+  expelAgent,
+  gridDistance,
+  hasTreaty,
   type DiplomacyEvent,
 } from '@mudbrick/engine';
 import { ADVANCE, IMPROVEMENT } from '@mudbrick/engine';
@@ -534,6 +538,9 @@ export class PlaySession {
       case 'boarded':
         this.log(`${this.unitName(unit)} boards the ${this.unitName(r.ship)}.`);
         break;
+      case 'repaired':
+        this.log(`Our allies in ${r.city.name} repair the ${this.unitName(unit)}.`);
+        break;
       case 'failed-roll':
         this.log(`${this.unitName(unit)} runs out of movement before reaching the square.`);
         break;
@@ -592,6 +599,36 @@ export class PlaySession {
     // asks whether to break the treaty, then declares war (0x00526d80).
     const victim = enemies[0]?.owner ?? (city && city.owner !== unit.owner ? city.owner : null);
     if (victim !== null && victim !== 0) {
+      const lone = enemies.length === 1 ? enemies[0] : undefined;
+      if (
+        lone &&
+        !city &&
+        this.rules.units[lone.type]?.role === 6 &&
+        hasTreaty(this.world, lone.owner, unit.owner, TREATY.ceaseFire | TREATY.peace)
+      ) {
+        // VERIFIED 0x00539099: an agent can be put out, but only near one of our own cities.
+        let nearest: City | null = null;
+        let least = 9999;
+        for (const c of this.world.cities) {
+          const d = gridDistance(this.world, c.position, to);
+          if (d < least) {
+            least = d;
+            nearest = c;
+          }
+        }
+        if (nearest?.owner !== unit.owner) {
+          this.log('We cannot expel an agent from foreign land.');
+          return;
+        }
+        const name = this.rules.units[lone.type]?.name ?? 'agent';
+        if (window.confirm(`Expel the ${this.game.civ(lone.owner).adjective} ${name}?`)) {
+          const home = expelAgent(this.world, lone);
+          this.log(`The ${name} is sent home${home ? ` to ${home.name}` : ''}.`);
+          adjustAttitude(this.world, lone.owner, unit.owner, this.game.rng.nextInt(4));
+          this.refresh();
+          return;
+        }
+      }
       const word = treaty(this.world, unit.owner, victim);
       if ((word & (TREATY.ceaseFire | TREATY.peace)) !== 0) {
         const ok =

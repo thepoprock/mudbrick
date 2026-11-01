@@ -3,6 +3,7 @@ import { rawYields, shieldTotals, tradeSplit, unitSupport } from '../src/city.js
 import { removeCity } from '../src/fertility.js';
 import { adjustAttitude, hasTreaty, setTreaty, TREATY } from '../src/diplomacy.js';
 import { Game } from '../src/game.js';
+import { tryMove } from '../src/movement.js';
 import { longMoveCount } from '../src/turnStart.js';
 import { researchChoices, researchableAdvances } from '../src/outcome.js';
 import { applyCityMood, researchableAdvances } from '../src/outcome.js';
@@ -274,6 +275,39 @@ describe('Game turn loop', () => {
     adjustAttitude(world, ally.slot, human.slot, 60);
     game.answerAllyCall(call, false);
     expect(hasTreaty(world, human.slot, ally.slot, TREATY.alliance)).toBe(false);
+  });
+
+  it('a hurt unit moving into an ally stays out, is repaired and ends its move', () => {
+    const { world, city } = setup();
+    const ally = world.civs[1];
+    if (!ally) throw new Error('no civs');
+    const friend = { ...ally, slot: 5, name: 'Friend' };
+    world.civs.push(friend);
+    (ally.treaties ??= new Uint32Array(8))[5] = TREATY.alliance | TREATY.contact;
+    city.owner = 5;
+    const from = world.neighbours(city.position.x, city.position.y).find((p) => p);
+    if (!from) throw new Error('no square');
+    const u: Unit = {
+      id: 50,
+      position: { ...from },
+      owner: ally.slot,
+      type: 0,
+      veteran: false,
+      hitPointsLost: 9,
+      movesSpent: 0,
+      fortified: false,
+      homeCity: null,
+      order: null,
+      workCounter: 0,
+      gotoTarget: null,
+      lastDirection: null,
+      gotoSteps: 0,
+    };
+    world.units.push(u);
+    const r = tryMove(world, rules, new Rng(1), u, city.position, {});
+    expect(r.kind).toBe('repaired');
+    expect(u.position).toEqual(from);
+    expect(u.hitPointsLost).toBeLessThan(9);
   });
 
   it('the go-to counter adds one a step and fifteen more for turning back', () => {

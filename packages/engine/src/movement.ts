@@ -8,7 +8,7 @@
 import { hutAt } from './terrainSpecials.js';
 import { lookAround } from './sight.js';
 import type { Rng } from './rng.js';
-import { DOMAIN_AIR, DOMAIN_GROUND, DOMAIN_SEA, type EngineRules } from './rules.js';
+import { DOMAIN_AIR, DOMAIN_GROUND, DOMAIN_SEA, IMPROVEMENT, type EngineRules } from './rules.js';
 import { OCEAN, SquareFlag, type City, type Point, type Unit, type World } from './world.js';
 
 export const THIRDS = 3;
@@ -361,6 +361,8 @@ export type MoveResult =
   | { kind: 'boarded'; ship: Unit }
   | { kind: 'failed-roll' }
   | { kind: 'attack' }
+  /** Into an ally's city: repaired, and the move is over (0x00539099, ALLIEDREPAIR). */
+  | { kind: 'repaired'; amount: number; city: City }
   /** A diplomat or spy at a foreign city: the espionage menu (espionage.ts). */
   | { kind: 'diplomat'; city: City }
   /** A diplomat or spy next to a lone foreign unit: bribe or sabotage it. */
@@ -379,6 +381,22 @@ export function tryMove(
 ): MoveResult {
   const verdict = checkMove(world, rules, unit, to, ctx);
   if (!verdict.ok) {
+    const allyCity = verdict.reason === 'enemy' ? world.cityAt(to.x, to.y) : undefined;
+    const moverRole = rules.units[unit.type]?.role;
+    if (
+      allyCity &&
+      allyCity.owner !== unit.owner &&
+      moverRole !== 6 &&
+      moverRole !== 7 &&
+      ((world.civs.find((c) => c.slot === unit.owner)?.treaties?.[allyCity.owner] ?? 0) & 8) !== 0
+    ) {
+      let amount = rules.units[unit.type]?.hitPointsTens ?? 1;
+      if (allyCity.improvements[IMPROVEMENT.barracks]) amount <<= 1;
+      amount = Math.max(0, Math.min(amount, unit.hitPointsLost));
+      unit.hitPointsLost -= amount;
+      unit.movesSpent = fullMoves(rules, unit, ctx);
+      return { kind: 'repaired', amount, city: allyCity };
+    }
     if (verdict.reason === 'enemy' && unit.owner !== 0) {
       // VERIFIED: the handler sends diplomats and caravans entering foreign cities to their own
       // routines before any combat; a diplomat next to a lone foreign unit gets the bribe menu.

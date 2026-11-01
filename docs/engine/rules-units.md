@@ -227,3 +227,10 @@ impassable; a square of own units outside a city or fortress in a foreign zone o
 roles; air units pay 1 a step. Beyond the window the unit falls back to a weighted greedy step
 whose terms are the same costs plus the distance to the goal. The engine's `pathfinding.ts`
 implements the search and the step choice; the greedy fallback is the engine's own.
+
+## Allies and agents on the move (VERIFIED 0x00539099)
+
+A unit moving into an ally's city does not enter it: it is repaired by its hit points / 10, doubled
+with Barracks there, and its move is over (ALLIEDREPAIR). Moving onto a treaty partner's lone
+Diplomat or Spy offers to expel it, provided the nearest city is ours (EXPEL, otherwise NOEXPEL): it
+goes to its owner's largest city, the capital counting 50 more.

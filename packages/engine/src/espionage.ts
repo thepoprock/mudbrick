@@ -601,3 +601,26 @@ export function sabotageUnit(
   resolveAgent(world, rules, spy, 0, ctx, events);
   return events;
 }
+
+/**
+ * Expel a treaty partner's lone agent from our land (0x00539099, EXPEL): it goes to its owner's
+ * largest city, the capital counting 50 more.
+ */
+export function expelAgent(world: World, target: Unit): City | null {
+  let best = -1;
+  let home: City | null = null;
+  for (const c of world.cities) {
+    if (c.owner !== target.owner) continue;
+    const v = c.size + (c.improvements[IMPROVEMENT.palace] ? 50 : 0);
+    if (best < v) {
+      best = v;
+      home = c;
+    }
+  }
+  if (home) {
+    target.position = { x: home.position.x, y: home.position.y };
+    target.order = null;
+    target.gotoTarget = null;
+  }
+  return home;
+}
