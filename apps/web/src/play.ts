@@ -108,6 +108,7 @@ import {
 } from '@mudbrick/engine';
 import { ADVANCE, IMPROVEMENT } from '@mudbrick/engine';
 import { sprites } from '@mudbrick/formats';
+import { drawCityView } from './cityView.js';
 import type { GameFolder } from './gameFiles.js';
 import { hitTest, squareOrigin } from './mapRenderer.js';
 import { drawWorld, WORLD_TOP_PAD, type WorldRenderOptions } from './worldRenderer.js';
@@ -1197,6 +1198,23 @@ export class PlaySession {
     });
   }
 
+  /** The City View, for a city you can see. */
+  private showCityView(city: City): void {
+    const box = this.talkBox();
+    box.style.width = '960px';
+    box.replaceChildren();
+    const canvas = document.createElement('canvas');
+    canvas.style.cssText = 'width:100%;image-rendering:auto';
+    box.appendChild(canvas);
+    void drawCityView(canvas, this.game, this.folder, city).then((ok) => {
+      if (!ok) canvas.remove();
+    });
+    this.talkButton(box, 'Close', () => {
+      box.style.width = '420px';
+      this.closeTalk();
+    });
+  }
+
   private airliftMenu(unit: Unit): void {
     const r = airliftTargets(this.world, this.rules, unit);
     if ('refused' in r) {
@@ -1958,6 +1976,7 @@ export class PlaySession {
           if (r === 'disorder') this.log(`${city.name} is in disorder: no units can be bought.`);
         }),
       );
+    box.appendChild(button('View', () => this.showCityView(city)));
     const sell = document.createElement('select');
     const none = document.createElement('option');
     none.textContent = city.soldThisTurn ? '(sold this turn)' : 'Sell…';

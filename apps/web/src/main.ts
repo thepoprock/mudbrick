@@ -461,6 +461,8 @@ byId<HTMLButtonElement>('netJoin').addEventListener('click', () => {
 });
 
 if (import.meta.env.DEV) {
+  // For automated checks of screens that are slow to reach by clicking.
+  (window as unknown as { mudbrick: () => PlaySession | undefined }).mudbrick = () => session;
   installDevLoader(byId<HTMLSpanElement>('dev'), {
     onFolder: applyFolder,
     onGame: (n, b) => {

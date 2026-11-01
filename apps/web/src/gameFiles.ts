@@ -53,7 +53,7 @@ export interface GameFolder {
   /** COUNCIL0–2.TXT as raw text, by era; empty strings when absent. */
   council: string[];
   /** A picture from one of the folder's DLLs, with its transparent colour removed. */
-  art: (dll: string, id: number) => Promise<string | null>;
+  art: (dll: string, id: number, opaque?: boolean) => Promise<string | null>;
   /** Describe.txt, for the Civilopedia. */
   descriptions: Descriptions | null;
   /** Fetch any other file from the folder by name (case-insensitive), e.g. a save. */
@@ -144,14 +144,15 @@ function artLoader(lookup: FileSource) {
     }
     return d;
   };
-  return (dll: string, id: number): Promise<string | null> => {
-    const key = `${dll}:${id}`;
+  return (dll: string, id: number, opaque = false): Promise<string | null> => {
+    const key = `${dll}:${id}:${opaque}`;
     let u = urls.get(key);
     if (!u) {
       u = open(dll).then(async (gifs) => {
         const gif = gifs.get(id);
         if (!gif) return null;
         const blob = new Blob([gif.slice()], { type: 'image/gif' });
+        if (opaque) return URL.createObjectURL(blob);
         const image = await createImageBitmap(blob);
         const canvas = document.createElement('canvas');
         canvas.width = image.width;

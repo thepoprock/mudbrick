@@ -94,3 +94,12 @@ advance leads to and allows. `?` opens it. Terrain and concepts are not offered 
 0x00452e10 plays `SOUND/NAME.WAV`, and CHEERS picks one of three. The attack routine 0x0052d472
 chooses by unit slot and domain, and production 0x004b7e74 by improvement. `M` mutes. Music
 (the Pick Music menu and CD tracks) is not ported.
+
+## City View (0x0043e690)
+
+`apps/web/src/cityView.ts`. Pictures come from cv.dll at run time. The site is coast, river or
+inland (0x0043f3b3), and the background is picture `340 + site × 5 + era`, or era 3 with
+Superhighways. Improvements 1 to 34 take places in random order from a 31-entry list per site, a
+few at fixed places (walls and others). Unbuilt ones leave a house. Wonders do the same from a
+24-entry list. The generator is the program's (seed × 0x19660d + 0x3c6ef35f), seeded with
+`x × 256 + y + map seed`, so a city's layout never changes. Places are drawn in order, back to front.
