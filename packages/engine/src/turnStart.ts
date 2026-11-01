@@ -7,7 +7,7 @@
 import { gridDistance } from './city.js';
 import { maxHitPoints } from './combat.js';
 import { checkMove, endUnitMove, fullMoves, tryMove, type MovementContext } from './movement.js';
-import { gotoDirection } from './pathfinding.js';
+import { chooseGotoStep } from './pathfinding.js';
 import type { Rng } from './rng.js';
 import { DOMAIN_AIR, DOMAIN_GROUND, DOMAIN_SEA, IMPROVEMENT, type EngineRules } from './rules.js';
 import { doWork, ORDER, type WorkContext, type WorkEvent } from './terraform.js';
@@ -170,7 +170,7 @@ export function gotoStep(
   };
   while (fullMoves(rules, unit, ctx) > unit.movesSpent) {
     let best: { x: number; y: number } | null = null;
-    const dir = gotoDirection(world, rules, unit, target);
+    const dir = chooseGotoStep(world, rules, unit, target);
     if (dir !== null) {
       const off = NEIGHBOUR_OFFSETS[dir];
       const y = unit.position.y + (off?.y ?? 0);

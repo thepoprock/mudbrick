@@ -290,3 +290,293 @@ export function gotoDirection(
   }
   return best < 0 ? null : best;
 }
+
+/**
+ * The locator grid (VERIFIED 0x0050df10, saved in every game after the map): cells of four game
+ * columns by four rows, one byte per cell for land and one for sea. A bit says the cell reaches
+ * that neighbouring cell. The original builds it once when a world starts and never again, so
+ * terraforming does not touch it. Built here on first use and kept with the world.
+ */
+export interface LocatorGrid {
+  columns: number;
+  rows: number;
+  land: Uint8Array;
+  sea: Uint8Array;
+}
+
+/** Cell steps in bit order (VERIFIED, the tables at 0x005b2e98 and 0x005b2ea8). */
+const CELL_DX = [0, 1, 1, 1, 0, -1, -1, -1];
+const CELL_DY = [-1, -1, 0, 1, 1, 1, 0, -1];
+
+const grids = new WeakMap<World, LocatorGrid>();
+
+/** The first square of a cell on the wanted kind of terrain (0x0050e1c7 and 0x00485ac5). */
+function cellSquare(world: World, x: number, y: number, sea: boolean): Point | null {
+  for (let k = 0; k < 2; k++) {
+    const sy = y + k;
+    if (sy < 0 || sy >= world.rows) continue;
+    const sx = world.wrapX(x + k, sy);
+    if (sx === null || !world.isSquare(sx, sy)) continue;
+    if ((world.terrain[world.index(sx, sy)] === OCEAN) === sea) return { x: sx, y: sy };
+  }
+  return null;
+}
+
+/** Steps between two squares of one kind within `limit` counted squares, the search's plain mode. */
+function plainSteps(world: World, a: Point, b: Point, sea: boolean, limit: number): number {
+  const goal = world.index(b.x, b.y);
+  const start = world.index(a.x, a.y);
+  if (goal === start) return 0;
+  const cost = new Map<number, number>([[goal, 1]]);
+  let frontier = [goal];
+  for (let c = 1; frontier.length > 0 && c <= limit; c++) {
+    const next: number[] = [];
+    for (const i of frontier) {
+      for (let dir = 0; dir < 8; dir++) {
+        const n = neighbourIndex(world, i, dir);
+        if (n < 0 || cost.has(n)) continue;
+        if (n !== start && (world.terrain[n] === OCEAN) !== sea) continue;
+        if (n === start) return c + 1;
+        cost.set(n, c + 1);
+        next.push(n);
+      }
+    }
+    frontier = next;
+  }
+  return -1;
+}
+
+export function locatorGrid(world: World): LocatorGrid {
+  const known = grids.get(world);
+  if (known) return known;
+  const columns = (world.widthX2 + 3) >> 2;
+  const rows = (world.rows + 3) >> 2;
+  const cellX = (x: number) => {
+    if (world.flatEarth) return x;
+    if (x < 0) return columns + x;
+    return x >= columns ? x - columns : x;
+  };
+  const build = (sea: boolean): Uint8Array => {
+    const grid = new Uint8Array(columns * rows);
+    for (let cx = 0; cx < columns; cx++) {
+      for (let cy = 0; cy < rows; cy++) {
+        const x = cx * 4 + 1;
+        const y = cy * 4 + 1;
+        const here = cellSquare(world, x, y, sea);
+        if (!here) continue;
+        const body = world.landmass[world.index(here.x, here.y)];
+        for (let dir = 0; dir < 4; dir++) {
+          const ny = y + (CELL_DY[dir] ?? 0) * 4;
+          if (ny < 0 || ny >= world.rows) continue;
+          const nx = world.wrapX(x + (CELL_DX[dir] ?? 0) * 4, ny);
+          if (nx === null || !world.isSquare(nx, ny)) continue;
+          const there = cellSquare(world, nx, ny, sea);
+          if (!there || world.landmass[world.index(there.x, there.y)] !== body) continue;
+          const steps = plainSteps(world, here, there, sea, 5);
+          // INFERRED: the code reads as cost under 5 (three steps), but the saved grids reject the
+          // exact (3,3) diagonal. Measured on one world: 34 of 486 land links and 66 of 1008 sea differ.
+          if (steps <= 0 || steps >= 5) continue;
+          if (steps === 4 && Math.abs(there.x - here.x) === 3 && Math.abs(there.y - here.y) === 3)
+            continue;
+          const at = cy * columns + cx;
+          grid[at] = (grid[at] ?? 0) | (1 << dir);
+          const ox = cellX(cx + (CELL_DX[dir] ?? 0));
+          const oy = cy + (CELL_DY[dir] ?? 0);
+          if (ox >= 0 && oy >= 0 && ox < columns && oy < rows) {
+            const back = oy * columns + ox;
+            grid[back] = (grid[back] ?? 0) | (1 << ((dir - 4) & 7));
+          }
+        }
+      }
+    }
+    return grid;
+  };
+  const made = { columns, rows, land: build(false), sea: build(true) };
+  grids.set(world, made);
+  return made;
+}
+
+/** Steps of real cost from `a` to `b` for the standard unit of the domain, −1 past `limit`. */
+function reachCost(
+  world: World,
+  rules: EngineRules,
+  a: Point,
+  b: Point,
+  sea: boolean,
+  limit: number,
+): number {
+  const start = world.index(a.x, a.y);
+  const goal = world.index(b.x, b.y);
+  if (start === goal) return 0;
+  if (gridDistance(world, a, b) >= 23) return -1;
+  // VERIFIED (0x00485412): Settlers on land, unit 33 at sea, and nobody's units in the way.
+  const type = sea ? 33 : 2;
+  const walker = { type, owner: -1 } as Unit;
+  const board: Board = {
+    unitOwner: new Int8Array(world.area).fill(-1),
+    sameRole: new Uint8Array(world.area),
+    cityOwner: new Int8Array(world.area).fill(-1),
+  };
+  for (const c of world.cities) board.cityOwner[world.index(c.position.x, c.position.y)] = c.owner;
+  const cost = new Map<number, number>([[goal, 1]]);
+  const open = [goal];
+  while (open.length > 0) {
+    const i = open.shift() ?? 0;
+    const c = cost.get(i) ?? 0;
+    if (c > limit) continue;
+    for (let dir = 0; dir < 8; dir++) {
+      const n = neighbourIndex(world, i, dir);
+      if (n < 0) continue;
+      if (n !== start && (world.terrain[n] === OCEAN) !== sea) continue;
+      const nc = c + stepCost(world, rules, walker, board, n, i);
+      if (nc >= (cost.get(n) ?? Infinity)) continue;
+      cost.set(n, nc);
+      open.push(n);
+    }
+  }
+  const found = cost.get(start);
+  return found !== undefined && found < limit ? found : -1;
+}
+
+/** The cell a square routes from (VERIFIED 0x00485b63): its own, else the nearest neighbour. */
+function routeCell(
+  world: World,
+  rules: EngineRules,
+  p: Point,
+  sea: boolean,
+): { x: number; y: number; ok: boolean } {
+  const g = locatorGrid(world);
+  const bits = sea ? g.sea : g.land;
+  const cx = p.x >> 2;
+  const cy = p.y >> 2;
+  if (bits[cy * g.columns + cx]) {
+    const own = cellSquare(world, cx * 4 + 1, cy * 4 + 1, sea);
+    if (own && reachCost(world, rules, own, p, sea, 18) >= 0) return { x: cx, y: cy, ok: true };
+  }
+  let best = -1;
+  let bestDistance = 99;
+  const wrap = (x: number) => {
+    if (world.flatEarth) return x;
+    if (x < 0) return g.columns + x;
+    return x >= g.columns ? x - g.columns : x;
+  };
+  for (let dir = 0; dir < 8; dir++) {
+    const nx = wrap(cx + (CELL_DX[dir] ?? 0));
+    const ny = cy + (CELL_DY[dir] ?? 0);
+    if (nx < 0 || ny < 0 || nx >= g.columns || ny >= g.rows) continue;
+    if (!bits[ny * g.columns + nx]) continue;
+    const base = { x: nx * 4 + 1, y: ny * 4 + 1 };
+    if (!world.isSquare(base.x, base.y)) continue;
+    const d = gridDistance(world, p, base);
+    if (d >= bestDistance) continue;
+    const square = cellSquare(world, base.x, base.y, sea);
+    if (square && reachCost(world, rules, square, p, sea, 18) >= 0) {
+      best = dir;
+      bestDistance = d;
+    }
+  }
+  if (best < 0) return { x: cx, y: cy, ok: false };
+  return { x: wrap(cx + (CELL_DX[best] ?? 0)), y: cy + (CELL_DY[best] ?? 0), ok: true };
+}
+
+/**
+ * The next waypoint of a long trip (VERIFIED 0x00485550): a breadth search over the locator grid
+ * from the goal's cell back to the unit's, in the original's 256-entry ring. The waypoint is the
+ * neighbouring cell nearest the goal, its first square of the right kind. Null when no route
+ * exists, and the caller then heads straight for the goal.
+ */
+export function longRouteWaypoint(
+  world: World,
+  rules: EngineRules,
+  from: Point,
+  goal: Point,
+  sea: boolean,
+): Point | null {
+  const start = routeCell(world, rules, from, sea);
+  if (!start.ok) return null;
+  const end = routeCell(world, rules, goal, sea);
+  const g = locatorGrid(world);
+  const bits = sea ? g.sea : g.land;
+  const wrap = (x: number) => {
+    if (world.flatEarth) return x;
+    if (x < 0) return g.columns + x;
+    return x >= g.columns ? x - g.columns : x;
+  };
+  const seen = new Uint8Array(g.columns * g.rows);
+  const qx = new Int32Array(256);
+  const qy = new Int32Array(256);
+  let head = 0;
+  let tail = 1;
+  qx[0] = end.x;
+  qy[0] = end.y;
+  seen[end.y * g.columns + end.x] = 1;
+  let found = false;
+  for (;;) {
+    const x = qx[head] ?? 0;
+    const y = qy[head] ?? 0;
+    head = (head + 1) & 0xff;
+    if (x === start.x && y === start.y) {
+      found = true;
+      break;
+    }
+    const level = seen[y * g.columns + x] ?? 0;
+    const mask = bits[y * g.columns + x] ?? 0;
+    for (let dir = 0; dir < 8; dir++) {
+      if ((mask & (1 << dir)) === 0) continue;
+      const nx = wrap(x + (CELL_DX[dir] ?? 0));
+      const ny = y + (CELL_DY[dir] ?? 0);
+      if (nx < 0 || ny < 0 || nx >= g.columns || ny >= g.rows) continue;
+      if (seen[ny * g.columns + nx]) continue;
+      seen[ny * g.columns + nx] = level + 1;
+      qx[tail] = nx;
+      qy[tail] = ny;
+      tail = (tail + 1) & 0xff;
+    }
+    if (head === tail) break;
+  }
+  if (!found) return null;
+  let best = -1;
+  let bestLevel = 99;
+  let bestDistance = 0;
+  const mask = bits[start.y * g.columns + start.x] ?? 0;
+  for (let dir = 0; dir < 8; dir++) {
+    if ((mask & (1 << dir)) === 0) continue;
+    const nx = wrap(start.x + (CELL_DX[dir] ?? 0));
+    const ny = start.y + (CELL_DY[dir] ?? 0);
+    if (nx < 0 || ny < 0 || nx >= g.columns || ny >= g.rows) continue;
+    const level = seen[ny * g.columns + nx] ?? 0;
+    if (level === 0) continue;
+    const d = gridDistance(world, goal, { x: nx * 4 + 1, y: ny * 4 + 1 });
+    if (level < bestLevel || (level === bestLevel && d < bestDistance)) {
+      best = dir;
+      bestLevel = level;
+      bestDistance = d;
+    }
+  }
+  if (best < 0) return null;
+  const x = wrap(start.x + (CELL_DX[best] ?? 0)) * 4 + 1;
+  const y = (start.y + (CELL_DY[best] ?? 0)) * 4 + 1;
+  return cellSquare(world, x, y, sea) ?? { x, y };
+}
+
+/**
+ * The original's step chooser for a unit under orders (VERIFIED 0x00485e3d): the window search
+ * under 23 squares, then a waypoint of the long route, then the caller's straight walk. Air units
+ * skip the search; other callers that want only the window use `gotoDirection`.
+ */
+export function chooseGotoStep(
+  world: World,
+  rules: EngineRules,
+  unit: Unit,
+  goal: Point,
+): number | null {
+  const domain = rules.units[unit.type]?.domain;
+  if (domain === DOMAIN_AIR) return null;
+  if (gridDistance(world, unit.position, goal) < 23) {
+    const direct = gotoDirection(world, rules, unit, goal);
+    if (direct !== null) return direct;
+  }
+  const waypoint = longRouteWaypoint(world, rules, unit.position, goal, domain === DOMAIN_SEA);
+  if (!waypoint || gridDistance(world, unit.position, waypoint) >= 23) return null;
+  return gotoDirection(world, rules, unit, waypoint);
+}

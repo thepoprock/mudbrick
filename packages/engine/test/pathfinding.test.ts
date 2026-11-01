@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { gotoDirection } from '../src/pathfinding.js';
+import { gotoDirection, locatorGrid, longRouteWaypoint } from '../src/pathfinding.js';
 import { Rng } from '../src/rng.js';
 import type { EngineRules } from '../src/rules.js';
 import { ORDER } from '../src/terraform.js';
@@ -109,5 +109,55 @@ describe('go-to pathfinding', () => {
     const d = gotoDirection(w, rules, ship, { x: 30, y: 34 });
     expect(d).toBe(1);
     expect(gotoDirection(w, rules, ship, { x: 30, y: 20 })).toBeNull(); // no sea route onto land
+  });
+});
+
+describe('long routes', () => {
+  const testRules = {
+    ...rules,
+    units: [rules.units[0], rules.units[0], rules.units[0]],
+  } as unknown as EngineRules;
+
+  /** Two long land strips joined at one end, so the straight line runs into the water. */
+  function strips(): World {
+    const w = new World({ columns: 60, rows: 60, flatEarth: true });
+    w.terrain.fill(10);
+    for (let y = 0; y < 60; y++) {
+      for (let x = y & 1; x < 120; x += 2) {
+        const landA = y >= 4 && y <= 10 && x >= 2 && x <= 100;
+        const landB = y >= 40 && y <= 46 && x >= 2 && x <= 100;
+        const link = x >= 92 && x <= 100 && y >= 4 && y <= 46;
+        if (landA || landB || link) {
+          const i = w.index(x, y);
+          w.terrain[i] = 0;
+          w.landmass[i] = 1;
+        }
+      }
+    }
+    return w;
+  }
+
+  it('builds links between neighbouring cells of one land', () => {
+    const g = locatorGrid(strips());
+    expect(g.columns).toBe(30);
+    expect(g.rows).toBe(15);
+    expect(g.land[1 * g.columns + 5]).toBeGreaterThan(0);
+    expect(g.land[7 * g.columns + 5]).toBe(0);
+    expect(locatorGrid(strips()).sea.some((b) => b !== 0)).toBe(true);
+  });
+
+  it('sends a trip beyond the window round by the far link', () => {
+    const w = strips();
+    let at = { x: 10, y: 6 };
+    let farthest = 0;
+    for (let hop = 0; hop < 60; hop++) {
+      const way = longRouteWaypoint(w, testRules, at, { x: 10, y: 44 }, false);
+      if (!way) break;
+      at = way;
+      farthest = Math.max(farthest, at.x);
+    }
+    expect(farthest).toBeGreaterThan(80);
+    expect(at.y).toBeGreaterThan(30);
+    expect(longRouteWaypoint(w, testRules, { x: 10, y: 6 }, { x: 10, y: 0 }, false)).toBeNull();
   });
 });

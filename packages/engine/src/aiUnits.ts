@@ -49,7 +49,7 @@ import {
   type TradeContext,
   type TradeEvent,
 } from './trade.js';
-import { gotoDirection } from './pathfinding.js';
+import { chooseGotoStep } from './pathfinding.js';
 import { gotoStep } from './turnStart.js';
 import {
   NEIGHBOUR_OFFSETS,
@@ -700,7 +700,7 @@ function stepToward(
   let bestDir = -1;
   // The go-to pathfinder first (the original orders a go-to for the outer squares), so a bay or
   // a mountain between the unit and its square is walked around.
-  const planned = gotoDirection(world, rules, unit, target);
+  const planned = chooseGotoStep(world, rules, unit, target);
   if (planned !== null) {
     const n = neighbour(world, unit.position, planned);
     if (n) {
