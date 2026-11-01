@@ -41,6 +41,8 @@ export interface ProductionContext {
   canBuildSpaceship: boolean;
   /** Add a part of kind 0 structural, 1 component, 2 module; returns the part index or −1 when full. */
   buildShipPart?: (slot: number, kind: number) => number;
+  /** The computer's choice of kind when a part completes (spaceship.ts aiNextPartKind). */
+  nextShipKind?: (slot: number, kind: number) => number;
   /** Shield-box rows for this owner; `boxRows(rules, ctx, true)` normally. */
   shieldRows: number;
 }
@@ -161,14 +163,31 @@ export function processProduction(
     if (city.shieldsStored < c) return events;
     if (SPACESHIP_PARTS.includes(idx as 35 | 36 | 37)) {
       // A part joins the civilization's ship rather than the city (spaceship.ts).
-      const added = ctx.buildShipPart ? ctx.buildShipPart(city.owner, idx - 35) : -1;
+      let kind = idx - 35;
+      let partCost = c;
+      if (!ctx.isHuman && ctx.nextShipKind) {
+        // VERIFIED (the production routine): a computer city asks the ship which kind it needs
+        // and switches to it; the part is added only once the shields cover the chosen kind.
+        const want = ctx.nextShipKind(city.owner, kind);
+        if (want < 0) {
+          events.push({ kind: 'bad-space', production: p });
+          return events;
+        }
+        if (want !== kind) {
+          kind = want;
+          city.production = { kind: 'improvement', index: 35 + want };
+          partCost = cost(rules, city.production, ctx.shieldRows);
+          if (city.shieldsStored < partCost) return events;
+        }
+      }
+      const added = ctx.buildShipPart ? ctx.buildShipPart(city.owner, kind) : -1;
       if (added < 0) {
-        events.push({ kind: 'bad-space', production: p });
+        events.push({ kind: 'bad-space', production: city.production });
         return events;
       }
-      city.shieldsStored -= c;
+      city.shieldsStored -= partCost;
       if (ctx.isHuman) city.shieldsStored = 0;
-      events.push({ kind: 'built-improvement', improvement: idx });
+      events.push({ kind: 'built-improvement', improvement: 35 + kind });
       return events;
     }
     city.improvements[idx] = true;

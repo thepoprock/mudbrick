@@ -5,7 +5,7 @@
  * Lower numbers win; 999 = never. Inputs the engine does not model yet take the documented
  * INFERRED defaults; every case is named by its improvement or unit role so it can be refined.
  */
-import { hasLaunched, hasStarted, kindComplete, shipOf } from './spaceship.js';
+import { hasLaunched, hasStarted } from './spaceship.js';
 import { boxRows, distance, type CityContext } from './city.js';
 import { canBuildUnit } from './founding.js';
 import type { Production } from './world.js';
@@ -304,6 +304,8 @@ export interface AiBuildEnv {
   canBuildImprovement: (improvement: number) => boolean;
   /** Has anyone discovered the advance that expires this wonder? (default: never) */
   wonderExpired?: (improvement: number) => boolean;
+  /** The ship's next kind for a request (spaceship.ts aiNextPartKind); negative = nothing to build. */
+  nextShipKind?: (kind: number) => number;
   /** Debug hook: every candidate and its score (lower wins). */
   trace?: (score: number, p: Production) => void;
 }
@@ -412,23 +414,13 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
   for (let imp = 1; imp < 39; imp++) {
     if (!env.canBuildImprovement(imp)) continue;
     if (imp >= 35) {
-      // VERIFIED value (ai-city.md): 4, or 2 once a human has a spaceship, with the Apollo
-      // Program standing and the ship not launched; INFERRED order of kinds: structure for the
-      // engines and modules first, then components, then one of each module, then the rest.
+      // VERIFIED (ai-city.md): one "spaceship part" candidate, structural by name, worth 4 (2
+      // once a human has a spaceship) while the Apollo Program stands, the ship is not launched
+      // and the ship's own chooser (0x0053ef43) can name a kind to build; the kind actually
+      // built is chosen again when the part completes (production.ts).
+      if (imp !== 35) continue;
       if (env.wonderCity(IMPROVEMENT.apolloProgram) === null || hasLaunched(civ)) continue;
-      const ship = shipOf(civ);
-      const kind = imp - 35;
-      if (kindComplete(ship, kind)) continue;
-      const s0 = ship.parts[0] ?? 0;
-      const wantKind =
-        s0 < 33
-          ? 0
-          : (ship.parts[1] ?? 0) < 8 || (ship.parts[2] ?? 0) < 8
-            ? 1
-            : (ship.parts[3] ?? 0) < 1 || (ship.parts[4] ?? 0) < 1 || (ship.parts[5] ?? 0) < 1
-              ? 2
-              : 0;
-      if (kind !== wantKind) continue;
+      if ((env.nextShipKind?.(0) ?? 0) < 0) continue;
       const humanShip = world.civs.some((c) => c.isHuman && hasStarted(c));
       consider(
         scaleCommon(

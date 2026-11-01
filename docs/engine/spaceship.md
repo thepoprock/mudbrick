@@ -69,3 +69,20 @@ unlaunched ship with it (the capture routine tests the started flag).
 game when one civilization remains (INFERRED: the original sets its game-over flag when a
 civilization dies leaving fewer than two) and removes a civilization with no city and no unit,
 or with no city after turn 20 (INFERRED).
+
+## The computer's next kind (VERIFIED, 0x0053ef43)
+
+When a computer city completes a part, the production routine asks the ship which kind it
+really needs and switches the city to it (adding the part only once the shields cover the
+chosen kind; a human's city builds what it chose). "Racing" means the ship's arrival year is set,
+within 14 years and ahead of every human's. A structural request turns to modules while the
+structure allows more modules than are usable, else (not racing) to components; a request the
+ship can use and the player can build stands, components never while racing; otherwise the kinds
+are tried from modules down — to components for a structural request, to structurals for the
+others — taking the first buildable kind with room. A structural answer becomes components when
+a human has launched a ship due no later than this one's estimate, components are not complete,
+their advance is known and either count is within its structural limit. "Can build" means the
+kind's count is below its structural limit (or zero), the kind is not complete and its advance
+(RULES @IMPROVE 35–37) is known; −1 once launched, −2 when nothing can be built, and the city
+then re-chooses. So a computer player lays all 39 structurals, then modules (one of each — its
+module limit), then components. `spaceship.ts` `aiNextPartKind`.

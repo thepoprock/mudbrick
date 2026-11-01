@@ -12,6 +12,7 @@ import {
   thrust,
   type SpaceshipContext,
   type SpaceshipEvent,
+  aiNextPartKind,
 } from '../src/spaceship.js';
 import { World, type Civ } from '../src/world.js';
 
@@ -101,6 +102,22 @@ describe('the spaceship', () => {
     expect(checkArrivals(w, arrival - 1, events)).toBeNull();
     expect(checkArrivals(w, arrival, events)).toBe(ai);
     expect(events.some((e) => e.text.includes('Alpha Centauri'))).toBe(true);
+  });
+
+  it('the computer asks for structurals first, then modules before components', () => {
+    const w = new World({ columns: 10, rows: 10, flatEarth: true });
+    const c = civ(2);
+    w.civs.push(c);
+    const ship = shipOf(c);
+    expect(aiNextPartKind(w, c, 0, ctx(w))).toBe(0);
+    ship.parts[0] = 39;
+    expect(aiNextPartKind(w, c, 0, ctx(w))).toBe(2);
+    expect(aiNextPartKind(w, c, 1, ctx(w))).toBe(1);
+    ship.parts.set([39, 8, 8, 4, 4, 4]);
+    expect(aiNextPartKind(w, c, 0, ctx(w))).toBe(-2);
+    // An advance the player lacks closes a kind.
+    ship.parts.set([39, 0, 0, 0, 0, 0]);
+    expect(aiNextPartKind(w, c, 2, { ...ctx(w), knowsPartAdvance: (_, k) => k !== 2 })).toBe(1);
   });
 
   it('a human launches by hand; losing the capital loses an unlaunched ship', () => {

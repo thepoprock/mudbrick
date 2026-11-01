@@ -154,6 +154,87 @@ export function evaluateShip(
   };
 }
 
+/**
+ * The computer's next part kind (0x0053ef43, VERIFIED): asked for `kind` (0 structural, 1
+ * component, 2 module) when a part completes, it answers the kind to add — −1 once launched, −2
+ * when nothing of the sort can be built. "Racing" means the ship's arrival is set, within 14
+ * years and ahead of every human's. A structural request turns to modules while the structure
+ * allows more modules than are usable, else (not racing) to components; a request the ship can
+ * use and the player can build stands (components never while racing); otherwise the kinds are
+ * tried from modules down — to components for a structural request, to structurals for the
+ * others — taking the first buildable kind with room. A structural answer becomes components
+ * when a human has launched a ship due no later than this one's estimate, components are not
+ * complete, their advance is known and either count is within its structural limit. "Can
+ * build" means: the kind's count is below its structural limit (or zero), the kind is not
+ * complete, and its advance is known.
+ */
+export function aiNextPartKind(
+  world: World,
+  civ: Civ,
+  kind: number,
+  ctx: SpaceshipContext,
+): number {
+  const ship = shipOf(civ);
+  const human = ctx.isHuman(civ.slot);
+  const estimate = evaluateShip(
+    ship,
+    human,
+    ctx.massThrust,
+    ctx.knowsFusion(civ.slot),
+    ctx.year,
+    false,
+  ).arrivalYear;
+  if (hasLaunched(civ)) return -1;
+  let earliestHuman = 9999;
+  for (const o of world.civs) {
+    if (o.slot === 0 || !ctx.isHuman(o.slot)) continue;
+    const a = o.spaceship?.arrival ?? 0;
+    if (a > 0 && a < earliestHuman) earliestHuman = a;
+  }
+  const racing =
+    ship.arrival !== 0 && ship.arrival - ctx.year <= 14 && ship.arrival < earliestHuman;
+  const partsOf = (k: number) => (k === 0 ? [0] : k === 1 ? [1, 2] : [3, 4, 5]);
+  const usableByKind = (k: number) => partsOf(k).reduce((s, p) => s + usable(ship, p, human), 0);
+  const limitByKind = (k: number) => partsOf(k).reduce((s, p) => s + partLimit(ship, p, human), 0);
+  const countByKind = (k: number) => partsOf(k).reduce((s, p) => s + (ship.parts[p] ?? 0), 0);
+  const canBuild = (k: number) =>
+    (countByKind(k) < limitByKind(k) || countByKind(k) === 0) &&
+    !kindComplete(ship, k) &&
+    (ctx.knowsPartAdvance?.(civ.slot, k) ?? true);
+  let switched = false;
+  if (kind === 0) {
+    if (usableByKind(2) < limitByKind(2)) switched = true;
+    else if (!racing && usableByKind(1) < limitByKind(1)) switched = true;
+  }
+  let chosen = kind;
+  let done = false;
+  if (
+    !switched &&
+    (kind !== 1 || !racing) &&
+    usableByKind(kind) < limitByKind(kind) &&
+    canBuild(kind)
+  )
+    done = true;
+  if (!done) {
+    for (let k = 2; k >= (kind === 0 ? 1 : 0); k--) {
+      if (canBuild(k) && (k !== 1 || !racing) && usableByKind(k) < limitByKind(k)) {
+        chosen = k;
+        break;
+      }
+    }
+  }
+  if (chosen === 0) {
+    for (const o of world.civs) {
+      if (o.slot === 0 || !ctx.isHuman(o.slot) || !hasLaunched(o)) continue;
+      if ((o.spaceship?.arrival ?? 0) > estimate) continue;
+      if (kindComplete(ship, 1) || !(ctx.knowsPartAdvance?.(civ.slot, 1) ?? true)) continue;
+      if ((ship.parts[1] ?? 0) <= partLimit(ship, 1, human)) return 1;
+      if ((ship.parts[2] ?? 0) <= partLimit(ship, 2, human)) return 1;
+    }
+  }
+  return canBuild(chosen) ? chosen : -2;
+}
+
 /** Can the civilization add another part of this production kind (0 structural, 1 component, 2 module)? (0x0053fbd4) */
 export function kindComplete(ship: Spaceship, kind: number): boolean {
   const p = ship.parts;
@@ -175,6 +256,8 @@ export interface SpaceshipContext {
   rank: (slot: number) => number;
   /** The computer re-chooses every city's production on launch; the game passes it. */
   rechooseProduction?: (slot: number) => void;
+  /** Does the slot know the advance of the parts of this kind (RULES @IMPROVE 35–37)? Default yes. */
+  knowsPartAdvance?: (slot: number, kind: number) => boolean;
 }
 
 export interface SpaceshipEvent {

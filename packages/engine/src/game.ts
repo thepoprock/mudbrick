@@ -60,6 +60,7 @@ import {
   hasLaunched,
   type SpaceshipContext,
   type SpaceshipEvent,
+  aiNextPartKind,
 } from './spaceship.js';
 import { computeSupplyDemand, supplyDemandDue } from './supplyDemand.js';
 import { terraformTasks } from './aiTerraform.js';
@@ -381,6 +382,7 @@ export class Game {
       ownsWonder: (i) => this.ownsWonder(slot, i),
       wonderCity: (i) => this.wonderCity(i),
       canBuildSpaceship: this.wonderCity(IMPROVEMENT.apolloProgram) !== null && !hasLaunched(civ),
+      nextShipKind: (s, kind) => aiNextPartKind(this.world, this.civ(s), kind, this.shipContext()),
       buildShipPart: (s, kind) => {
         const events: SpaceshipEvent[] = [];
         const part = buildPart(this.world, this.civ(s), kind, this.shipContext(), events);
@@ -976,6 +978,10 @@ export class Game {
       massThrust: this.rules.cosmic.massThrustParadigm ?? 75,
       isHuman: (s) => this.world.civs.find((c) => c.slot === s)?.isHuman ?? false,
       knowsFusion: (s) => this.knows(s, 32),
+      knowsPartAdvance: (s, k) => {
+        const p = advanceIndex(this.rules.improvements[35 + k]?.preq);
+        return p === null || this.knows(s, p);
+      },
       rank: (s) => this.world.civs.find((c) => c.slot === s)?.advancesCount ?? 0,
       rechooseProduction: (s) => {
         for (const c of this.citiesOf(s)) this.aiChooseProduction(c);
@@ -1244,6 +1250,7 @@ export class Game {
         const e = this.rules.improvements[w]?.expiresWith;
         return e?.kind === 'advance' && (this.state.firstDiscoveredBy[e.index] ?? 0) !== 0;
       },
+      nextShipKind: (kind) => aiNextPartKind(this.world, civ, kind, this.shipContext()),
     });
   }
 
