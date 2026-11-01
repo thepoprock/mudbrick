@@ -461,3 +461,55 @@ describe('Game turn loop', () => {
     expect(civ.scienceRate + civ.taxRate).toBeLessThanOrEqual(10);
   });
 });
+
+describe('calls for help (0x0051520a)', () => {
+  function table() {
+    const { world, game } = setup();
+    world.civs.push(
+      civ({ slot: 2, name: 'Caller', isHuman: false, inPlay: true, treasury: 450 }),
+      civ({ slot: 3, name: 'Foe', isHuman: false, inPlay: true }),
+      civ({ slot: 4, name: 'Player', isHuman: true, inPlay: true, treasury: 10 }),
+    );
+    const [caller, foe, human] = [2, 3, 4].map((s) => game.civ(s));
+    if (!caller || !foe || !human) throw new Error('no civs');
+    caller.knownAdvances[7] = true;
+    caller.strategy = { strengthSum: 10 } as NonNullable<Civ['strategy']>;
+    foe.strategy = { strengthSum: 30 } as NonNullable<Civ['strategy']>;
+    setTreaty(world, 2, 3, TREATY.contact | TREATY.attacked);
+    setTreaty(world, 4, 2, TREATY.contact);
+    setTreaty(world, 4, 3, TREATY.contact);
+    game.state.turn = 8; // 2 × 4
+    game.wantsTalks = true;
+    return { world, game, caller, foe, human };
+  }
+
+  it('only speaks on its own turn of the 32', () => {
+    const { game } = table();
+    game.state.turn = 9;
+    game.askForHelp(2, 4);
+    expect(game.helpCalls).toHaveLength(0);
+  });
+
+  it('badly outmatched, it offers gold; acceptance is an alliance and a war', () => {
+    const { world, game, caller, human } = table();
+    game.askForHelp(2, 4);
+    const call = game.helpCalls[0];
+    expect(call).toMatchObject({ kind: 'help', foe: 3, gold: 200 });
+    if (!call) throw new Error('no call');
+    game.answerHelpCall(call, true);
+    expect(hasTreaty(world, 4, 2, TREATY.alliance)).toBe(true);
+    expect(hasTreaty(world, 4, 3, TREATY.war)).toBe(true);
+    expect(human.treasury).toBe(210);
+    expect(caller.treasury).toBe(250);
+  });
+
+  it('refusal keeps the peace and only moves the last talk', () => {
+    const { world, game, human } = table();
+    game.askForHelp(2, 4);
+    const call = game.helpCalls[0];
+    if (!call) throw new Error('no call');
+    game.answerHelpCall(call, false);
+    expect(hasTreaty(world, 4, 3, TREATY.war)).toBe(false);
+    expect(human.lastWarTurns?.[2]).toBe(-1);
+  });
+});

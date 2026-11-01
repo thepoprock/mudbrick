@@ -959,3 +959,14 @@ export function nearestOwnCityDistance(world: World, slot: number, x: number, y:
 
 export const DIPLOMACY_OCEAN = OCEAN;
 export const DIPLOMACY_FLAGS = SquareFlag;
+
+/** May `a`'s senate overrule breaking with `b` (0x0050f0ea)? Only a Republic or Democracy has one. */
+export function senateBlocks(world: World, a: number, b: number, unitedNations: boolean): boolean {
+  const civ = civOf(world, a);
+  if (!civ || civ.government < 5) return false;
+  let need = hasTreaty(world, b, a, TREATY.warDeclared) ? 25 : 0;
+  if (unitedNations) need = 50;
+  need = Math.min(75, Math.max(0, need + (civOf(world, b)?.reputation ?? 0) * 15));
+  if ((civ.patience ?? 0) < need) return false;
+  return civ.government < 6 ? civ.senateActive === true : true;
+}

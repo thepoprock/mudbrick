@@ -111,11 +111,13 @@ import {
   declareWar,
   treaty,
   TREATY,
+  senateBlocks,
   adjustAttitude,
   expelAgent,
   gridDistance,
   hasTreaty,
   type DiplomacyEvent,
+  type HelpCall,
 } from '@mudbrick/engine';
 import { ADVANCE, IMPROVEMENT } from '@mudbrick/engine';
 import { sprites } from '@mudbrick/formats';
@@ -630,6 +632,10 @@ export class PlaySession {
         }
       }
       const word = treaty(this.world, unit.owner, victim);
+      if ((word & TREATY.alliance) !== 0) {
+        this.log(`We are allied with the ${this.game.civ(victim).name}.`); // ANNOYALLIED
+        return;
+      }
       if ((word & (TREATY.ceaseFire | TREATY.peace)) !== 0) {
         const ok =
           typeof window === 'undefined' ||
@@ -637,6 +643,11 @@ export class PlaySession {
             `Attacking the ${this.world.civs.find((c) => c.slot === victim)?.name ?? 'civilization'} breaks our treaty. Declare war?`,
           );
         if (!ok) return;
+        const un = this.game.ownsWonder(unit.owner, IMPROVEMENT.unitedNations);
+        if (senateBlocks(this.world, unit.owner, victim, un)) {
+          this.log('The Senate overrules the order: the treaty stands.'); // OVERRULE
+          return;
+        }
         const events: DiplomacyEvent[] = [];
         declareWar(this.world, unit.owner, victim, this.game.diplomacyContext(), events);
         for (const e of events) this.log(`${e.text}.`);
@@ -1259,6 +1270,31 @@ export class PlaySession {
     bar.style.left = '0';
     bar.style.zIndex = '20';
     this.el.canvas.parentElement?.prepend(bar);
+  }
+
+  /** A computer player asks us to join its war (HELPME, CRUSADE, JIHAD, INSTEAD; 0x0051520a). */
+  private showHelpCall(call: HelpCall): void {
+    const them = this.game.civ(call.computer);
+    const foe = this.game.civ(call.foe);
+    const box = this.talkBox();
+    box.replaceChildren();
+    const text = document.createElement('p');
+    const ally = hasTreaty(this.world, call.human, call.foe, TREATY.alliance);
+    const tech = call.advance !== null ? this.rules.advances[call.advance]?.name : undefined;
+    text.textContent =
+      call.kind === 'help'
+        ? `The ${them.name} are hard pressed by the ${foe.name}${ally ? ', our own allies' : ''}. They offer ${call.gold} gold${tech ? ` and the secret of ${tech}` : ''} if we ally with them and declare war.`
+        : `The ${them.name} ask us to join their righteous cause against the ${foe.name}${ally ? ', our own allies' : ''}.`;
+    box.append(text);
+    const answer = (yes: boolean) => {
+      this.game.answerHelpCall(call, yes);
+      this.log(
+        yes ? `We join the ${them.name} against the ${foe.name}.` : `We refuse the ${them.name}.`,
+      );
+      this.closeTalk();
+    };
+    this.talkButton(box, 'Agree', () => answer(true));
+    this.talkButton(box, 'Refuse', () => answer(false));
   }
 
   /** An ally asks for help (ALLYUNDERATTACK, DEMANDHELP, HELPBONUS, DIDNTHELP; 0x00444c22). */
@@ -2190,6 +2226,12 @@ export class PlaySession {
       if (i >= 0) {
         const [call] = this.game.allyCalls.splice(i, 1);
         if (call) this.showAllyCall(call);
+        return;
+      }
+      const h = this.game.helpCalls.findIndex((c) => c.human === this.humanSlot);
+      if (h >= 0) {
+        const [call] = this.game.helpCalls.splice(h, 1);
+        if (call) this.showHelpCall(call);
         return;
       }
       const item = this.news.shift();

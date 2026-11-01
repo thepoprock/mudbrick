@@ -215,3 +215,15 @@ below 51, and otherwise ends the alliance.
 Learning Monarchy under Despotism offers a revolution (AUTOMONARCHY). Learning Communism,
 Fundamentalism, The Republic or Democracy offers one (AUTOREV), unless already under that government,
 under Democracy, or in Anarchy.
+
+## Calls for help (VERIFIED 0x0051520a)
+
+Once in 32 turns (`turn & 31 == civ × 4`) a computer player looks for a civilization that attacked
+it, and asks each human whose reputation less pardons is under 6, provided the human is not at war
+or allied with the computer, not already opposed to the foe, and has met both. If the computer's
+strength doubled is at most the foe's, it offers an alliance with `clamp(treasury / 100, 1, 10) × 50`
+gold and the advance worth most to the human, of those it knows. One only the foe knows also counts
+if the human has no embassy with the caller, no Marco Polo and no United Nations; the caller then
+gets it too. A weaker computer with either side outside the top two ranks asks for the alliance
+alone. Accepting allies the two, breaks any treaty with the foe, and declares war. Refusing delays
+further talks by moving the last contact turn to 14 turns ago at the least, 15 if no talk could open.

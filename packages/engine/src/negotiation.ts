@@ -9,6 +9,7 @@
  * Specification: docs/engine/negotiation.md. VERIFIED from those routines unless marked. The
  * scenario-only branches and the multiplayer messages are not ported.
  */
+import { senateBlocks } from './diplomacy.js';
 import { advanceIndex, IMPROVEMENT, type EngineRules } from './rules.js';
 import {
   adjustAttitude,
@@ -815,14 +816,12 @@ export class Talk {
 
   /** The senate's veto test (0x0050f0ea). */
   senateBlocks(): boolean {
-    const { h, c, env } = this;
-    if (h.government < 5) return false;
-    let need = (this.cw & TREATY.warDeclared) !== 0 ? 25 : 0;
-    if (env.ownsWonder(this.hs, IMPROVEMENT.unitedNations)) need = 50;
-    need = Math.min(75, Math.max(0, need + (c.reputation ?? 0) * 15));
-    if ((h.patience ?? 0) < need) return false;
-    if (h.government < 6) return h.senateActive === true;
-    return true;
+    return senateBlocks(
+      this.env.world,
+      this.hs,
+      this.cs,
+      this.env.ownsWonder(this.hs, IMPROVEMENT.unitedNations),
+    );
   }
 
   *warnHawks(): Generator<Dialog, void, number> {

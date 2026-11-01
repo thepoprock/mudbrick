@@ -102,6 +102,9 @@ import {
   type DiplomacyContext,
   type DiplomacyEvent,
   hasTreaty,
+  lastWarTurnsOf,
+  setTreaty,
+  treaty,
   TREATY,
 } from './diplomacy.js';
 import {
@@ -237,6 +240,16 @@ export interface RetirementEvent {
 export type GrowthNote =
   { kind: 'grew' | 'starved' | 'destroyed' } | { kind: 'growth-blocked'; blockedBy: number };
 export type CityTurnEvent = CityEvent | ProductionEvent | UpkeepEvent | GrowthNote | PollutionEvent;
+
+export interface HelpCall {
+  human: number;
+  computer: number;
+  foe: number;
+  gold: number;
+  advance: number | null;
+  kind: 'help' | 'cause';
+  turn: number;
+}
 
 export type TurnEvent =
   | { slot: number; event: { kind: 'climate'; text: string } }
@@ -652,6 +665,134 @@ export class Game {
 
   /** Allies under attack waiting on a human's answer (ALLYUNDERATTACK, DEMANDHELP). */
   allyCalls: { human: number; ally: number; attacker: number; turn: number }[] = [];
+
+  /** Losing computer players asking a human to join them (HELPME, CRUSADE; 0x0051520a). */
+  helpCalls: HelpCall[] = [];
+
+  /**
+   * A computer player on the losing side of a fight asks a human it is not fighting to join in
+   * (0x0051520a), once in 32 turns: for gold and an advance if badly outmatched, else as a cause.
+   */
+  askForHelp(computer: number, human: number): void {
+    const turn = this.state.turn;
+    if ((turn & 31) !== computer * 4) return;
+    const me = this.civ(computer);
+    const h = this.civ(human);
+    if ((h.reputation ?? 0) - (me.pardons?.[human] ?? 0) >= 6) return;
+    const w = this.world;
+    const words = treatiesOf(me);
+    const strengthOf = (s: number) => this.civStrength(s);
+    const atOdds = (foe: number) =>
+      hasTreaty(w, human, foe, TREATY.war) ||
+      (!hasTreaty(w, human, foe, TREATY.alliance) &&
+        (treaty(w, human, foe) & (TREATY.contact | TREATY.peace)) === TREATY.contact &&
+        attitude(w, human, foe) >= 50);
+    const refused = (offset: number) => {
+      const seen = lastWarTurnsOf(h);
+      seen[computer] = Math.max(seen[computer] ?? -1, turn + offset);
+    };
+    for (let foe = 1; foe < 8; foe++) {
+      if (
+        foe === computer ||
+        foe === human ||
+        !this.world.civs.some((c) => c.slot === foe && c.inPlay)
+      )
+        continue;
+      const eligible =
+        ((words[foe] ?? 0) & TREATY.attacked) !== 0 &&
+        ((words[human] ?? 0) & (TREATY.war | TREATY.alliance)) === 0 &&
+        !atOdds(foe) &&
+        hasTreaty(w, human, computer, TREATY.contact) &&
+        hasTreaty(w, human, foe, TREATY.contact);
+      if (eligible) {
+        const mine = strengthOf(computer);
+        const theirs = strengthOf(foe);
+        const kind =
+          mine * 2 <= theirs
+            ? 'help'
+            : mine < theirs && (this.powerRank(human) < 6 || this.powerRank(computer) < 6)
+              ? 'cause'
+              : null;
+        if (kind) {
+          if (!this.wantsTalks) {
+            refused(-15);
+            return;
+          }
+          const gold =
+            kind === 'help' ? Math.max(1, Math.min(10, Math.trunc(me.treasury / 100))) * 50 : 0;
+          this.helpCalls.push({
+            human,
+            computer,
+            foe,
+            gold,
+            advance: kind === 'help' ? this.helpAdvance(human, computer, foe) : null,
+            kind,
+            turn,
+          });
+          return;
+        }
+      }
+      words[foe] = (words[foe] ?? 0) & ~TREATY.attacked;
+    }
+  }
+
+  /** The advance offered with a call for help: the third party's counts if the human can't tell. */
+  private helpAdvance(human: number, computer: number, foe: number): number | null {
+    const blind =
+      !hasTreaty(this.world, human, computer, TREATY.embassy) &&
+      !this.ownsWonder(human, IMPROVEMENT.unitedNations) &&
+      !this.ownsWonder(human, IMPROVEMENT.marcoPolo);
+    const value = this.diplomacyContext().advanceValue;
+    let best: number | null = null;
+    let top = -99;
+    for (let a = 0; a < 100; a++) {
+      const rule = this.rules.advances[a];
+      if (!rule || (rule.preq1.kind === 'never' && rule.preq2.kind === 'never')) continue;
+      if (this.knows(human, a)) continue;
+      if (!this.knows(computer, a) && !(this.knows(foe, a) && blind)) continue;
+      const v = value?.(human, a) ?? 1;
+      if (top < v) {
+        top = v;
+        best = a;
+      }
+    }
+    return best;
+  }
+
+  /** The human's answer to a call for help (0x0051520a). */
+  answerHelpCall(call: HelpCall, accept: boolean): void {
+    const turn = this.state.turn;
+    const w = this.world;
+    const h = this.civ(call.human);
+    const me = this.civ(call.computer);
+    const seen = lastWarTurnsOf(h);
+    if (!accept) {
+      seen[call.computer] = Math.max(seen[call.computer] ?? -1, turn - 14);
+      return;
+    }
+    if (call.advance !== null) {
+      if (!this.knows(call.computer, call.advance)) {
+        grantAdvance(me, call.advance, 'other');
+        this.advanceGained(me, call.advance);
+      }
+      grantAdvance(h, call.advance, 'other');
+      this.advanceGained(h, call.advance);
+    }
+    setTreaty(w, call.computer, call.human, TREATY.alliance | TREATY.peace);
+    breakTreaty(w, call.human, call.foe, call.computer, this.diplomacyContext(), []);
+    setTreaty(w, call.human, call.foe, TREATY.war);
+    const words = treatiesOf(h);
+    words[call.foe] = (words[call.foe] ?? 0) | TREATY.grudge | TREATY.grudgeRenewed;
+    seen[call.foe] = turn;
+    seen[call.computer] = turn + 16;
+    me.treasury -= call.gold;
+    h.treasury += call.gold;
+  }
+
+  /** A civilization's military strength, summed in the strategy pass (0x005d132e). */
+  private civStrength(slot: number): number {
+    return this.civ(slot).strategy?.strengthSum ?? 0;
+  }
 
   /** A human's ally is attacked by someone the human is neither fighting nor allied to. */
   attacked(attacker: number, defender: number): void {
@@ -1407,6 +1548,9 @@ export class Game {
             this.settleQuietly(
               relationsTurn(this.negotiationEnv(), h.slot, slot, this.spaceRace(civ).on),
             );
+        }
+        for (const h of this.world.civs) {
+          if (h.isHuman && h.slot !== 0) this.askForHelp(slot, h.slot);
         }
       }
       for (const e of dipEvents) out.push({ slot, event: e });
