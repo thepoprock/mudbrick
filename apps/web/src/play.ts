@@ -218,6 +218,7 @@ export class PlaySession {
     readonly renderOptions: () => WorldRenderOptions,
   ) {
     game.wantsTalks = folder.popups.size > 0;
+    this.startTimer();
     void this.buildMenuBar();
     this.log(`You lead the ${this.civ.name}. Arrow keys or the number pad move the selected unit.`);
     if (game.state.nextSlot === 0) {
@@ -303,6 +304,7 @@ export class PlaySession {
       if (e.key === 'c') this.chat();
       else if (e.key === 'r') this.retire();
       else if (e.key === 'd') this.showCasualties();
+      else if (e.key === 't') this.showTimer();
       else return false;
       return true;
     }
@@ -897,6 +899,7 @@ export class PlaySession {
     }
     if (this.game.throneDue(this.humanSlot)) this.showThrone(true);
     this.sound('ENDOTURN');
+    this.startTimer();
     this.log(`— Turn ${this.game.state.turn}, ${this.yearText()} —`);
     this.nextTalk();
     if (this.game.state.gameOver) {
@@ -1087,6 +1090,13 @@ export class PlaySession {
     this.el.log.textContent = this.logLines.slice(-14).join('\n');
   }
 
+  private clockText(): string {
+    if (this.timerEnds === 0) return '';
+    const left = Math.max(0, Math.ceil((this.timerEnds - Date.now()) / 1000));
+    const seconds = String(left % 60).padStart(2, '0');
+    return `${String(Math.trunc(left / 60)).padStart(2, '0')}:${seconds} left · `;
+  }
+
   private renderStatus(): void {
     const civ = this.civ;
     const waiting = this.humanUnits().filter((u) => this.needsOrders(u)).length;
@@ -1096,6 +1106,7 @@ export class PlaySession {
       `${civ.name} · ${gov} · Turn ${this.game.state.turn} (${this.yearText()}) · ` +
       `${civ.treasury} gold · tax ${civ.taxRate * 10} % lux ${(10 - civ.taxRate - civ.scienceRate) * 10} % sci ${civ.scienceRate * 10} % · ` +
       `score ${this.game.scoreOf(civ.slot).total} · ` +
+      this.clockText() +
       (this.game.state.gameOver
         ? ` · GAME OVER: ${this.world.civs[this.game.state.gameOver.winner]?.name ?? '?'} win by ${this.game.state.gameOver.reason}`
         : waiting > 0
@@ -1168,6 +1179,7 @@ export class PlaySession {
           if (value === 'CASUALTY') this.showCasualties();
           else if (value === 'THRONE') this.showThrone(false);
           else if (value === 'RETIRE') this.retire();
+          else if (value === 'TIMER') this.showTimer();
           else if (value === 'CHAT') this.chat();
           else if (value) this.handleKey({ key: value, target: null } as unknown as KeyboardEvent);
           this.refresh();
@@ -1182,6 +1194,7 @@ export class PlaySession {
       if (key.startsWith('Shift+')) code = code.toUpperCase();
       if (key === 'SPACE') code = ' ';
       if (label.startsWith('End Player')) code = 'Enter';
+      if (label.startsWith('Change Timer')) code = 'TIMER';
       if (label === 'Consult High Council') code = 'F10';
       if (label.startsWith('Casualty')) code = 'CASUALTY';
       if (section === 'PEDIA') code = '?';
@@ -1191,7 +1204,7 @@ export class PlaySession {
       if (label === 'Chat with Kings') code = 'CHAT';
       const bound =
         /^F\d+$/.test(code) ||
-        ['Enter', ' ', '?', 'CASUALTY', 'RETIRE', 'CHAT', 'O', 'THRONE'].includes(code) ||
+        ['Enter', ' ', '?', 'CASUALTY', 'RETIRE', 'CHAT', 'O', 'THRONE', 'TIMER'].includes(code) ||
         (code.length === 1 && 'brimopgfshwkauljFEPDHCMTR'.includes(code));
       opt.value = bound ? code : '';
       opt.disabled = !bound;
@@ -1224,6 +1237,56 @@ export class PlaySession {
     text.textContent = item.text;
     box.append(img, text);
     this.talkButton(box, 'Continue', () => this.closeTalk());
+  }
+
+  /** The game timer's dialog (0x004df2a1): the fixed choices, or a custom time. */
+  private showTimer(): void {
+    const box = this.talkBox();
+    box.replaceChildren();
+    const heading = document.createElement('h3');
+    heading.textContent = 'Game timer';
+    box.append(heading);
+    const set = (ms: number) => {
+      this.game.state.turnTimerMs = ms;
+      this.timerEnds = ms > 0 ? Date.now() + ms : 0;
+      this.closeTalk();
+    };
+    const choices: [string, number][] = [
+      ['Unlimited', 0],
+      ['30 seconds', 30000],
+      ['1 minute', 60000],
+      ['2 minutes', 120000],
+      ['3 minutes', 180000],
+      ['5 minutes', 300000],
+    ];
+    for (const [label, ms] of choices) this.talkButton(box, label, () => set(ms));
+    this.talkButton(box, 'Custom', () => {
+      const minutes = Number(window.prompt('Minutes', '10') ?? 0);
+      const seconds = Number(window.prompt('Seconds', '0') ?? 0);
+      if (Number.isFinite(minutes) && Number.isFinite(seconds))
+        set(Math.max(0, minutes * 60000 + seconds * 1000));
+    });
+  }
+
+  private timerEnds = 0;
+  private timerTick: ReturnType<typeof setInterval> | undefined;
+
+  /** A human's turn starts: the clock restarts, and when it runs out the turn ends. */
+  private startTimer(): void {
+    const ms = this.game.state.turnTimerMs ?? 0;
+    this.timerEnds = ms > 0 ? Date.now() + ms : 0;
+    this.timerTick ??= setInterval(() => {
+      if (this.timerEnds === 0) return;
+      const left = this.timerEnds - Date.now();
+      if (left > 0) {
+        this.renderStatus();
+        return;
+      }
+      if (this.talk || this.seatPending) return; // a question is answered first
+      this.closeTalk();
+      this.timerEnds = 0;
+      this.endTurn();
+    }, 500);
   }
 
   /** Choosing what to research (0x00495ee8): the advisor's pick first. */

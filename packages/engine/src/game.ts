@@ -151,6 +151,8 @@ export interface GameState {
   pollutionSquares?: number;
   /** Header barbarian activity: 0 villages only, 1 roving, 2 restless, 3 raging. */
   barbarianActivity?: number;
+  /** Time allowed a human's turn in milliseconds, 0 or unset for none (0x005d9790). */
+  turnTimerMs?: number;
   /** Turns since the last battle between civilizations, counted from turn 200 (header +32). */
   turnsOfPeace?: number;
   /** Civilizations destroyed so far (header +25, INFERRED), for the conquest score bonus. */

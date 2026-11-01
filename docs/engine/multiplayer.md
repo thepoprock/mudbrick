@@ -13,6 +13,10 @@ never reads the game, so the rules run only in browsers.
 Start the relay with `PORT=8787 npm start -w apps/relay`, then each player joins the same room with
 a seat equal to their civilization's slot, the host with its game already loaded.
 
-The original's simultaneous-moves mode (the `NM_` messages), its turn timer and its host migration
-are not ported. Its protocol (0x00460379, 0x0045094d, 0x004d4b20) is a client-server exchange over
+**The turn timer** (0x004df2a1, Change Timer, Ctrl+T) offers unlimited, 30 seconds, 1, 2, 3 or 5
+minutes, or a custom time. It restarts each human turn and ends the turn when it runs out. In the
+original a change in a network game goes to a vote of all players; here the mover's setting travels
+with the game.
+
+The original's simultaneous-moves mode (the `NM_` messages) and its host migration are not ported. Its protocol (0x00460379, 0x0045094d, 0x004d4b20) is a client-server exchange over
 TCP/IP or IPX, which a browser cannot join, so the two games cannot play each other.
