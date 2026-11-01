@@ -41,7 +41,13 @@ export interface MoodOutcomeInputs {
   tax: number;
 }
 
-/** Apply the verified disorder / celebration / gold rules. Mutates `city` and `civ`. */
+/**
+ * Apply the disorder / celebration / gold rules (VERIFIED against 0x004bafef: disorder on
+ * happy < unhappy, a human Democracy's revolt on the second turn of it, order restored and the
+ * tax banked otherwise except under Anarchy; celebration with no unhappy citizen, size above 2
+ * and happy at least half the size rounded up, rapture growth under a senate with food to spare
+ * and nothing blocking growth). Mutates `city` and `civ`.
+ */
 export function applyCityMood(
   rules: EngineRules,
   civ: Civ,

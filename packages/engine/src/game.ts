@@ -701,13 +701,9 @@ export class Game {
       const events = this.processCity(city);
       out.push(...events);
       if (city.inDisorder) anyDisorder = true;
-      if (
-        city.size > 5 &&
-        !city.inDisorder &&
-        !events.some((e) => 'city' in e && e.event.kind === 'celebration-start')
-      ) {
-        anyLargeQuiet = true; // INFERRED reading of "happy equals unhappy"
-      }
+      // VERIFIED: the city turn returns happy − unhappy, and the rate policy notes a city above
+      // size 5 whose result is zero.
+      if (city.size > 5 && (city.lastHappy ?? 0) === (city.lastUnhappy ?? 0)) anyLargeQuiet = true;
     }
     // Diplomacy and government (0x0051326d) run after the cities and before the strategic layer.
     {

@@ -174,7 +174,7 @@ export interface AiRateContext {
   turn: number;
   /** Any city of the civilization is in disorder this turn. */
   anyDisorder: boolean;
-  /** Any city of size 6 or more whose turn result was zero (INFERRED: a quiet large city). */
+  /** Any city of size 6 or more whose city turn returned zero: happy equals unhappy (VERIFIED). */
   anyLargeContentCity: boolean;
   /** The leader's RULES @LEADERS "civilize" personality value (−1, 0, 1). */
   civilize: number;
