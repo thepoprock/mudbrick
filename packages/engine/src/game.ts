@@ -120,6 +120,7 @@ import { advanceEffects, leonardoUpgrades, type AdvanceEvent } from './advances.
 import {
   conversation,
   powerRanks,
+  powerScores,
   relationsTurn,
   spokenBy,
   type Conversation,
@@ -159,6 +160,8 @@ export interface GameState {
   calendarLockTurn?: number;
   /** The next slot to play in this round, 0 between rounds. */
   nextSlot?: number;
+  /** The power graph's table, by quarter of the turn. */
+  powerHistory?: number[][];
   /** The human whose move it is. */
   movingHuman?: number;
   /** Past this turn the historian reports (header +0x142). */
@@ -1351,8 +1354,20 @@ export class Game {
           civ.reputation = rep - 1;
       }
     }
+    this.recordPower();
     out.push(...this.endOfYear());
     return out;
+  }
+
+  /** The power graph's table (0x00465607): every fourth turn, one byte per civilization. */
+  private recordPower(): void {
+    if (this.state.turn >= 600) return;
+    const at = (this.state.turn >> 2) % 150;
+    const history = (this.state.powerHistory ??= Array<number[]>(150)
+      .fill([])
+      .map(() => Array<number>(8).fill(0)));
+    const scores = powerScores(this.world, (s) => this.citiesOf(s).reduce((n, c) => n + c.size, 0));
+    history[at] = scores.map((v) => Math.min(255, Math.max(0, v >> 3)));
   }
 
   /** A whole round with nobody stopping to move. */

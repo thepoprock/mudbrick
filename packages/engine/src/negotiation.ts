@@ -113,12 +113,17 @@ export function goldGoodwill(gold: number): number {
 }
 
 /** The power ranking (0x00465607): 7 for the strongest civilization in play, down from there. */
-export function powerRanks(world: World, population: (slot: number) => number): number[] {
+export function powerScores(world: World, population: (slot: number) => number): number[] {
   const score = Array<number>(8).fill(0);
   for (const c of world.civs) {
     if (c.slot < 1 || c.slot > 7 || !c.inPlay) continue;
     score[c.slot] = c.advancesCount * 3 + population(c.slot) * 8 + (c.treasury >> 5);
   }
+  return score;
+}
+
+export function powerRanks(world: World, population: (slot: number) => number): number[] {
+  const score = powerScores(world, population);
   const ranks = Array<number>(8).fill(0);
   for (let place = 1; place < 8; place++) {
     let best = -1;
