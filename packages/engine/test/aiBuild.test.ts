@@ -334,6 +334,11 @@ describe('defence valuations (0x00474edb)', () => {
     expect(
       improvementPriority(IMPROVEMENT.samBattery, c, facts({ expanding: false }), rep)?.military,
     ).toBe(false);
+    // SDI Defense: (clamp(15 − 5) + 1) / 2 = 5, ×2 without the Manhattan Project, ×2 while the
+    // human has no Nuclear Missiles → 20; one missile halves that.
+    expect(improvementPriority(IMPROVEMENT.sdiDefense, c, facts(), base)?.n).toBe(20);
+    const nukes = { ...base, unitCount: (s: number, ty: number) => (s === 2 && ty === 45 ? 1 : 0) };
+    expect(improvementPriority(IMPROVEMENT.sdiDefense, c, facts(), nukes)?.n).toBe(10);
     // Police Station: 10 − the units away, doubled under Democracy, +2 when barely content.
     expect(
       improvementPriority(IMPROVEMENT.policeStation, c, facts({ unitsAway: 2 }), {

@@ -188,6 +188,8 @@ export function improvementPriority(
       if (!disorder) {
         n = (clamp(15 - city.size, 1, 15) + 1) >> 1;
         if (!env.wonderBuilt(im.manhattanProject)) n <<= 1;
+        // VERIFIED: doubled again while the main human has no Nuclear Missiles (index 45).
+        if ((env.unitCount?.(env.mainHuman ?? 0, 45) ?? 0) === 0) n <<= 1;
         if (city.size > 9) n -= 1;
         if (has(im.palace)) n = 0;
       }
