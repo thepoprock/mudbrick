@@ -127,4 +127,4 @@ without screenshots and without AI moves interfering: food, shields, net trade, 
 happy and unhappy. On August 1861 of the Civil War all 29 Federal cities match on all seven. On
 19 saves of two long Roman games net trade rose from about half to nearly all after the distance
 fix, and five saves match completely. Tax and science gaps in computer cities are partly rates
-changed after the cities were computed; the unhappy gap is open.
+changed after the cities were computed; the unhappy gap closed once martial law counted every armed unit in the city. Most misses left are single cities; several stored all zeros, which fits cities the original had not recomputed since capture (INFERRED).

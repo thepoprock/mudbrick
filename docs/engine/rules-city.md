@@ -332,3 +332,10 @@ probability `1 / (6 − difficulty)`: the plant is destroyed and the square suff
 
 The AI build choice (0x00430b61), the nuclear blast (0x0052c788), the AI's exact content base,
 the connected-to-capital test (0x00468c65), and the buy-cost formula for human purchases.
+
+### Martial law and units abroad (VERIFIED 0x004b6359, 0x004b6359's support pass)
+
+Martial law counts every armed unit standing in the city square, wherever it is homed (×2 under
+Communism, at most 3, or 6 under Communism). Units causing unhappiness under Republic and
+Democracy are the city's own: armed air units except fighters, and armed units outside any city,
+unless on a fortress (not an airbase) within 3 of one of the owner's cities.

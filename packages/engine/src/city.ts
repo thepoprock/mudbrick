@@ -587,18 +587,21 @@ export function unitSupport(
       const here = u.position.x === city.position.x && u.position.y === city.position.y;
       if (type.domain === DOMAIN_AIR) {
         if (type.role !== 3) abroad += 1;
-        if (here) inCity += 1;
-      } else if (here) {
-        inCity += 1;
-      } else if (!world.cityAt(u.position.x, u.position.y)) {
+      } else if (!here && !world.cityAt(u.position.x, u.position.y)) {
         const inFortressNearHome =
           world.hasFlag(u.position.x, u.position.y, SquareFlag.Fortress) &&
+          !world.hasFlag(u.position.x, u.position.y, SquareFlag.Airbase) &&
           world.cities.some(
             (c) => c.owner === city.owner && gridDistance(world, c.position, u.position) < 4,
           );
         if (!inFortressNearHome) abroad += 1;
       }
     }
+  }
+  // VERIFIED (0x004b6359): martial law counts every armed unit standing in the city, wherever
+  // it is homed.
+  for (const u of world.unitsAt(city.position.x, city.position.y)) {
+    if ((rules.units[u.type]?.attack ?? 0) !== 0) inCity += 1;
   }
   return { shields, settlers, abroad, inCity, supported: count };
 }

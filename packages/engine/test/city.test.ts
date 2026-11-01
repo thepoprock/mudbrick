@@ -475,7 +475,13 @@ describe('support, growth and boxes (verified)', () => {
     expect(des.shields).toBe(2); // 4 units, size 2 free
     expect(des.settlers).toBe(1);
     expect(des.abroad).toBe(2);
-    expect(des.inCity).toBe(1);
+    expect(des.inCity).toBe(0); // none of these stand in the world's unit list
+    // Martial law counts every armed unit in the city, homed here or not.
+    const guard = unit(4, 1, c.position.x, c.position.y);
+    guard.homeCity = 99;
+    w.units.push(guard);
+    expect(unitSupport(w, rules, c, ctx(), []).inCity).toBe(1);
+    w.units.pop();
     expect(unitSupport(w, rules, c, ctx({ government: GOVERNMENT.monarchy }), units).shields).toBe(
       1,
     );
