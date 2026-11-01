@@ -85,3 +85,29 @@ in the code as ai-city.md describes it; only the "wonder city" flag is left as c
 The rig: `/mnt/t7/civ2-wine` on bm3 — a 32-bit Wine prefix, the operator's disc image mounted
 as D:, Xvfb :98, `civ2-autoplay.sh` pressing Enter (Escape and `f` in turn) and clicking the
 High Council away, autosave each turn to `Ca_Auto.SAV`.
+
+## Scenario check: the Civil War at its first turn (2026-11-01)
+
+Method: the original (Multiplayer Gold under Wine on a virtual display) opened
+SCENARIO/CIVILWAR as the Federals at Deity; screenshots of its City Status (F1) and Attitude
+Advisor (F4) at the first turn, July 1861. The engine loaded the same file with the scenario's
+own RULES.TXT (`scripts/play-smoke.ts` drives the web app headlessly; the probes used
+`worldFromSave` / `gameFromSave` directly).
+
+| check                                | original              | engine before              | engine after       |
+| ------------------------------------ | --------------------- | -------------------------- | ------------------ |
+| gold after the first city processing | 138                   | 61–73                      | 138                |
+| food totals, 24 cities (City Status) | e.g. Boston 38, NY 51 | 1 of 24 (Boston 29, NY 42) | 24 of 24           |
+| Washington's mood                    | 4 happy, 2 unhappy    | 1 happy, 2 unhappy         | 4 happy, 2 unhappy |
+| cities in disorder, famine at turn 1 | none                  | 11 in disorder, 2 starving | none               |
+| date                                 | July 1861             | 4000 BC                    | July 1861          |
+| rules in force                       | the scenario's        | the game folder's          | the scenario's     |
+
+Causes found: the city record's worked-square mask was read in the wrong byte order (so every
+loaded city worked the wrong squares); luxuries calmed unhappy citizens first instead of
+setting the happy count outright; the scenario folder's RULES.TXT was ignored; the calendar
+ignored scenario months. `apps/web/test/civilwar.conformance.test.ts` pins the food totals.
+
+Open: from the third turn the engine's Pittsburgh falls into disorder (its Engineers complete,
+the city shrinks and its entertainer goes back to work, luxuries drop); the original has not
+been played forward under the same moves yet, so the later turns are unchecked.
