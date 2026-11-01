@@ -30,6 +30,8 @@ export interface CaptureContext {
   advanceGained?: (civ: Civ, advance: number) => void;
   /** Scenario events: CITYTAKEN, after the city has changed hands. */
   onCityTaken?: (city: string, attacker: number, defender: number) => void;
+  /** A capital falls while its owner still holds it; true when the government got away. */
+  capitalFalls?: (city: City, loser: Civ, captor: Civ) => boolean;
   turn: number;
   difficulty: number;
   /** Conquest by force (true) or another transfer such as diplomacy (false). */
@@ -102,7 +104,11 @@ export function captureCity(
       IMPROVEMENT.courthouse,
     ]) {
       if (city.improvements[i]) {
-        if (i === IMPROVEMENT.palace) loseShip(loser);
+        if (i === IMPROVEMENT.palace) {
+          // Civil war, flight or a new Palace; a ship survives only a flight (0x00528720).
+          const fled = ctx.capitalFalls?.(city, loser, captor) ?? false;
+          if (!fled) loseShip(loser);
+        }
         city.improvements[i] = false;
         destroyed.push(i);
       }

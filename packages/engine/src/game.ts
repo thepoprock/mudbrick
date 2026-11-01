@@ -53,6 +53,7 @@ import { beginUnitsTurn, type UnitTurnEvent } from './turnStart.js';
 import { fallout } from './nuclear.js';
 import { enterHut } from './huts.js';
 import { rushEmptyCity } from './aiShips.js';
+import { civilWar, escapeCity, mostCentralCity } from './civilWar.js';
 import { cityPollution, meltdownRoll, pollutionRoll, type PollutionEvent } from './pollution.js';
 import { aiChooseProduction } from './aiBuild.js';
 import { runStrategy, type StrategyEvent } from './aiStrategy.js';
@@ -68,6 +69,7 @@ import {
   spaceRacePressure,
   type SpaceshipContext,
   type SpaceshipEvent,
+  hasStarted,
 } from './spaceship.js';
 import { computeSupplyDemand, supplyDemandDue } from './supplyDemand.js';
 import { terraformTasks } from './aiTerraform.js';
@@ -629,6 +631,63 @@ export class Game {
           }
         : {}),
     };
+  }
+
+  /** A human's answer to CANESCAPE; unset, a human pays. */
+  askEscape?: (city: City) => boolean;
+
+  /** The fall of a capital (0x00528720); true when the government escapes. */
+  capitalFalls(city: City, loser: Civ, captor: Civ): boolean {
+    const main = this.world.civs.find((c) => c.isHuman)?.slot ?? 0;
+    let newPalace: City | null = null;
+    if (!loser.isHuman && this.citiesOf(loser.slot).length > 4) {
+      const stronger =
+        (captor.isHuman ? this.powerRank(captor.slot) : this.powerRank(main)) <
+        this.powerRank(loser.slot);
+      if (stronger) {
+        const split = civilWar(this.world, this.rules, loser, {
+          turn: this.state.turn,
+          restart: (s) => {
+            this.pendingEvents.push(...this.restart(s));
+            return this.civ(s).inPlay;
+          },
+        });
+        if (split) {
+          this.pendingEvents.push({
+            slot: loser.slot,
+            event: {
+              kind: 'diplomacy',
+              text: `Civil war divides the ${loser.name}!`,
+              a: loser.slot,
+              b: loser.slot,
+            },
+          });
+        } else newPalace = mostCentralCity(this.world, loser.slot, city);
+      }
+    }
+    const refuge = escapeCity(
+      this.world,
+      city,
+      loser.slot,
+      this.ownsWonder(loser.slot, IMPROVEMENT.greatWall),
+    );
+    let flee = false;
+    if (loser.treasury > 999 && refuge && this.world.cities.indexOf(refuge) > 0 && !newPalace) {
+      if (loser.isHuman) flee = this.askEscape?.(refuge) ?? true;
+      else {
+        flee =
+          this.state.difficulty > 2 &&
+          (hasStarted(loser) || this.citiesOf(loser.slot).length > 11 || loser.treasury > 1999);
+      }
+    }
+    if (flee && refuge) {
+      loser.treasury -= 1000;
+      refuge.improvements[IMPROVEMENT.palace] = true;
+      if (!loser.isHuman) this.aiChooseProduction(refuge);
+      return true;
+    }
+    if (newPalace) newPalace.production = { kind: 'improvement', index: IMPROVEMENT.palace };
+    return false;
   }
 
   /**
@@ -1324,6 +1383,7 @@ export class Game {
         },
         onUnitKilled: (t, a, d) => this.unitKilled(t, a, d),
         onCityEmptied: (c) => this.cityEmptied(c),
+        capitalFalls: (c, l, w) => this.capitalFalls(c, l, w),
         onCityTaken: (c, a, d) => this.cityTaken(c, a, d),
         advanceGained: (c, a) => this.advanceGained(c, a),
         guerillaWarfareDiscovered: (this.state.firstDiscoveredBy[34] ?? 0) !== 0,
@@ -1657,6 +1717,7 @@ export class Game {
       activity: this.state.barbarianActivity ?? 0,
       onUnitKilled: (t, a, d) => this.unitKilled(t, a, d),
       onCityEmptied: (c) => this.cityEmptied(c),
+      capitalFalls: (c, l, w) => this.capitalFalls(c, l, w),
       realisticCombat: this.state.realisticCombat,
       anyoneKnows: (a) => this.world.civs.some((c) => c.slot !== 0 && c.knownAdvances[a] === true),
       humanKnows: (a) => this.world.civs.some((c) => c.isHuman && c.knownAdvances[a] === true),

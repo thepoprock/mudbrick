@@ -218,6 +218,8 @@ export class PlaySession {
     readonly renderOptions: () => WorldRenderOptions,
   ) {
     game.wantsTalks = folder.popups.size > 0;
+    game.askEscape = (c) =>
+      window.confirm(`Pay 1000 gold to move the government to ${c.name} and save the spaceship?`);
     this.startTimer();
     void this.buildMenuBar();
     this.log(`You lead the ${this.civ.name}. Arrow keys or the number pad move the selected unit.`);
@@ -701,6 +703,7 @@ export class PlaySession {
     const loser = this.world.civs.find((c) => c.slot === city.owner);
     if (!loser) return;
     const ev = captureCity(this.world, this.rules, this.game.rng, city, this.civ, loser, {
+      capitalFalls: (c, l, w) => this.game.capitalFalls(c, l, w),
       turn: this.game.state.turn,
       difficulty: this.game.state.difficulty,
       conquest: true,

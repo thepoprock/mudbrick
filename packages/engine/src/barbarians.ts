@@ -82,6 +82,7 @@ export interface BarbarianContext extends MovementContext {
   /** Scenario events: UNITKILLED. */
   onUnitKilled?: (type: number, attacker: number, defender: number) => void;
   onCityEmptied?: (city: City) => void;
+  capitalFalls?: (city: City, loser: Civ, captor: Civ) => boolean;
   rng: Rng;
   turn: number;
   /** Game year, for the ransom rule. */
@@ -727,6 +728,7 @@ function takeCity(
     difficulty: ctx.difficulty,
     conquest: true,
     guerillaWarfareDiscovered: ctx.guerillaWarfareDiscovered,
+    ...(ctx.capitalFalls ? { capitalFalls: ctx.capitalFalls } : {}),
   });
   if (!ev.cityDestroyed) applyMove(rules, unit, at, THIRDS, ctx);
   events.push({

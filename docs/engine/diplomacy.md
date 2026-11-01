@@ -182,3 +182,21 @@ turns running falls into anarchy (the happiness routine, already in the engine).
   original's further conditions — coastal cities for ships — were not read in full, INFERRED).
 - **Pillage** (0x00498170) inside another civilization's city radius breaks the treaty when not
   already at war and declares war outright (rules-units.md).
+
+## A capital falls (VERIFIED 0x00528720, 0x00527a44, 0x005277c5)
+
+When a Palace is captured from a computer player with more than four cities that outranks the
+conqueror (or the human, when the conqueror is a computer), a **civil war** starts if a slot is
+free. The rebels take half the gold, the government, advances, research and the map; the two are at
+war. The land mass of the Palace stays loyal; other land masses go to the rebels while the loyal
+total stays ahead, and that split stands if the loyal side keeps between one and two times the
+rebels' citizens. Otherwise the cities furthest from the Palace go until the rebels hold a third of
+the citizens. Units follow the city they stand in, or their home. Each side's new capital is the
+city nearest its others. Without a civil war the most central city starts building a Palace.
+
+Then the government may **escape** for 1000 gold to the best city of size 8 or more and at least half
+the captured city's size, scored `size × 3 − distance + 4 × units`, ×1.5 with SAM, ×2 with walls or
+the Great Wall, ×3 with SDI, halved on another land mass. A human is asked; a computer above Prince
+does it if it has started a ship, holds over 11 cities or has 2000 gold. No escape when the Palace
+was just put into production. **A spaceship is lost only if the government does not escape.** The
+quirk that the first city in the table is never chosen is kept.
