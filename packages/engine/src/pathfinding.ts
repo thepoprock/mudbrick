@@ -28,7 +28,7 @@ const WINDOW = 48;
 const MAX_COST = 999;
 
 /** Per-square facts gathered once per search, so the inner loop touches only arrays. */
-interface Board {
+export interface Board {
   /** Owner slot of the units on the square, −1 when empty. */
   unitOwner: Int8Array;
   /** Own units of the moving unit's role on the square. */
@@ -50,6 +50,22 @@ function board(world: World, rules: EngineRules, unit: Unit): Board {
   }
   for (const c of world.cities) cityOwner[world.index(c.position.x, c.position.y)] = c.owner;
   return { unitOwner, sameRole, cityOwner };
+}
+
+/**
+ * The facts a search reads. Planning walks (road links, route modifiers) ignore the stacking cost
+ * of own units, else a worker standing on the link shifts the link away from itself every turn.
+ * A walk of many steps builds this once and passes it along.
+ */
+export function planningBoard(
+  world: World,
+  rules: EngineRules,
+  unit: Unit,
+  ignoreOwnUnits: boolean,
+): Board {
+  const b = board(world, rules, unit);
+  if (ignoreOwnUnits) b.sameRole.fill(0);
+  return b;
 }
 
 function neighbourIndex(world: World, i: number, dir: number): number {
@@ -161,15 +177,12 @@ export function gotoDirection(
   rules: EngineRules,
   unit: Unit,
   goal: Point,
-  opts: { ignoreOwnUnits?: boolean } = {},
+  opts: { ignoreOwnUnits?: boolean; board?: Board } = {},
 ): number | null {
   const here = unit.position;
   if (here.x === goal.x && here.y === goal.y) return null;
   if (manhattan(world, here, goal) >= WINDOW) return null;
-  const b = board(world, rules, unit);
-  // Planning walks (road links, route modifiers) ignore the stacking cost of own units, else a
-  // worker standing on the link shifts the link away from itself every turn.
-  if (opts.ignoreOwnUnits) b.sameRole.fill(0);
+  const b = opts.board ?? planningBoard(world, rules, unit, opts.ignoreOwnUnits === true);
   const goalIndex = world.index(goal.x, goal.y);
   const hereIndex = world.index(here.x, here.y);
   const cost = new Int32Array(world.area); // 0 = unreached
@@ -219,6 +232,9 @@ export function gotoDirection(
     const [c, i] = top;
     if ((cost[i] ?? 0) < c) continue;
     if (c > MAX_COST) continue;
+    // Everything cheaper than this square is settled, which is all the choice below reads.
+    const reached = cost[hereIndex] ?? 0;
+    if (reached !== 0 && c >= reached) break;
     if (i === hereIndex) continue;
     const p = world.position(i);
     for (let dir = 0; dir < 8; dir++) {

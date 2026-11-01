@@ -10,7 +10,7 @@
 import { addGoal, addObjective, objectiveAt, removeGoals, type CivStrategy } from './aiStrategy.js';
 import { distance, gridDistance } from './city.js';
 import { hasTreaty, TREATY } from './diplomacy.js';
-import { gotoDirection } from './pathfinding.js';
+import { planningBoard, gotoDirection } from './pathfinding.js';
 import { DOMAIN_GROUND, IMPROVEMENT, type EngineRules } from './rules.js';
 import { canOrder, doWork, ORDER, type WorkContext } from './terraform.js';
 import { specialAt } from './terrainSpecials.js';
@@ -62,8 +62,9 @@ function walkPath(
     lastDirection: null,
     gotoSteps: 0,
   };
+  const board = planningBoard(world, rules, walker, true);
   for (let steps = 0; steps < 50; steps++) {
-    const dir = gotoDirection(world, rules, walker, to, { ignoreOwnUnits: true });
+    const dir = gotoDirection(world, rules, walker, to, { board });
     if (dir === null) return;
     const off = NEIGHBOUR_OFFSETS[dir];
     if (!off) return;

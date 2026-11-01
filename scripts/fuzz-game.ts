@@ -197,9 +197,15 @@ function play(slot: number): void {
 }
 
 let last = -1;
+let slowest = 0;
 const started = Date.now();
 for (let step = 0; game.state.turn < turns && !game.state.gameOver && step < turns * 10; step++) {
+  const t0 = Date.now();
   game.playUntilHuman();
+  const spent = Date.now() - t0;
+  slowest = Math.max(slowest, spent);
+  if (process.env.FUZZ_TIMES && game.state.turn % 25 === 0)
+    console.log('turn', game.state.turn, spent, 'ms');
   check();
   const slot = game.state.movingHuman;
   if (slot === undefined) break;
@@ -236,6 +242,6 @@ for (let step = 0; game.state.turn < turns && !game.state.gameOver && step < tur
 }
 const w = game.world;
 console.log(
-  `seed ${seed}: turn ${game.state.turn}, ${w.cities.length} cities, ${w.units.length} units, over: ${game.state.gameOver?.reason ?? 'no'}, ${Math.round((Date.now() - started) / 1000)}s`,
+  `seed ${seed}: turn ${game.state.turn}, ${w.cities.length} cities, ${w.units.length} units, over: ${game.state.gameOver?.reason ?? 'no'}, ${Math.round((Date.now() - started) / 1000)}s, slowest turn ${slowest} ms`,
 );
 for (const [k, v] of problems) console.log(`  PROBLEM ${k} × ${v}`);
