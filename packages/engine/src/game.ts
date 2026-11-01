@@ -1237,7 +1237,12 @@ export class Game {
     // The second recompute runs with the city-turn flag (0x005b864c): the workers are placed
     // again, so a citizen spent on Settlers leaves a specialist's place if that was the spare one,
     // and a computer city puts one specialist back to work.
-    this.placeNewWorker(city, ctx);
+    // VERIFIED 0x004bc513: the scoring switch (0x005b8648) goes on here, so every square the
+    // placement weighs counts, and on a computer's re-placing turn that is all of them.
+    this.placeNewWorker(city, {
+      ...ctx,
+      governmentScores: governmentScoresOf(civ),
+    });
     t = totals();
     city.lastHappy = t.mood.happy;
     city.lastUnhappy = t.mood.unhappy;
@@ -1326,7 +1331,7 @@ export class Game {
         governmentScores: governmentScoresOf(civ),
         civilize: leader?.civilize ?? 0,
       };
-      const raw = rawYields(this.world, this.rules, city, sctx);
+      const raw = rawYields(this.world, this.rules, city, ctx);
       const support = unitSupport(this.world, this.rules, city, sctx, homed());
       const shields = shieldTotals(this.rules, city, sctx, raw.shields, support.shields);
       const ownNet = raw.trade - corruption(this.rules, city, ctx, raw.trade, false);

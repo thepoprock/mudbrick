@@ -103,8 +103,10 @@ Liberty; Fundamentalism also needs the rules to allow it.
 
 **Scores (7 × i16 at +980, VERIFIED):** reset at the start of the civilization's turn and fed
 during each city's turn by one scoring pass — the switch at 0x005b8648 is set around the city
-turn's recompute (also while founding and capturing), and while it is set three routines add to
-the scores as they run:
+turn's second recompute (also while founding and capturing), and while it is set three routines
+add to the scores as they run. The square yield runs for every square the worker placement weighs,
+not just those worked, so a computer city's re-placing turn (`(turn + city) & 3 == 0`) adds far more
+than the others; the scores saved by the original confirm this:
 
 - the square yield (0x004b4102) takes a point from Despotism for every worked square making
   more than 2 of anything (not while celebrating) and gives the Republic and Democracy a point
