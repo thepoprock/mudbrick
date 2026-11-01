@@ -56,7 +56,14 @@ import { rushEmptyCity } from './aiShips.js';
 import { civilWar, escapeCity, mostCentralCity } from './civilWar.js';
 import { canBuildImprovementAt } from './buildRules.js';
 import { canBuildUnit } from './founding.js';
-import { cityPollution, meltdownRoll, pollutionRoll, type PollutionEvent } from './pollution.js';
+import {
+  cityPollution,
+  globalWarming,
+  meltdownRoll,
+  pollutionRoll,
+  warmingTurn,
+  type PollutionEvent,
+} from './pollution.js';
 import { aiChooseProduction } from './aiBuild.js';
 import { runStrategy, type StrategyEvent } from './aiStrategy.js';
 import { gameYear, formatYear, type CalendarOptions } from './calendar.js';
@@ -156,6 +163,11 @@ export interface GameState {
   eliminatePollution?: boolean;
   /** World pollution count (the save header's value), kept for global warming later. */
   pollutionSquares?: number;
+  /** The warming counter and how many warmings have struck (header 0x005da72e, 0x005da72f). */
+  warmingCounter?: number;
+  warmingEvents?: number;
+  /** Polluted squares in computer players' radii (0x005da730). */
+  pollutionBaseline?: number;
   /** Header barbarian activity: 0 villages only, 1 roving, 2 restless, 3 raging. */
   barbarianActivity?: number;
   /** Time allowed a human's turn in milliseconds, 0 or unset for none (0x005d9790). */
@@ -227,6 +239,7 @@ export type GrowthNote =
 export type CityTurnEvent = CityEvent | ProductionEvent | UpkeepEvent | GrowthNote | PollutionEvent;
 
 export type TurnEvent =
+  | { slot: number; event: { kind: 'climate'; text: string } }
   | { slot: number; city: number; event: CityTurnEvent }
   | { slot: number; event: ResearchEvent }
   | { slot: number; event: AdvanceEvent }
@@ -1682,6 +1695,33 @@ export class Game {
   private endOfYear(): TurnEvent[] {
     const out: TurnEvent[] = [];
     if (this.state.gameOver) return out;
+    const warming = {
+      counter: this.state.warmingCounter ?? 0,
+      events: this.state.warmingEvents ?? 0,
+      polluted: this.state.pollutionSquares ?? 0,
+      baseline: this.state.pollutionBaseline ?? 0,
+    };
+    const climate = warmingTurn(
+      warming,
+      this.world.civs.filter((c) => c.isHuman && c.slot !== 0).length,
+      this.world.cities.filter((c) => c.improvements[29]).length,
+    );
+    if (climate === 'warm') {
+      globalWarming(this.world, warming.events - 1);
+      delete this.world.landmassStats;
+    }
+    this.state.warmingCounter = warming.counter;
+    this.state.warmingEvents = warming.events;
+    this.state.pollutionBaseline = warming.baseline;
+    if (climate) {
+      const text =
+        climate === 'warm'
+          ? 'Global warming! The climate changes across the world.'
+          : 'Our scientists fear that pollution is warming the climate.';
+      for (const c of this.world.civs) {
+        if (c.isHuman && c.slot !== 0) out.push({ slot: c.slot, event: { kind: 'climate', text } });
+      }
+    }
     const year = yearOf(this.state);
     const shipEvents: SpaceshipEvent[] = [];
     const winner = checkArrivals(this.world, year, shipEvents);

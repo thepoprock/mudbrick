@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { cityPollution, meltdownRoll, pollutionRoll } from '../src/pollution.js';
+import {
+  cityPollution,
+  globalWarming,
+  meltdownRoll,
+  pollutionRoll,
+  warmingTurn,
+} from '../src/pollution.js';
 import { Rng } from '../src/rng.js';
 import { ADVANCE, IMPROVEMENT } from '../src/rules.js';
 import { CITY_CENTRE_INDEX, SquareFlag, World, type City } from '../src/world.js';
@@ -95,5 +101,28 @@ describe('pollution (verified)', () => {
       }
     }
     expect(melted).toBe(100); // 1 / (6 − 5): certain at Deity
+  });
+
+  it('warming builds with pollution, is held back by Solar Plants, and strikes past 16', () => {
+    const s = { counter: 16, events: 0, polluted: 40, baseline: 0 };
+    expect(warmingTurn(s, 1, 0)).toBe('warm');
+    expect(s).toMatchObject({ counter: 0, events: 1 });
+    const held = { counter: 5, events: 0, polluted: 3, baseline: 0 };
+    expect(warmingTurn(held, 1, 6)).toBe(null);
+    expect(held.counter).toBe(4);
+    const warn = { counter: 11, events: 0, polluted: 20, baseline: 0 };
+    expect(warmingTurn(warn, 1, 0)).toBe('warn');
+  });
+
+  it('the coast turns to swamp and jungle, and loses its works', () => {
+    const w = new World({ columns: 20, rows: 20, flatEarth: true });
+    w.terrain.fill(10);
+    w.terrain[w.index(10, 10)] = 2;
+    w.terrain[w.index(12, 10)] = 3;
+    w.setFlag(10, 10, SquareFlag.Irrigation, true);
+    globalWarming(w, 0);
+    expect(w.terrain[w.index(10, 10)]).toBe(8);
+    expect(w.terrain[w.index(12, 10)]).toBe(9);
+    expect(w.hasFlag(10, 10, SquareFlag.Irrigation)).toBe(false);
   });
 });

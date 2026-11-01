@@ -393,3 +393,13 @@ A unit needs its advance and must not be obsolete. Gunpowder retires defenders w
 Musketeers; Knights' advance retires two-move attackers no stronger. Nuclear units need the Manhattan
 Project and Rocketry; ships need sea that is more than a lake; Fanatics need Fundamentalism. A computer
 skips a fast ground unit when a better one of its role is available.
+
+## Global warming (VERIFIED 0x00466e4e, 0x00466b1b)
+
+Each year `dirt = polluted − base + base / 2` (shared among the humans if several). The counter goes
+up one when `dirt × 2 − warmings × 4 − Solar Plants − counter` is positive, down one when negative,
+between 0 and 99. At 12 with `dirt` above 6 the player is warned. Past 16 the climate changes and the
+counter restarts. For warming `n` counting from 0, each desert, plains, grassland or forest square
+with under `7 − n` ocean squares among its 20 neighbours goes, when `(3x − 3y) & 7` equals `n`, to
+desert (from desert or plains) or plains. With more ocean near it becomes swamp, or jungle from
+forest, and loses irrigation and mines.

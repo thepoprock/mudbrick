@@ -150,6 +150,9 @@ export interface SavePatch {
   turn?: number;
   year?: number;
   pollutionSquares?: number;
+  warmingCounter?: number;
+  warmingEvents?: number;
+  pollutionBaseline?: number;
   /** Per advance: first discoverer slot. */
   firstDiscoveredBy?: number[];
   /** Per advance: bit n = slot n knows it. Omit to keep the file's table. */
@@ -308,6 +311,9 @@ export function writeSave(original: Uint8Array, save: SaveFile, patch: SavePatch
   w.u16(P + 36, patch.cities.length);
   if (patch.turn !== undefined) w.u16(P + 4, patch.turn);
   if (patch.year !== undefined) w.i16(P + 6, patch.year);
+  if (patch.warmingCounter !== undefined) w.u8(P + 26, patch.warmingCounter);
+  if (patch.warmingEvents !== undefined) w.u8(P + 27, patch.warmingEvents);
+  if (patch.pollutionBaseline !== undefined) w.u16(P + 28, patch.pollutionBaseline);
   if (patch.pollutionSquares !== undefined) w.u16(P + 30, patch.pollutionSquares);
   if (patch.nextHistory !== undefined) w.i16(0x142, patch.nextHistory);
   if (patch.turnsOfPeace !== undefined) w.i16(P + 32, patch.turnsOfPeace);

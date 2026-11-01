@@ -1024,6 +1024,8 @@ export class PlaySession {
         return `Barbarians: ${'text' in e.event ? e.event.text : ''}.`;
       case 'polluted':
         return `Pollution near ${cityName}.`;
+      case 'climate':
+        return ev.text;
       case 'meltdown':
         return `Nuclear meltdown in ${cityName}! The Nuclear Plant is destroyed.`;
       case 'disbanded-for-shortage':

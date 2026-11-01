@@ -62,6 +62,10 @@ export interface GameParameters {
   humanSlots: boolean[];
   globalWarmingCount: number;
   pollutionSquares: number;
+  /** Global warming counter, warmings so far, and polluted squares in computer radii. */
+  warmingCounter: number;
+  warmingEvents: number;
+  pollutionBaseline: number;
   /** File offset 8 (i16): from this turn on the calendar advances one year per turn; −1 none (VERIFIED 0x0046520c). */
   calendarLockTurn: number;
   /** File offset 0x142: past this turn the historian reports (VERIFIED 0x00467591). */
@@ -568,6 +572,9 @@ export function parseSave(bytes: Uint8Array): SaveFile {
     humanSlots: r.bits8(P + 23),
     globalWarmingCount: r.u8(P + 27),
     pollutionSquares: r.u16(P + 30),
+    warmingCounter: r.u8(P + 26),
+    warmingEvents: r.u8(P + 27),
+    pollutionBaseline: r.u16(P + 28),
     calendarLockTurn: r.i16(P + 8),
     nextHistory: r.i16(0x142),
     turnsOfPeace: r.i16(P + 32),

@@ -165,6 +165,11 @@ export function saveFromGame(original: Uint8Array, parsed: SaveFile, game: Game)
     year: yearOf(state),
     ...(state.nextHistory !== undefined ? { nextHistory: state.nextHistory } : {}),
     ...(state.turnsOfPeace !== undefined ? { turnsOfPeace: state.turnsOfPeace } : {}),
+    ...(state.warmingCounter !== undefined ? { warmingCounter: state.warmingCounter } : {}),
+    ...(state.warmingEvents !== undefined ? { warmingEvents: state.warmingEvents } : {}),
+    ...(state.pollutionBaseline !== undefined
+      ? { pollutionBaseline: state.pollutionBaseline }
+      : {}),
     ...(state.pollutionSquares !== undefined ? { pollutionSquares: state.pollutionSquares } : {}),
     firstDiscoveredBy: state.firstDiscoveredBy,
     knownByMask: Array.from({ length: 100 }, (_, a) =>

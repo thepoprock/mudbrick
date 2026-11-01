@@ -8,7 +8,14 @@
  */
 import type { Rng } from './rng.js';
 import { ADVANCE, IMPROVEMENT } from './rules.js';
-import { CITY_CENTRE_INDEX, OCEAN, SquareFlag, type City, type World } from './world.js';
+import {
+  CITY_CENTRE_INDEX,
+  OCEAN,
+  SquareFlag,
+  type City,
+  type World,
+  CITY_RADIUS_OFFSETS,
+} from './world.js';
 
 export interface PollutionContext {
   knows: (advance: number) => boolean;
@@ -59,7 +66,9 @@ export function cityPollution(
 }
 
 export type PollutionEvent =
-  { kind: 'polluted'; x: number; y: number } | { kind: 'meltdown'; city: City };
+  | { kind: 'climate'; text: string }
+  | { kind: 'polluted'; x: number; y: number }
+  | { kind: 'meltdown'; city: City };
 
 /**
  * The per-turn roll (VERIFIED): `rand() % (256 − threshold) < 2 × pollution` dirties a random
@@ -108,4 +117,68 @@ export function meltdownRoll(rng: Rng, city: City, ctx: PollutionContext): Pollu
   if (roll !== 0) return null;
   city.improvements[IMPROVEMENT.nuclearPlant] = false;
   return { kind: 'meltdown', city };
+}
+
+export interface WarmingState {
+  counter: number;
+  events: number;
+  /** Polluted squares in all (0x005da732). */
+  polluted: number;
+  /** Those inside computer players' radii, counted in the scoring pass (0x005da730). */
+  baseline: number;
+}
+
+/**
+ * The yearly reckoning (VERIFIED 0x00466e4e): pollution pushes a counter up and Solar Plants and past
+ * warming push it down, shared among the humans. Returns 'warn' at 12 with enough pollution, 'warm'
+ * past 16.
+ */
+export function warmingTurn(
+  s: WarmingState,
+  humans: number,
+  solarPlants: number,
+): 'warn' | 'warm' | null {
+  let dirt = s.polluted - s.baseline + Math.trunc(s.baseline / 2);
+  if (humans > 1) dirt = Math.trunc((humans - 1 + dirt) / humans);
+  const push = dirt * 2 - s.events * 4 - solarPlants - s.counter;
+  if (push >= 1) s.counter += 1;
+  else if (push < 0) s.counter -= 1;
+  s.counter = Math.max(0, Math.min(99, s.counter));
+  s.baseline = 0;
+  if (s.counter > 16) {
+    s.counter = 0;
+    s.events += 1;
+    return 'warm';
+  }
+  return s.counter === 12 && dirt > 6 ? 'warn' : null;
+}
+
+/**
+ * The climate changes (VERIFIED 0x00466b1b), event `n` counting from 0: desert, plains, grassland
+ * and forest far from the sea go, one in eight squares, to desert or plains; near the sea they
+ * become swamp or, from forest, jungle, and lose irrigation and mines.
+ */
+export function globalWarming(world: World, n: number): void {
+  for (let i = 0; i < world.area; i++) {
+    const t = world.terrain[i] ?? OCEAN;
+    if (t >= 4) continue;
+    const { x, y } = world.position(i);
+    let sea = 0;
+    for (const off of CITY_RADIUS_OFFSETS) {
+      const py = y + off.y;
+      const px = py >= 0 && py < world.rows ? world.wrapX(x + off.x, py) : null;
+      if (px !== null && world.terrainAt(px, py) === OCEAN) sea += 1;
+    }
+    if (sea < 7 - n) {
+      if (((x * 3 - y * 3) & 7) === n) {
+        if (world.visited[i] === 15) world.visited[i] = 0;
+        world.terrain[i] = t < 2 ? 0 : 1;
+      }
+    } else {
+      if (world.visited[i] === 15) world.visited[i] = 0;
+      world.terrain[i] = t === 3 ? 9 : 8;
+      world.setFlag(x, y, SquareFlag.Irrigation, false);
+      world.setFlag(x, y, SquareFlag.Mine, false);
+    }
+  }
 }
