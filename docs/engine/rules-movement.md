@@ -32,9 +32,12 @@ two movement points, and a damaged Armor never drops below one.
 
 The go-to step chooser weighs each of the eight directions by the step cost of
 [rules-units.md](rules-units.md) plus the remaining distance, steers "stay near land" units away
-from squares flagged as far from land, and refuses zone-of-control violations. A go-to counter
-grows by one per step and by fifteen when the unit reverses; past 47 the player is asked whether
-to give up (LONGMOVE).
+from squares flagged as far from land, and refuses zone-of-control violations. For the human at the
+keyboard a go-to counter grows by one per step and by fifteen more when the unit turns straight
+back; past 47 the original asks whether to give up (LONGMOVE, VERIFIED 0x00539099). Mudbrick gives
+up without asking and the unit waits for orders, which is the original's "yes" answer. The computer
+players have no such counter. Because railroad can cost nothing, Mudbrick drops a computer unit's
+go-to when it turns straight back without spending a move (INFERRED: our safeguard, not decoded).
 
 ## Sight (VERIFIED 0x0041aad6)
 

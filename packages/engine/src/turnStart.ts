@@ -132,6 +132,21 @@ export function checkFuel(world: World, rules: EngineRules, unit: Unit): UnitTur
  * One go-to step: the pathfinder's first step (pathfinding.ts, the original's 0x00484325),
  * falling back to a greedy step when the goal is outside the pathfinder's window.
  */
+/** A go-to is given up past this count (VERIFIED 0x00539099, the LONGMOVE test). */
+const LONG_MOVE = 47;
+
+/** The go-to counter after a step: one, and fifteen more for turning straight back. */
+export function longMoveCount(count: number, reversed: boolean): number {
+  return count + 1 + (reversed ? 15 : 0);
+}
+
+function reverses(a: number | null, b: number | null): boolean {
+  if (a === null || b === null) return false;
+  const x = NEIGHBOUR_OFFSETS[a];
+  const y = NEIGHBOUR_OFFSETS[b];
+  return x !== undefined && y !== undefined && x.x === -y.x && x.y === -y.y;
+}
+
 export function gotoStep(
   world: World,
   rules: EngineRules,
@@ -146,6 +161,13 @@ export function gotoStep(
     unit.gotoTarget = null;
     return { kind: 'goto-step', unit, arrived: true };
   }
+  const human = world.civs.find((c) => c.slot === unit.owner)?.isHuman === true;
+  let previous: number | null = null;
+  const giveUp = (): UnitTurnEvent => {
+    unit.order = null;
+    unit.gotoTarget = null;
+    return { kind: 'goto-blocked', unit };
+  };
   while (fullMoves(rules, unit, ctx) > unit.movesSpent) {
     let best: { x: number; y: number } | null = null;
     const dir = gotoDirection(world, rules, unit, target);
@@ -171,16 +193,32 @@ export function gotoStep(
         }
       }
     }
-    if (!best) {
-      unit.order = null;
-      unit.gotoTarget = null;
-      return { kind: 'goto-blocked', unit };
-    }
+    if (!best) return giveUp();
+    const step = best;
+    const bestDir = NEIGHBOUR_OFFSETS.findIndex(
+      (o) =>
+        unit.position.y + o.y === step.y && world.wrapX(unit.position.x + o.x, step.y) === step.x,
+    );
+    const spentBefore = unit.movesSpent;
     const r = tryMove(world, rules, rng, unit, best, ctx);
     unit.order = ORDER.goTo; // tryMove clears orders; a go-to continues
     unit.gotoTarget = target;
-    unit.gotoSteps += 1;
+    if (human) {
+      // The original counts for the human at the keyboard only, and asks whether to give up.
+      unit.gotoSteps = longMoveCount(unit.gotoSteps, reverses(unit.lastDirection, bestDir));
+      unit.lastDirection = bestDir;
+      if (unit.gotoSteps > LONG_MOVE) {
+        unit.gotoSteps = 0;
+        return giveUp();
+      }
+    } else {
+      unit.gotoSteps += 1;
+    }
     if (r.kind !== 'moved') break;
+    // INFERRED, a safeguard of ours: railroad can cost nothing, so a computer unit bouncing
+    // between two squares would never run out of moves here.
+    if (!human && unit.movesSpent === spentBefore && reverses(previous, bestDir)) return giveUp();
+    previous = bestDir;
     if (unit.position.x === target.x && unit.position.y === target.y) {
       unit.order = null;
       unit.gotoTarget = null;

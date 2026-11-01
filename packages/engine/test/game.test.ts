@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { rawYields, shieldTotals, tradeSplit, unitSupport } from '../src/city.js';
 import { removeCity } from '../src/fertility.js';
 import { Game } from '../src/game.js';
+import { longMoveCount } from '../src/turnStart.js';
 import { applyCityMood, researchableAdvances } from '../src/outcome.js';
 import { Rng } from '../src/rng.js';
 import { GOVERNMENT, IMPROVEMENT, type EngineRules } from '../src/rules.js';
@@ -227,6 +228,11 @@ describe('Game turn loop', () => {
     game.playUntilHuman();
     expect(game.state.movingHuman).toBe(1);
     expect(game.state.turn).toBe(11);
+  });
+
+  it('the go-to counter adds one a step and fifteen more for turning back', () => {
+    expect(longMoveCount(0, false)).toBe(1);
+    expect(longMoveCount(1, true)).toBe(17);
   });
 
   it('a dead city takes its homed units with it, and routes to it go', () => {
