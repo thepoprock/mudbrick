@@ -376,3 +376,20 @@ unless on a fortress (not an airbase) within 3 of one of the owner's cities.
 Trade routes to it are cut. Units homed there: Partisans (slot 9) lose their home, a computer
 player's lone defender of another of its cities moves its home there, and every other one is
 disbanded. `removeCity` in fertility.ts does this for every way a city can end.
+
+## What can be built (VERIFIED 0x00494938, 0x00494862, 0x004943e4)
+
+An improvement needs its advance and must not stand in the city. Then: Harbor and Offshore Platform
+need the coast; Port Facility and Coastal Fortress need sea that is more than a lake; no Granary with
+the Pyramids, no Cathedral with Michelangelo's, no Research Lab with SETI, no Police Station with
+Women's Suffrage, no Courthouse in the capital. Bank needs a Marketplace, Stock Exchange a Bank,
+University a Library, Research Lab a University, Manufacturing Plant a Factory, Sewer System an
+Aqueduct, each with that building's advance known. Power, Hydro, Nuclear and Solar Plants need a
+Factory or Manufacturing Plant; Hydro needs a river or mountains near; other than Solar none may be
+built beside Hoover Dam, a Power Plant or a Solar Plant, and only Power beside a Nuclear Plant.
+Spaceship parts need the Apollo Program, an AD date, no launch yet, and no bloodlust.
+
+A unit needs its advance and must not be obsolete. Gunpowder retires defenders weaker than
+Musketeers; Knights' advance retires two-move attackers no stronger. Nuclear units need the Manhattan
+Project and Rocketry; ships need sea that is more than a lake; Fanatics need Fundamentalism. A computer
+skips a fast ground unit when a better one of its role is available.

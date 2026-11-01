@@ -54,6 +54,8 @@ import { fallout } from './nuclear.js';
 import { enterHut } from './huts.js';
 import { rushEmptyCity } from './aiShips.js';
 import { civilWar, escapeCity, mostCentralCity } from './civilWar.js';
+import { canBuildImprovementAt } from './buildRules.js';
+import { canBuildUnit } from './founding.js';
 import { cityPollution, meltdownRoll, pollutionRoll, type PollutionEvent } from './pollution.js';
 import { aiChooseProduction } from './aiBuild.js';
 import { runStrategy, type StrategyEvent } from './aiStrategy.js';
@@ -2033,15 +2035,26 @@ export class Game {
     });
   }
 
-  /** May the city build this improvement: prerequisite known, not built, wonders unclaimed. */
+  /** May the city build this improvement (0x00494938)? */
   canBuildImprovement(city: City, imp: number): boolean {
-    const rule = this.rules.improvements[imp];
-    if (!rule || imp === 0 || rule.preq?.kind === 'never') return false;
-    if (imp >= 39 && this.wonderCity(imp) !== null) return false;
-    if (imp < 39 && city.improvements[imp]) return false;
-    if (imp >= 35 && imp <= 37 && this.wonderCity(IMPROVEMENT.apolloProgram) === null) return false;
-    const pre = advanceIndex(rule.preq);
-    return pre === null || this.knows(city.owner, pre);
+    const civ = this.civ(city.owner);
+    return canBuildImprovementAt(this.world, this.rules, city, imp, {
+      knows: (a) => this.knows(city.owner, a),
+      ownsWonder: (i) => this.ownsWonder(city.owner, i),
+      wonderBuilt: (i) => this.wonderCity(i) !== null,
+      afterChrist: yearOf(this.state) > 0,
+      bloodlust: this.state.bloodlust ?? false,
+      launched: hasLaunched(civ),
+    });
+  }
+
+  /** May the city build this unit (0x004943e4)? */
+  canBuildUnitAt(city: City, type: number): boolean {
+    return canBuildUnit(this.rules, this.civ(city.owner), type, {
+      world: this.world,
+      city,
+      manhattanBuilt: this.wonderCity(IMPROVEMENT.manhattanProject) !== null,
+    });
   }
 }
 

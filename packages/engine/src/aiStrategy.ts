@@ -109,20 +109,25 @@ export interface StrategyContext {
 export interface LandmassStats {
   land: number[];
   rated: number[];
+  oceans: number[];
 }
 
 export function landmassStats(world: World, rules: EngineRules): LandmassStats {
   if (world.landmassStats) return world.landmassStats;
   const land = Array<number>(64).fill(0);
   const rated = Array<number>(64).fill(0);
+  const oceans = Array<number>(64).fill(0);
   for (let i = 0; i < world.area; i++) {
-    if ((world.terrain[i] ?? OCEAN) === OCEAN) continue;
     const lm = (world.landmass[i] ?? 0) & 63;
+    if ((world.terrain[i] ?? OCEAN) === OCEAN) {
+      oceans[lm] = (oceans[lm] ?? 0) + 1;
+      continue;
+    }
     land[lm] = (land[lm] ?? 0) + 1;
     const p = world.position(i);
     if (fertilityAt(world, rules, p.x, p.y) !== 0) rated[lm] = (rated[lm] ?? 0) + 1;
   }
-  world.landmassStats = { land, rated };
+  world.landmassStats = { land, rated, oceans };
   return world.landmassStats;
 }
 

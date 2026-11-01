@@ -431,7 +431,12 @@ function humanThreat(env: ForeignStrengthEnv): boolean {
 export function aiChooseProduction(env: AiBuildEnv): Production {
   const { world, rules, civ, city, facts: f } = env;
   const knows = (a: number) => civ.knownAdvances[a] === true;
-  const buildable = (t: number) => canBuildUnit(rules, civ, t);
+  const buildable = (t: number) =>
+    canBuildUnit(rules, civ, t, {
+      world,
+      city,
+      manhattanBuilt: env.wonderCity(IMPROVEMENT.manhattanProject) !== null,
+    });
   const bestDefender = (): number => {
     let pick = -1;
     for (let t = rules.units.length - 1; t >= 0; t--) {

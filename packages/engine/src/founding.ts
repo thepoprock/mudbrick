@@ -4,8 +4,9 @@
  * Specification: docs/engine/rules-units.md, "Founding and joining a city" — VERIFIED against the
  * original's found-city (0x005352e6), settle (0x00497dbe) and create-city (0x0042e8ff) routines.
  */
+import { canBuildUnitType, type UnitBuildContext } from './buildRules.js';
 import { claimCitySite } from './fertility.js';
-import { advanceIndex, IMPROVEMENT, type EngineRules } from './rules.js';
+import { IMPROVEMENT, type EngineRules } from './rules.js';
 import { ROLE_SETTLERS } from './terraform.js';
 import {
   CITY_CENTRE_INDEX,
@@ -57,13 +58,13 @@ export function initialProduction(rules: EngineRules, canBuild: (type: number) =
 }
 
 /** Default "can build" test: prerequisite known and not obsolete. */
-export function canBuildUnit(rules: EngineRules, civ: Civ, type: number): boolean {
-  const u = rules.units[type];
-  if (!u || u.preq?.kind === 'never') return false;
-  const pre = advanceIndex(u.preq);
-  if (pre !== null && !civ.knownAdvances[pre]) return false;
-  const obs = advanceIndex(u.obsoleteWith);
-  return !(obs !== null && civ.knownAdvances[obs]);
+export function canBuildUnit(
+  rules: EngineRules,
+  civ: Civ,
+  type: number,
+  ctx?: UnitBuildContext,
+): boolean {
+  return canBuildUnitType(rules, civ, type, ctx);
 }
 
 export interface FoundOptions {

@@ -9,7 +9,6 @@ import { decodeText, descriptionFor } from '@mudbrick/formats';
  */
 import {
   advanceIndex,
-  canBuildUnit,
   canFoundCity,
   canOrder,
   captureCity,
@@ -2296,15 +2295,10 @@ export class PlaySession {
     const label = document.createElement('label');
     label.textContent = 'Change production: ';
     const select = document.createElement('select');
-    const canBuildOption = (opt: { kind: 'unit' | 'improvement'; index: number }) => {
-      if (opt.kind === 'unit') return canBuildUnit(this.rules, this.civ, opt.index);
-      const imp = this.rules.improvements[opt.index];
-      if (!imp || opt.index === 0 || imp.preq?.kind === 'never') return false;
-      if (opt.index >= 39 && this.game.wonderCity(opt.index) !== null) return false;
-      if (opt.index < 39 && city.improvements[opt.index]) return false;
-      const pre = advanceIndex(imp.preq);
-      return pre === null || this.civ.knownAdvances[pre] === true;
-    };
+    const canBuildOption = (opt: { kind: 'unit' | 'improvement'; index: number }) =>
+      opt.kind === 'unit'
+        ? this.game.canBuildUnitAt(city, opt.index)
+        : this.game.canBuildImprovement(city, opt.index);
     const options: { kind: 'unit' | 'improvement'; index: number; label: string }[] = [];
     this.rules.units.forEach((u, i) => {
       if (canBuildOption({ kind: 'unit', index: i }))

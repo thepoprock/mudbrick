@@ -302,7 +302,7 @@ export class World {
   /** Per square: fertility rating 0 or 8–15 (map byte 5, low nibble; fertility.ts). */
   readonly fertility: Uint8Array;
   /** Land and rated squares per land mass, computed on first use (aiStrategy.ts). */
-  landmassStats?: { land: number[]; rated: number[] };
+  landmassStats?: { land: number[]; rated: number[]; oceans: number[] };
   readonly civs: Civ[] = [];
   /** A battle between two civilizations happened this turn (resets the turns of peace). */
   peaceBroken = false;
