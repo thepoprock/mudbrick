@@ -165,6 +165,8 @@ export function atPeace(world: World, a: number, b: number): boolean {
 }
 
 export interface DiplomacyContext {
+  /** Open the negotiation with a human: the review stops here and the screen decides. */
+  requestTalk?: (human: number, computer: number) => void;
   /** Scenario events: may `talker` approach `listener` (NEGOTIATION)? Default yes. */
   negotiationAllowed?: (talker: number, listener: number) => boolean;
   /** The research value of an advance to a slot (0x004920ac); the RULES base when absent. */
@@ -602,6 +604,11 @@ export function reviewRelations(
   if (first) setTreaty(world, a, b, TREATY.firstContact);
   setTreaty(world, a, b, TREATY.contact | TREATY.metThisTurn);
   if (!first && ((ctx.turn + a + b) & 3) !== 0) return;
+  if (ctx.requestTalk && ctx.isHuman(a) !== ctx.isHuman(b)) {
+    if (ctx.isHuman(a)) ctx.requestTalk(a, b);
+    else ctx.requestTalk(b, a);
+    return;
+  }
   const peaceful = (x: number, y: number): boolean => {
     if (ctx.isHuman(x)) {
       const t = treaty(world, x, y);

@@ -144,7 +144,12 @@ export interface CivRecord {
   taxRate: number;
   government: number;
   reputation: number;
+  /** Record +22: a fresh random 0 to 99 each turn. */
   patience: number;
+  /** Record +31: conversations with humans this round (signed). */
+  talks: number;
+  /** Record +72: reputation forgiven, per civilization (signed). */
+  pardons: number[];
   treaties: Treaty[];
   attitudes: number[];
   /** 7 × i16 at +980: the AI's government preference scores (VERIFIED, 0x0051278c). */
@@ -605,7 +610,9 @@ export function parseSave(bytes: Uint8Array): SaveFile {
       taxRate: r.u8(o + 20),
       government: r.u8(o + 21),
       reputation: r.u8(o + 30),
-      patience: r.u8(o + 31),
+      patience: r.u8(o + 22),
+      talks: r.i8(o + 31),
+      pardons: Array.from({ length: 8 }, (_, n) => r.i8(o + 72 + n)),
       treaties: Array.from({ length: 8 }, (_, n) => {
         const t = o + 32 + 4 * n;
         return {

@@ -43,8 +43,8 @@ contact (VERIFIED in the arrival handler 0x0041aad6: one of the eight neighbouri
 mover a land unit on land and not a Caravan, and only when the move allows talking); the engine
 sweeps each civilization's units once a turn instead and also counts cities (INFERRED
 equivalence). With a human on either side the original
-opens the negotiation screens; the engine asks `humanAccepts` (default: accept peace, decline
-alliances). Between computer players the review records contact and, on first contact or every
+opens the negotiation screens; the engine queues the same conversation (`Game.pendingTalks`, negotiation.md) when a UI holds
+one, and otherwise asks `humanAccepts` (default: accept peace, decline alliances). Between computer players the review records contact and, on first contact or every
 fourth turn for the pair (`(turn + a + b) & 3 == 0`):
 
 - Each side is **willing** when it does not want war (below), or the other owns the Great Wall

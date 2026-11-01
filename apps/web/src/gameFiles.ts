@@ -10,7 +10,14 @@
  * (docs/formats/assets.md, "Common conventions"), and the blue/orange marker pixels on each
  * unit and city cell's grid lines are read into anchor tables.
  */
-import { decodeText, parseRules, sprites, type Rules } from '@mudbrick/formats';
+import {
+  decodeText,
+  parsePopups,
+  parseRules,
+  sprites,
+  type Popup,
+  type Rules,
+} from '@mudbrick/formats';
 
 export type SheetName = 'TERRAIN1' | 'TERRAIN2' | 'CITIES' | 'UNITS' | 'ICONS';
 const SHEETS: SheetName[] = ['TERRAIN1', 'TERRAIN2', 'CITIES', 'UNITS', 'ICONS'];
@@ -38,6 +45,8 @@ export interface GameFolder {
   cityFlag: CellAnchors[][];
   /** Size-box (orange) anchors per [style row][size column]. */
   citySize: CellAnchors[][];
+  /** GAME.TXT's dialogs, when the folder has the file. */
+  popups: Map<string, Popup>;
   /** Fetch any other file from the folder by name (case-insensitive), e.g. a save. */
   file: (name: string) => Promise<Blob | undefined>;
   /** Every file the folder holds, as upper-case paths relative to it (empty for the dev path). */
@@ -124,6 +133,11 @@ async function loadFrom(
   if (!rulesFile) throw new Error('RULES.TXT not found: choose the folder that contains it');
   const rules = parseRules(decodeText(new Uint8Array(await rulesFile.arrayBuffer())));
 
+  const gameText = await lookup('GAME.TXT');
+  const popups = gameText
+    ? parsePopups(decodeText(new Uint8Array(await gameText.arrayBuffer())))
+    : new Map<string, Popup>();
+
   const sheets: Partial<Record<SheetName, Sheet>> = {};
   for (const name of SHEETS) {
     const f = await lookup(`${name}.GIF`);
@@ -160,7 +174,7 @@ async function loadFrom(
       citySize.push(sizeRow);
     }
   }
-  return { rules, sheets, unitFlag, cityFlag, citySize, file: source, paths, prefix };
+  return { rules, popups, sheets, unitFlag, cityFlag, citySize, file: source, paths, prefix };
 }
 
 /**

@@ -25,6 +25,7 @@ export * from './production.js';
 export * from './research.js';
 export * from './upkeep.js';
 export * from './advances.js';
+export * from './negotiation.js';
 export * from './outcome.js';
 export * from './game.js';
 export * from './terraform.js';

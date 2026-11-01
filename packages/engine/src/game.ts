@@ -114,6 +114,7 @@ import {
 import { inEnemyZoc } from './movement.js';
 import { payUpkeep, type UpkeepEvent } from './upkeep.js';
 import { advanceEffects, leonardoUpgrades, type AdvanceEvent } from './advances.js';
+import { conversation, powerRanks, type Conversation, type NegotiationEnv } from './negotiation.js';
 import { CITY_CENTRE_INDEX, type City, type Civ, type World, type Production } from './world.js';
 
 export interface GameState {
@@ -238,6 +239,9 @@ export class Game {
 
   /** Events raised outside a turn step (spaceship parts), drained after each civilization. */
   private pendingEvents: TurnEvent[] = [];
+  /** Set by a UI that can hold a conversation: reviews then queue here instead of deciding. */
+  wantsTalks = false;
+  pendingTalks: { human: number; computer: number }[] = [];
 
   /** Debug hook: the build advisor's candidates for a city (score, production). */
   buildTrace?: (city: City, score: number, p: Production) => void;
@@ -282,6 +286,52 @@ export class Game {
   wonderOwner(improvement: number): number | null {
     if (this.wonderExpired(improvement)) return null;
     return this.world.cities.find((c) => c.improvements[improvement])?.owner ?? null;
+  }
+
+  /** Everything negotiation.ts reads of the game. */
+  negotiationEnv(): NegotiationEnv {
+    const strategy = (s: number) => this.world.civs.find((c) => c.slot === s)?.strategy;
+    const ranks = powerRanks(this.world, (s) => this.citiesOf(s).reduce((n, c) => n + c.size, 0));
+    const leader = (s: number) =>
+      this.rules.leaders?.[this.world.civs.find((c) => c.slot === s)?.tribe ?? -1];
+    return {
+      world: this.world,
+      rules: this.rules,
+      rng: this.rng,
+      turn: this.state.turn,
+      difficulty: this.state.difficulty,
+      bloodlust: this.state.bloodlust ?? false,
+      rank: (s) => ranks[s] ?? 0,
+      ownsWonder: (s, i) => this.ownsWonder(s, i),
+      knows: (s, a) => this.knows(s, a),
+      gain: (civ, advance) => {
+        grantAdvance(civ, advance, 'other');
+        this.advanceGained(civ, advance);
+      },
+      advanceValue: (slot, a) => {
+        const c = this.world.civs.find((x) => x.slot === slot);
+        return c ? advanceValue(this.rules, slot, a, this.researchValueContext(c)) : 1;
+      },
+      spaceRace: (s) => {
+        const c = this.world.civs.find((x) => x.slot === s);
+        return c ? this.spaceRace(c).pressure : false;
+      },
+      launched: (s) => {
+        const c = this.world.civs.find((x) => x.slot === s);
+        return c ? hasLaunched(c) : false;
+      },
+      unitsOn: (s, m) => strategy(s)?.unitsOn[m] ?? 0,
+      attackOn: (s, m) => strategy(s)?.attackOn[m] ?? 0,
+      planOn: (s, m) => strategy(s)?.plans[m] ?? 0,
+      power: (s) => strategy(s)?.strengthSum ?? 0,
+      leaderAttack: (s) => leader(s)?.attack ?? 0,
+      leaderCivilize: (s) => leader(s)?.civilize ?? 0,
+    };
+  }
+
+  /** A conversation; answer each yielded dialog with the chosen entry. */
+  talkTo(human: number, computer: number, calledByHuman: boolean): Conversation {
+    return conversation(this.negotiationEnv(), human, computer, calledByHuman);
   }
 
   /** Leonardo's Workshop's sweep over a civilization's units (0x00492c44). */
@@ -454,6 +504,14 @@ export class Game {
       },
       nextInt: (n) => this.rng.nextInt(n),
       ...(this.humanAccepts ? { humanAccepts: this.humanAccepts } : {}),
+      ...(this.wantsTalks
+        ? {
+            requestTalk: (h: number, c: number) => {
+              if (!this.pendingTalks.some((t) => t.human === h && t.computer === c))
+                this.pendingTalks.push({ human: h, computer: c });
+            },
+          }
+        : {}),
     };
   }
 

@@ -114,6 +114,8 @@ export function saveFromGame(original: Uint8Array, parsed: SaveFile, game: Game)
     ...(civ.reputation !== undefined ? { reputation: civ.reputation } : {}),
     ...(civ.eiffelApplied !== undefined ? { eiffelApplied: civ.eiffelApplied } : {}),
     ...(civ.patience !== undefined ? { patience: civ.patience } : {}),
+    ...(civ.talks !== undefined ? { talks: civ.talks } : {}),
+    ...(civ.pardons ? { pardons: Array.from(civ.pardons) } : {}),
     ...(civ.lastWarTurns ? { lastContact: Array.from(civ.lastWarTurns) } : {}),
     ...(civ.governmentScores ? { governmentScores: Array.from(civ.governmentScores) } : {}),
     ...(civ.spaceship

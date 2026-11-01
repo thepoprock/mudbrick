@@ -26,6 +26,9 @@ import {
   movesLeft,
   ORDER,
   orderGoTo,
+  treatiesOf,
+  type Conversation,
+  type Dialog,
   pillage,
   pillageOptions,
   rawYields,
@@ -126,6 +129,8 @@ export class PlaySession {
   wantedGovernment: number | null = null;
   /** A diplomat or spy waiting for the player's choice at a foreign city or unit. */
   pendingAgent: { unit: Unit; city: City } | { unit: Unit; target: Unit } | null = null;
+  /** The conversation on screen, if any. */
+  private talk: Conversation | null = null;
   selected: Unit | null = null;
   openCity: City | null = null;
   gotoMode = false;
@@ -139,6 +144,7 @@ export class PlaySession {
     readonly el: PlayElements,
     readonly renderOptions: () => WorldRenderOptions,
   ) {
+    game.wantsTalks = folder.popups.size > 0;
     this.log(`You lead the ${this.civ.name}. Arrow keys or the number pad move the selected unit.`);
     this.selectNext();
     this.refresh();
@@ -205,7 +211,11 @@ export class PlaySession {
       this.moveSelected(dir);
       return true;
     }
+    if (this.talk) return true;
     switch (e.key) {
+      case 'F3':
+        this.foreignMenu();
+        return true;
       case 'Enter':
         this.endTurn();
         return true;
@@ -661,6 +671,7 @@ export class PlaySession {
       if (text) this.log(text);
     }
     this.log(`— Turn ${this.game.state.turn}, ${this.yearText()} —`);
+    this.nextTalk();
     if (this.game.state.gameOver) {
       const w = this.world.civs[this.game.state.gameOver.winner];
       this.log(`GAME OVER: the ${w?.name ?? '?'} win by ${this.game.state.gameOver.reason}.`);
@@ -860,6 +871,110 @@ export class PlaySession {
       `keys: arrows/numpad move · f fortify · s sleep · g go to · w wait · b build city\n` +
       `r road · i irrigate · m mine · o transform · F fortress · E airbase · p clean pollution\n` +
       `P pillage · D disband · t trade route · h help wonder · Tab next unit · c centre · Enter end turn`;
+  }
+
+  /** The foreign minister: pick a civilization we know to ask for an audience. */
+  private foreignMenu(): void {
+    const box = this.talkBox();
+    box.replaceChildren();
+    const title = document.createElement('div');
+    title.textContent = 'Send an emissary to';
+    box.appendChild(title);
+    for (const c of this.world.civs) {
+      if (c.slot === 0 || c.slot === this.humanSlot || !c.inPlay) continue;
+      if (((treatiesOf(this.civ)[c.slot] ?? 0) & TREATY.contact) === 0) continue;
+      this.talkButton(box, c.name, () => this.startTalk(c.slot, true));
+    }
+    this.talkButton(box, 'Close', () => this.closeTalk());
+  }
+
+  private talkBox(): HTMLElement {
+    let box = document.getElementById('talkBox');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'talkBox';
+      box.style.cssText =
+        'position:fixed;left:50%;top:18%;transform:translateX(-50%);width:420px;padding:14px;' +
+        'background:#efe6cf;color:#222;border:2px solid #333;z-index:50;white-space:pre-wrap';
+      document.body.appendChild(box);
+    }
+    box.style.display = 'block';
+    return box;
+  }
+
+  private talkButton(box: HTMLElement, label: string, run: () => void): void {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.style.cssText = 'display:block;width:100%;margin-top:6px;text-align:left';
+    b.addEventListener('click', run);
+    box.appendChild(b);
+  }
+
+  private closeTalk(): void {
+    this.talk = null;
+    const box = document.getElementById('talkBox');
+    if (box) box.style.display = 'none';
+    this.refresh();
+    this.nextTalk();
+  }
+
+  private nextTalk(): void {
+    if (this.talk) return;
+    const next = this.game.pendingTalks.shift();
+    if (next) this.startTalk(next.computer, false);
+  }
+
+  private startTalk(computer: number, byHuman: boolean): void {
+    const gen = this.game.talkTo(this.humanSlot, computer, byHuman);
+    this.talk = gen;
+    this.showDialog(gen.next());
+  }
+
+  private answerTalk(n: number): void {
+    if (this.talk) this.showDialog(this.talk.next(n));
+  }
+
+  private showDialog(step: IteratorResult<Dialog, void>): void {
+    if (step.done) {
+      this.closeTalk();
+      return;
+    }
+    const d = step.value;
+    const fill = (line: string) =>
+      line
+        .replace(/%STRING(\d)/g, (_, n) => d.strings?.[Number(n)] ?? '')
+        .replace(/%NUMBER(\d)/g, (_, n) => String(d.numbers?.[Number(n)] ?? ''));
+    const box = this.talkBox();
+    box.replaceChildren();
+    const popup = this.folder.popups.get(d.key);
+    const lines = popup?.text ?? [d.key];
+    const gap = lines.indexOf('');
+    const message = gap < 0 ? lines : lines.slice(0, gap);
+    const choices = popup?.entries.length
+      ? popup.entries
+      : gap < 0
+        ? []
+        : lines.slice(gap + 1).filter((l) => l !== '');
+    const text = document.createElement('div');
+    text.textContent = message.map(fill).join('\n');
+    box.appendChild(text);
+    if (d.civs) {
+      this.talkButton(box, 'Never mind', () => this.answerTalk(0));
+      for (const s of d.civs) this.talkButton(box, this.game.civ(s).name, () => this.answerTalk(s));
+      return;
+    }
+    if (d.amounts) {
+      this.talkButton(box, 'Never mind', () => this.answerTalk(0));
+      for (const g of d.amounts) this.talkButton(box, `${g} gold`, () => this.answerTalk(g));
+      return;
+    }
+    if (choices.length === 0) {
+      this.talkButton(box, 'OK', () => this.answerTalk(0));
+      return;
+    }
+    choices.forEach((c, i) => {
+      if (!d.offer || d.offer.includes(i)) this.talkButton(box, fill(c), () => this.answerTalk(i));
+    });
   }
 
   /** Buttons for a diplomat's or spy's mission (espionage.ts). */

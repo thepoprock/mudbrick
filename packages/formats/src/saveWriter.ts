@@ -115,6 +115,8 @@ export interface CivWrite {
   /** Sets or clears byte 0 bit 4. */
   eiffelApplied?: boolean;
   patience?: number;
+  talks?: number;
+  pardons?: number[];
   /** Turn each slot last attacked us (8 × i16 at +994). */
   lastContact?: number[];
   /** Government scores (7 × i16 at +980). */
@@ -323,7 +325,9 @@ export function writeSave(original: Uint8Array, save: SaveFile, patch: SavePatch
       const old = out[b] ?? 0;
       w.u8(b, c.eiffelApplied ? old | 0x10 : old & ~0x10);
     }
-    if (c.patience !== undefined) w.u8(b + 31, c.patience);
+    if (c.patience !== undefined) w.u8(b + 22, c.patience);
+    if (c.talks !== undefined) w.u8(b + 31, c.talks);
+    if (c.pardons) for (let n = 0; n < 8; n++) w.u8(b + 72 + n, c.pardons[n] ?? 0);
     if (c.governmentScores)
       for (let n = 0; n < 7; n++) w.i16(b + L.tail + 578 + 2 * n, c.governmentScores[n] ?? 0);
     if (c.lastContact)

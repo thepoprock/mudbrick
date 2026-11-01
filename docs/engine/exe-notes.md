@@ -31,7 +31,7 @@ Rule: read the C, write the behaviour down in words and formulas here. Never cop
 
 ### Power rating and ranking — 0x00465607 (VERIFIED by decompilation)
 
-Runs once per turn. For each civilization slot 1–7 in play: `score = citizens×3 + (something at civ+0x6c as i16)×8 + (civ+0x02 as i32) >> 5 + Σ over unit types (units owned × unitValue)`, where `unitValue` = `cost/2` for role ≥ 5 (settlers, diplomats, caravans), else `attack × k + defence/2` with `k = (firepower + 1 + hitPoints)/2` for ground units and `k = 1` otherwise. In the first 600 turns `clamp(score >> 3, 0, 255)` is stored in the power-graph history at `graph[((turn >> 2) % 150) × 8 + slot]` — which is exactly the 1200-byte block the save format carries (docs/formats/save-format.md), so that block is now VERIFIED as "one byte per civ every 4 turns, 150 records". The function then sorts civs into a ranking table and runs the "gang up on the leader" diplomacy: once the leader has > 4 cities and turn > 200 (or on higher difficulty), other civs may be pushed toward war with it, using `rand() % 32 <= difficulty`.
+Runs once per turn. For each civilization slot 1–7 in play: `score = advances × 3 + citizens × 8 + treasury >> 5`, and the ranking 7 down to 1 follows the score (first highest wins ties). VERIFIED: this order equals the ranking stored at file offset 0x146 in 19 of 22 saves. The routine also sums a unit value per type, but that sum is never added to the score; adding it matched 1 save of 22.
 
 ### Memory layout confirmed from the same function
 

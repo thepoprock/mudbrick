@@ -119,6 +119,12 @@ export interface Civ {
   reputation?: number;
   /** The Eiffel Tower's one-time amnesty has been used (civilization byte 0 bit 4, 0x004b7d88). */
   eiffelApplied?: boolean;
+  /** Conversations with humans this round (record +31); the patience counter in negotiation. */
+  talks?: number;
+  /** What this civilization has forgiven of each other's reputation (record +72, signed). */
+  pardons?: Int8Array;
+  /** Civilization flag bit 2, read by the senate test under the Republic (0x0050f0ea). */
+  senateActive?: boolean;
   /** A per-turn random 0–99 the original keeps at record +22 (patience, INFERRED name). */
   patience?: number;
   /** A counter at record +31 that falls every third turn (INFERRED name). */

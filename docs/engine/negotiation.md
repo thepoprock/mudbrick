@@ -1,89 +1,111 @@
 # Negotiation with a human
 
-Read from the assessment routine 0x00440b9e(computer, human), which runs before the negotiation
-screen 0x00449c70 opens. VERIFIED from that routine unless marked INFERRED. The names of its
-results are INFERRED from how they are used here; the screen itself (0x00449c70, 0x00445022) is
-not read yet, and nothing in this file is ported yet.
+`packages/engine/src/negotiation.ts` ports the conversation. VERIFIED from the routines named
+below unless marked INFERRED. Names of the working values are INFERRED from how they are used.
+Multiplayer messages and the branches for scenario flags are not ported.
 
-Below, `A` is the computer player and `H` the human.
+The conversation is a generator. Each yield is a dialog named by its GAME.TXT section, and the
+answer is the chosen entry counted from 0, as the original's dialog call returns it. The entries
+follow the first blank line of a section.
 
-## What it produces
+In the routines the first argument is the human, who pays tribute, and the second the computer
+player. Below, H is the human and C the computer player.
 
-| Global     | Name here   | Meaning                                                           |
-| ---------- | ----------- | ----------------------------------------------------------------- |
-| 0x005cfd4c | `tribute`   | gold it would ask for, a multiple of 50                           |
-| 0x005cfd2c | `hostile`   | it means to threaten or fight                                     |
-| 0x005cfd20 | `fear`      | how much it fears H; non-zero clears `hostile`                    |
-| 0x005cfd48 | `mood`      | attitude toward H, adjusted, 1 to 99                              |
-| 0x005cfd7c | `stance`    | 0 wary, 1 neutral, 2 hostile                                      |
-| 0x005cfd74 | `restraint` | a score; above its limit `hostile` is dropped                     |
-| 0x005cfd50 | `leader`    | it is ranked first and may press its lead                         |
-| 0x005cfd1c | `betrayal`  | H has been a bad partner; it refuses to deal                      |
-| 0x005cfd64 | `spaceRace` | a spaceship is under way (0x0053ff14, or a human one late enough) |
-| 0x005cfd60 | `outranked` | A is ranked below H                                               |
-| 0x005cfd68 | `exposed`   | one of A's undefended cities has H's unit within two squares      |
-| 0x005cfd28 | `ceded`     | cities A holds that H founded                                     |
+## Fields it uses
 
-## The sequence
+| Civilization field | Name here                            | Notes                                                              |
+| ------------------ | ------------------------------------ | ------------------------------------------------------------------ |
+| +0x105             | Nuclear Missile count                | one byte of the unit-type table at +0xd8, type 45                  |
+| +22                | `patience`                           | fresh random 0 to 99 each turn, read by the senate test            |
+| +31                | `talks`                              | signed, counts this round's exchanges with a human                 |
+| +30                | reputation                           |                                                                    |
+| +72 + n            | `pardons`                            | signed, what this civilization has forgiven of slot n's reputation |
+| +0x6c              | citizens                             |                                                                    |
+| +0x6e              | `power`                              | sum of attack + defence over its units (`strengthSum`)             |
+| +994 + 2n          | turn of last talk or war with slot n |                                                                    |
 
-1. **Per continent.** For each of the 63 land masses, H's strength there is compared with A's.
-   Where H has an attack plan and is stronger, `fear` grows by A's strength × (4 on Chieftain,
-   otherwise 2) / (H's strength + 1), subject to the note below. Otherwise,
-   if both have units there `hostile` is set, and `tribute` grows: on a mass A has no plan for,
-   by a quarter or a half of the strength gap; on one A has a plan for, by H's full strength early
-   (turn ≤ 200 − 50 × A's vendettas, or either side ranked above 6) when H's plan is weak, and by
-   the gap otherwise.
-2. H owning Marco Polo's adds a quarter to `tribute`.
-3. `leader` holds when A ranks 7, has more than 4 cities, H more than 1, A has no spaceship, the
-   difficulty is above Chieftain and the turn is past 200.
-4. `mood` starts at A's attitude toward H. When `leader` holds, or H is in vendetta with A and A
-   has under three times H's power, and A has no spaceship: `tribute` is at least twice H's rank,
-   and capped by what A can pay if `hostile` was clear; `hostile` is set, `fear` cleared, `mood`
-   at least 75.
-5. `spaceRace` with `outranked` sets `hostile`.
-6. If H has a spaceship, the treaty bit 8 is set and, when A has none, `hostile` is set with
-   `tribute` at least 100. If A has one and they are not allied, `fear` is forced to at least 4
-   when H has none (half A's reputation plus one), or `tribute` is halved and scaled by the two
-   ships' sizes.
-7. `fear` is divided by `(reputation − 1) / 2 + 1`.
-8. `mood` adjustments: −25 allied, +25 for a recent attack by H, and with any reputation
-   `(reputation − 1 − A's per-civilization offset) × 5`.
-9. Mood bands: below 26 halves `tribute` and clears `hostile`. Band under 4 (0x0044dfde) takes
-   two thirds. Above 74 takes half as much again and sets `hostile`.
-10. Grudge bit 11 sets `hostile`, as does an options bit when H's science rate is 0. Any `fear`
-    clears `hostile` and sets `stance` to 0.
-11. **A owns the Great Wall or the United Nations:** `leader` clears, `hostile` is remembered and
-    cleared, `mood` falls by 10, and the bit 16 note is recorded.
-12. Reputation scales `tribute` by half per point. A vendetta doubles it; bit 16 quarters it.
-13. Any city of A with no defender and an H unit within two squares doubles `tribute` once and
-    counts as `exposed`.
-14. `tribute` becomes `(difficulty + 1) × tribute / 32`, clamped to 0 to 20, × 50. If that is
-    between one and two times A's gold, and A has at least 50, it is A's gold rounded down to 50.
-15. `hostile` clears with no tribute, or when A has over three times H's power. A pair counter
-    above 9 is zeroed and clears `hostile`. `stance` becomes 2 when hostile, else 0 if allied.
-16. **Restraint** starts at −2 for a vendetta, −1 more under that options bit with no science,
-    minus half of A's reputation. Each third civilization adjusts it:
-    - allied with H: −1 if H ranks below A, and when A is `leader`-shaped and has contact with
-      that civilization, `fear` falls by 4, or `hostile` sets if that civilization holds a grudge
-      against A and A owns neither the Wall nor the UN;
-    - at war with H: +1 if H's power is under four times its power, +1 if under its power. It
-      is remembered as a possible ally when A has contact and no grudge. Those with bits 13 and 9
-      toward H are tracked as the strongest and weakest such enemies.
-      H having no third party in bit 11 records bit 20. Then the government of H (0x005da118 table)
-      is subtracted, and −1 if A has less power than H. If restraint exceeds 1 at war, or 0
-      otherwise, with no `leader` and no alliance or bit 11, `hostile` clears, and `tribute` is
-      zeroed on some turns (`(turn + A + H) & 32`).
-17. `ceded` counts cities A holds that H founded. **Betrayal** requires H's standing or the
-    negotiation-limit option, no bit 13 past 4 ceded, no alliance, and hostility or a late space
-    race or a remembered hostility with reputation gap over 6, and H weaker than A or in vendetta
-    or that gap. It clears `hostile` and `stance`, and caps `mood` at 30.
-18. Scenario flag (bit 15 at 0x005d0880): hard-coded pairs for the shipped Cold War scenario force
-    `hostile`, INFERRED from the slot numbers.
-19. Under a senate (H's government above 4, with the patience test) a hostile A either backs down,
-    when H is much weaker and neither `leader` nor vendetta holds, or the human's senate is
-    consulted (0x0051278c).
-20. Clamps: `mood` at least 1 with no `fear`; at most 99 unless H has bit 13 toward A; at most 74
-    when A is allied or `stance` is 0; at least 26 when H has bit 13 toward A.
+`gap` is H's reputation less C's pardon for H.
 
-Note on step 1: the test compares a boolean with H's plan byte, so with more than one city a plan
-of 2 or more counts and with one city any plan does.
+The mapping of +0x192 to `unitsOn` and +0x212 to `attackOn` is INFERRED from the existing
+strategy port.
+
+## Assessment (0x00440b9e)
+
+Run at the start and again after each treaty or payment. Results: `tribute`, a multiple of 50;
+`hostile`; `fear`, how far C is outmatched, which clears `hostile`; `mood`, adjusted attitude;
+`stance` 0 wary, 1 neutral, 2 hostile; `restraint`; `leader`, H ranked 7 and pressing its lead;
+`betrayal`, C will not deal; `exposed`; `ceded`, cities C founded that H holds.
+
+1. Each land mass 1 to 63. When C has a plan there and fewer units than H has attack, `fear` grows
+   by H's attack × (4 on Chieftain, else 2) / (C's units + 1). Otherwise units of both set
+   `hostile`, and `tribute` grows by a quarter or half of the gap, or by C's whole attack early
+   (turn ≤ 200 − 50 × H's wars, or either ranked above 6) where C's plan is below 2.
+2. C owning Marco Polo's adds a quarter. `leader` needs H at rank 7, over 4 cities, C over 1, H
+   with no nuclear missiles, above Chieftain, past turn 200.
+3. With `leader`, or a vendetta and C under three times H's power, and H with no missiles:
+   `tribute` is at least twice C's rank, capped by H's means if not yet hostile; `hostile` sets,
+   `fear` clears, `mood` is at least 75.
+4. C with missiles sets bit 8, and if H has none, `hostile` and at least 100 tribute. H with
+   missiles and no alliance: `fear` is at least 4 if C has none, otherwise `tribute` scales by the
+   two counts.
+5. `fear` divides by `(reputation − 1) / 2 + 1`. `mood` starts at C's attitude: −25 allied, +25 at
+   war, `(reputation − 1 − pardon) × 5`.
+6. Below 26 halves `tribute` and clears `hostile`. Band under 4 takes two thirds. Above 74 takes
+   half as much again and sets `hostile`. Grudge sets it, as does bloodlust with C's science at 0
+   (INFERRED that options bit is bloodlust). `fear` clears it.
+7. H owning the Great Wall or United Nations clears `leader` and `hostile`, remembers it, and
+   takes 10 from `mood`.
+8. Reputation adds half per point; vendetta doubles; bit 16 quarters. An undefended city of H
+   with a C unit within two squares doubles once and sets `exposed`.
+9. `tribute = clamp((difficulty + 1) × tribute / 32, 0, 20) × 50`, reduced to H's gold when that
+   is at least half. No tribute, or H over three times C's power, clears `hostile`.
+10. `restraint` starts −2 for a vendetta, −1 for the bloodlust case, less half reputation, then
+    takes each third civilization: allies below, wars above, C's leader `attack`, and −1 if H
+    has less power. Above its limit `hostile` drops, and `tribute` too when `(turn + H + C) & 32`.
+11. `betrayal` needs (first pass or `gap` > 6), no war or over 4 ceded, no alliance, hostility or
+    a space race above Prince, and C weaker, or a vendetta, or `gap` > 6. It clears `hostile` and
+    `stance` and caps `mood` at 30.
+12. On the first pass a C senate backs off from a much stronger H. The other arm, where C's
+    government is sneak-tested (0x0051278c), is not ported.
+13. Clamps: at least 1 with no `fear`; at most 99 unless H is at war; at most 74 if H is allied or
+    `stance` is 0; at least 26 when H is at war.
+
+## Conversation (0x00449c70)
+
+`talks` resets when the emissary comes to H. When H calls: a grudge fills `talks`, an owed
+ally-war clears it, and bit 21 or `talks` at the limit (0x00440acb) ends it at once with OUTAHERE.
+
+The emissary is announced once, on the first thing C wants to say (0x00442942). Turning them away
+skips every offer, and the end of the talk then falls to H's senate or Wonders.
+
+In order: the exchange offer; a demand to break with C's enemy (CANCELTREATY); TRIBUTE; TAKECIV,
+with OVERABARREL for a second advance when a city is `exposed`; an ally's BEGONE; war by PROVOKE,
+REJECT0 or RID0; the alliance offer; at war a cease-fire, with GIVECIV, GIVECASH or GROVEL as
+sweeteners; with no treaty, peace with CASHFORPEACE. The senate (0x0050f0ea) or the Wall or UN can
+force a refused cease-fire or peace onto H. Then a greeting and the menu.
+
+## The menu (0x00449960, 0x00445022)
+
+Entries: 0 end; 1 alliance, at peace; 2 peace, with neither treaty; 3 a gift from allies; 4
+tribute, under a government below the Republic and not allied; 5 withdraw, at peace with bit 14
+clear; 6 cancel the alliance; 7 a proposal; 8 a gift. Each pass raises `talks`, and reaching the
+limit ends with PATIENCE.
+
+Alliance and peace test the standing, then may ask a secret (PERHAPSSECRET), gold (PERHAPSTHROWIN)
+and the break with C's enemy (PERHAPSSOLIDARITY). Asking for a gift or tribute reaches the same
+branch: C may withdraw troops from near H's cities (APOLOGIZE), pay, give an advance, or provoke.
+
+## Proposals and gifts (0x004478c6, 0x00448bf8, 0x00443055, 0x00442d14)
+
+Exchange: the best advance each side lacks, valued by 0x004920ac. C refuses on a vendetta, a
+declared war, cities ceded, or a bad mood; may sell for gold (SELLTECH); an ally may give freely.
+The second-best advance may be asked instead (EXCHANGEPETTY when it is not worth it).
+
+War against a third party costs a computed fee, or two secrets from a rich C (CYBERCOP). The third
+party may turn on H (MERCBETRAY). Maps need Map Making on both sides and `mood` of 25 or less.
+
+Gifts raise attitude and take `talks` back down. An advance counts 4 × its value, or 2 × for the
+second; gold counts 1.5 × `goldGoodwill` (0x00444fba).
+
+Not ported: the gift of a military unit, which needs a garrison picker in the UI (MILITARYNONE
+stands in), and the BREAKTHROUGH chance that goes with it.
