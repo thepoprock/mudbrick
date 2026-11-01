@@ -279,6 +279,50 @@ export function eventStringOrder(ints: number[]): number[] {
   return out;
 }
 
+/**
+ * Where a civilization record's fields sit in the file. VERIFIED from the loader 0x004574a0: a
+ * version-40 record is the executable's 0x594-byte memory record as is; a version-39 record
+ * (1396 bytes) is read in pieces — 88 bytes, 12 bytes of known advances (93 advances), 14 bytes
+ * from memory +102, 93 per-advance bytes from +116, three 54-entry unit-type arrays from +216,
+ * +278 and +340, one byte skipped, then 1026 bytes from +402 to the end — so everything from
+ * the strategy arrays on sits 32 bytes earlier than in memory.
+ */
+export interface CivLayout {
+  unitTypes: number;
+  unitsActive: number;
+  unitsLost: number;
+  unitsInProduction: number;
+  militaryUnits: number;
+  cities: number;
+  sumCitySizes: number;
+  /** Offset of the memory record's +402 (the strategy arrays) in the file record. */
+  tail: number;
+}
+export function civLayout(version: number): CivLayout {
+  if (version <= 39) {
+    return {
+      unitTypes: 54,
+      unitsActive: 207,
+      unitsLost: 261,
+      unitsInProduction: 315,
+      militaryUnits: 100,
+      cities: 102,
+      sumCitySizes: 106,
+      tail: 370,
+    };
+  }
+  return {
+    unitTypes: 62,
+    unitsActive: 216,
+    unitsLost: 278,
+    unitsInProduction: 340,
+    militaryUnits: 102,
+    cities: 104,
+    sumCitySizes: 108,
+    tail: 402,
+  };
+}
+
 /** Read an `EVNT` block at `off` (the tag): count, records, then each record's strings. */
 export function readEventBlock(
   bytes: Uint8Array,
@@ -537,9 +581,11 @@ export function parseSave(bytes: Uint8Array): SaveFile {
       titles: Array.from({ length: 7 }, (_, g) => r.str(o + 74 + 24 * g, 24)),
     };
   });
+  const L = civLayout(version);
   const civs: CivRecord[] = Array.from({ length: 8 }, (_, slot) => {
     const o = civsOff + civRecordSize * slot;
-    const X = o + 216 + 3 * UNIT_TYPES + 592;
+    // Memory +994 (contact turns, throne room, spaceship) = tail + 592.
+    const X = o + L.tail + 592;
     const researching = r.i16(o + 10);
     const knownAdvances: boolean[] = [];
     for (let i = 0; i < T; i++) knownAdvances.push(r.bit(o + 88 + (i >> 3), i & 7));
@@ -572,15 +618,20 @@ export function parseSave(bytes: Uint8Array): SaveFile {
       }),
       attitudes: Array.from({ length: 8 }, (_, n) => r.u8(o + 64 + n)),
       knownAdvances,
-      militaryUnits: r.u16(o + 102),
-      cities: r.u16(o + 104),
-      sumCitySizes: r.u16(o + 108),
-      unitsActive: Array.from({ length: UNIT_TYPES }, (_, t) => r.u8(o + 216 + t)),
-      unitsLost: Array.from({ length: UNIT_TYPES }, (_, t) => r.u8(o + 216 + UNIT_TYPES + t)),
-      unitsInProduction: Array.from({ length: UNIT_TYPES }, (_, t) =>
-        r.u8(o + 216 + 2 * UNIT_TYPES + t),
+      militaryUnits: r.u16(o + L.militaryUnits),
+      cities: r.u16(o + L.cities),
+      sumCitySizes: r.u16(o + L.sumCitySizes),
+      unitsActive: Array.from({ length: UNIT_TYPES }, (_, t) =>
+        t < L.unitTypes ? r.u8(o + L.unitsActive + t) : 0,
       ),
-      governmentScores: Array.from({ length: 7 }, (_, n) => r.i16(o + 980 + 2 * n)),
+      unitsLost: Array.from({ length: UNIT_TYPES }, (_, t) =>
+        t < L.unitTypes ? r.u8(o + L.unitsLost + t) : 0,
+      ),
+      unitsInProduction: Array.from({ length: UNIT_TYPES }, (_, t) =>
+        t < L.unitTypes ? r.u8(o + L.unitsInProduction + t) : 0,
+      ),
+      // Memory +980 = tail + 578.
+      governmentScores: Array.from({ length: 7 }, (_, n) => r.i16(o + L.tail + 578 + 2 * n)),
       lastContact: Array.from({ length: 8 }, (_, n) => r.i16(X + 2 * n)),
       throneRoom: Array.from({ length: 9 }, (_, n) => r.u8(X + 17 + n)),
       spaceship: {
@@ -748,7 +799,7 @@ export function parseSave(bytes: Uint8Array): SaveFile {
       name: r.str(s + 2, 80),
       techParadigm: r.u16(s + 82),
       yearsPerTurn: r.i16(s + 84),
-      startingYear: r.u16(s + 86),
+      startingYear: r.i16(s + 86), // signed: the Rise of Rome starts at −277
       maxTurns: r.u16(s + 88),
       protagonist: r.u8(s + 90),
       objectivesDecisiveVictory: r.u16(s + 92),

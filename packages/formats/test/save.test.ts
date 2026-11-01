@@ -187,3 +187,19 @@ describe.skipIf(!hasGameFiles)('parseSave (all shipped saves and scenarios)', ()
     expect(berlin?.improvements[1]).toBe(true);
   });
 });
+
+const ORIGINAL = process.env.ORIGINAL_GAME_DIR;
+describe('version-39 civilization records (the loader reads them in pieces)', () => {
+  it.skipIf(!ORIGINAL)('ROME.SCN: city counts match the records and no ship has flown', () => {
+    if (!ORIGINAL) return;
+    const save = parseSave(new Uint8Array(readFileSync(`${ORIGINAL}/ROME.SCN`)));
+    expect(save.version).toBe(39);
+    for (const civ of save.civs) {
+      if (civ.slot === 0) continue;
+      const owned = save.cities.filter((c) => c.owner === civ.slot).length;
+      expect(civ.cities, `slot ${civ.slot} cities`).toBe(owned);
+      expect(civ.spaceship.flags, `slot ${civ.slot} ship flags`).toBe(0);
+      expect(civ.unitsActive.slice(54).every((n) => n === 0)).toBe(true);
+    }
+  });
+});

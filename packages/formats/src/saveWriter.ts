@@ -14,6 +14,7 @@
 import { encodeText } from './text.js';
 import type { Point } from './map.js';
 import {
+  civLayout,
   EVENT_RECORD_BYTES,
   EVENT_RECORD_INTS,
   EVENT_STRING_SLOTS_AFTER_TEXT,
@@ -308,7 +309,8 @@ export function writeSave(original: Uint8Array, save: SaveFile, patch: SavePatch
       w.i16(o.wonders + 2 * i, v === 'destroyed' ? -2 : v === null ? -1 : v);
     });
   }
-  // Civilizations.
+  // Civilizations (the version-39 layout shifts the tail by 32 bytes; see civLayout).
+  const L = civLayout(save.version);
   for (const c of patch.civs) {
     const b = o.civs + o.civRecordSize * c.slot;
     w.i32(b + 2, c.treasury);
@@ -317,10 +319,11 @@ export function writeSave(original: Uint8Array, save: SaveFile, patch: SavePatch
     if (c.reputation !== undefined) w.u8(b + 30, c.reputation);
     if (c.patience !== undefined) w.u8(b + 31, c.patience);
     if (c.governmentScores)
-      for (let n = 0; n < 7; n++) w.i16(b + 980 + 2 * n, c.governmentScores[n] ?? 0);
-    if (c.lastContact) for (let n = 0; n < 8; n++) w.i16(b + 994 + 2 * n, c.lastContact[n] ?? -1);
+      for (let n = 0; n < 7; n++) w.i16(b + L.tail + 578 + 2 * n, c.governmentScores[n] ?? 0);
+    if (c.lastContact)
+      for (let n = 0; n < 8; n++) w.i16(b + L.tail + 592 + 2 * n, c.lastContact[n] ?? -1);
     if (c.spaceship) {
-      const X = b + 994;
+      const X = b + L.tail + 592;
       w.u8(X + 30, c.spaceship.flags);
       w.u16(X + 32, c.spaceship.arrival);
       w.u16(X + 34, c.spaceship.launchYear);
@@ -335,8 +338,8 @@ export function writeSave(original: Uint8Array, save: SaveFile, patch: SavePatch
     w.u8(b + 20, c.taxRate);
     w.u8(b + 21, c.government);
     for (let i = 0; i < T; i++) w.bit(b + 88 + (i >> 3), i & 7, c.knownAdvances[i] === true);
-    if (c.cities !== undefined) w.u16(b + 104, c.cities);
-    if (c.sumCitySizes !== undefined) w.u16(b + 108, c.sumCitySizes);
+    if (c.cities !== undefined) w.u16(b + L.cities, c.cities);
+    if (c.sumCitySizes !== undefined) w.u16(b + L.sumCitySizes, c.sumCitySizes);
   }
   // Squares.
   if (patch.squares)

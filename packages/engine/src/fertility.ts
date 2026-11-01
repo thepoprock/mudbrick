@@ -168,14 +168,17 @@ export function releaseCitySite(world: World, city: City): void {
   for (const other of world.cities) claimCitySite(world, other);
 }
 
-/** A city changed hands: its radius squares follow the new owner (INFERRED condition). */
+/**
+ * A city changed hands: every square of its radius belongs to the new owner (VERIFIED
+ * 0x004ac56a — the transfer routine sets the territory owner of all 21 squares outright).
+ */
 export function remarkTerritory(world: World, city: City, previousOwner: number): void {
+  void previousOwner;
   for (let i = 0; i < CITY_RADIUS_OFFSETS.length; i++) {
     const q = world.radiusSquare(city.position.x, city.position.y, i);
     if (!q) continue;
     const k = world.index(q.x, q.y);
-    const t = world.territory[k] ?? 0;
-    if (t === previousOwner || t === 0) world.territory[k] = city.owner & 7;
+    world.territory[k] = city.owner & 7;
   }
 }
 

@@ -139,6 +139,8 @@ ruler title under each of the 7 governments (24 each). Empty = use RULES.TXT. IN
 | X+30 | 1         | spaceship flags: bit 0 started (a part built), bit 1 launched, bit 2 arrived, bit 3 Fusion Power at the last evaluation, bit 4 won — VERIFIED (0x00480857/0x00480886, 0x00467591)                                                                             |
 | X+32 | u16 … u16 | spaceship: estimated arrival, launch year, population aboard (habitation modules at launch), structural, propulsion, fuel, habitation, life support, solar at +38 … +48                                                                                       |
 
+**Version 39 records (1396 bytes) — VERIFIED from the loader 0x004574a0:** the file holds the first 88 bytes, then 12 bytes of known advances (93 advances), then memory +102 … +115 (14 bytes), then 93 per-advance bytes (memory +116), then three 54-entry unit-type arrays (memory +216, +278, +340), one unused byte, then memory +402 to the end (1026 bytes) — so from the strategy arrays on, every field sits 32 bytes earlier than the memory offsets listed here (government scores at 948, the contact turns at 962, the spaceship byte at 992). `civLayout(version)` in save.ts carries the mapping; reading the tail at the version-40 offsets had made old scenarios' civilizations look launched.
+
 Rows marked VERIFIED were confirmed by reading the executable (its civilization record is a memory image of this one, stride 0x594); the rest are INFERRED. The 62-entry unit-type arrays are known for version 40/44; version 39 has a
 smaller record and may differ.
 
@@ -213,7 +215,7 @@ Names, coordinates and owner < 8 are VERIFIED across all 42 files; the rest INFE
 `+0` flags: bit 0 total war, 1 objective victory, 2 count wonders as objectives, 4 forbid
 government switching, 5 forbid tech from conquests, 6 eliminate pollution · `+1` bit 1 special
 rules-file override, bit 7 special WWII-only AI · `+2` scenario name, NUL-terminated, up to 80 ·
-`+82` u16 tech paradigm · `+84` i16 years per turn · `+86` u16 starting year · `+88` u16 max turns ·
+`+82` u16 tech paradigm · `+84` i16 years per turn (negative: the calendar counts months) · `+86` i16 starting year (the Rise of Rome: −277; in months when years per turn is negative, the Civil War's 22338 = July 1861) · `+88` u16 max turns ·
 `+90` protagonist slot · `+92 … +98` u16 objectives needed for decisive victory, marginal victory,
 marginal defeat, decisive defeat. Presence VERIFIED (exactly 100 extra bytes in all 41
 scenarios); fields INFERRED.

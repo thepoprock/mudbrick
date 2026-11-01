@@ -108,6 +108,14 @@ loaded city worked the wrong squares); luxuries calmed unhappy citizens first in
 setting the happy count outright; the scenario folder's RULES.TXT was ignored; the calendar
 ignored scenario months. `apps/web/test/civilwar.conformance.test.ts` pins the food totals.
 
+Second turn (the original's units put on sentry, its AI moving freely): the original reaches
+August 1861 with 158 gold (+20) and 17,250,000 people after losing 4 units to Confederate
+attacks; the engine's second turn gives 174 gold (+36) with no attacks modelled on the same
+squares, so the gap is not yet attributable. The original's Springfield2 at August: food 18,
+surplus 5, trade 8 (tax 8, luxuries 8, science 3), production 8, 2 happy, 6 content, 1
+entertainer — its workers had been rearranged since July (food 23 there), the keep rule freeing
+citizens whose squares an enemy had entered.
+
 Open: from the third turn the engine's Pittsburgh falls into disorder (its Engineers complete,
 the city shrinks and its entertainer goes back to work, luxuries drop); the original has not
 been played forward under the same moves yet, so the later turns are unchecked.

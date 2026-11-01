@@ -4,7 +4,7 @@
  *
  * Specification: docs/engine/rules-city.md — the value is VERIFIED (0x004b5686) and the roll and
  * meltdown are VERIFIED (0x004bb7bb). The original rolls only for human cities inside the city
- * turn; the engine rolls for every city (INFERRED for computer players).
+ * turn, and so does the game (the roll's one caller is in the human-only branch).
  */
 import type { Rng } from './rng.js';
 import { ADVANCE, IMPROVEMENT } from './rules.js';
