@@ -188,6 +188,8 @@ export interface City {
   investigated?: boolean;
   /** AI: a wanted settler stands within four squares (city flag 0x40). */
   workerNearby?: boolean;
+  /** Scenario objective city (the record's byte 7 bit 2), for objective victory. */
+  objective?: boolean;
 }
 
 export interface Unit {

@@ -101,7 +101,7 @@ export interface GameState {
   /** Per advance: slot that discovered it first, 0 = nobody. */
   firstDiscoveredBy: number[];
   /** Scenario parameters in effect. */
-  scenario?: { techParadigm: number; fixedCost: boolean };
+  scenario?: ScenarioState;
   researchDearer?: boolean;
   researchCheaper?: boolean;
   /** Scenario: governments may not change. */
@@ -118,6 +118,26 @@ export interface GameState {
   destroyedCivilizations?: number;
   /** The game has ended: who won and how; 'retirement' is the year 2020 (the best score wins). */
   gameOver?: { winner: number; reason: 'spaceship' | 'conquest' | 'retirement' };
+}
+
+/** Scenario parameters the engine uses (docs/formats/save-format.md, the 100-byte block). */
+export interface ScenarioState {
+  techParadigm: number;
+  fixedCost: boolean;
+  /** The scenario's last turn (+88); the game ends on it, with a warning five turns before. */
+  endTurn?: number;
+  /** Scenario flag bit 1: victory by objectives; bit 2: wonders count as objectives. */
+  objectiveVictory?: boolean;
+  countWondersAsObjectives?: boolean;
+  /** The protagonist slot (+90); 0 = each civilization is measured on its own objectives. */
+  protagonist?: number;
+  /** Objectives needed (+92 … +98). */
+  objectives?: {
+    decisiveVictory: number;
+    marginalVictory: number;
+    marginalDefeat: number;
+    decisiveDefeat: number;
+  };
 }
 
 /** The year limit's messages (0x0046b0fa). */
@@ -606,6 +626,15 @@ export class Game {
       massThrust: this.rules.cosmic.massThrustParadigm ?? 75,
       knowsFusion: (s) => this.knows(s, 32),
       year: gameYear(this.state.turn, this.state.difficulty),
+      ...(this.state.scenario?.objectiveVictory && this.state.scenario.objectives
+        ? {
+            scenario: {
+              countWondersAsObjectives: this.state.scenario.countWondersAsObjectives ?? false,
+              protagonist: this.state.scenario.protagonist ?? 0,
+              objectives: this.state.scenario.objectives,
+            },
+          }
+        : {}),
     });
   }
 
@@ -860,7 +889,12 @@ export class Game {
     // in 2020 the game ends for everyone — here the best civilization score wins. A scenario's
     // end turn (warned five turns before) is not modelled yet.
     if (!this.state.gameOver) {
-      const stage = retirementStage(gameYear(this.state.turn, this.state.difficulty));
+      const scenarioEnd = this.state.scenario?.endTurn ?? 0;
+      const stage = retirementStage(
+        gameYear(this.state.turn, this.state.difficulty),
+        this.state.turn,
+        scenarioEnd,
+      );
       if (stage === 'warn') {
         for (const civ of this.world.civs) {
           if (civ.slot === 0 || !civ.inPlay || !civ.isHuman) continue;
@@ -868,7 +902,10 @@ export class Game {
             slot: civ.slot,
             event: {
               kind: 'retirement',
-              text: 'The year 2000: plan your retirement — the game ends in 2020.',
+              text:
+                scenarioEnd > 0
+                  ? 'The scenario ends in five turns.'
+                  : 'The year 2000: plan your retirement — the game ends in 2020.',
               final: false,
             },
           });
@@ -890,7 +927,7 @@ export class Game {
             slot: best.slot,
             event: {
               kind: 'retirement',
-              text: `The year 2020: the game ends. The ${best.name} lead with a score of ${bestScore}.`,
+              text: `${scenarioEnd > 0 ? 'The scenario has ended' : 'The year 2020: the game ends'}. The ${best.name} lead with a score of ${bestScore}.`,
               final: true,
             },
           });

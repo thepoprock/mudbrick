@@ -19,6 +19,16 @@ export function gameFromSave(save: SaveFile, rules: Rules, world: World): Game {
           scenario: {
             techParadigm: save.scenario.techParadigm,
             fixedCost: save.scenario.yearsPerTurn !== 0,
+            endTurn: save.scenario.maxTurns,
+            objectiveVictory: save.scenario.objectiveVictory,
+            countWondersAsObjectives: save.scenario.countWondersAsObjectives,
+            protagonist: save.scenario.protagonist,
+            objectives: {
+              decisiveVictory: save.scenario.objectivesDecisiveVictory,
+              marginalVictory: save.scenario.objectivesMarginalVictory,
+              marginalDefeat: save.scenario.objectivesMarginalDefeat,
+              decisiveDefeat: save.scenario.objectivesDecisiveDefeat,
+            },
           },
           forbidGovernmentChange: save.scenario.forbidGovernmentSwitching,
           eliminatePollution: save.scenario.eliminatePollution,

@@ -61,6 +61,8 @@ export interface CityWrite {
   production: { kind: 'unit' | 'improvement'; index: number };
   civilDisorder: boolean;
   weLoveTheKingDay: boolean;
+  /** Scenario objective city (byte 7 bit 2). */
+  objective?: boolean;
   /** Routes (up to three): partner city id and commodity (−1 food). */
   routes?: { partner: number; commodity: number }[];
   /** Three signed commodity bytes each (+59, +62). */
@@ -393,6 +395,7 @@ export function writeSave(original: Uint8Array, save: SaveFile, patch: SavePatch
     w.u16(b + 2, c.y);
     w.bit(b + 4, 0, c.civilDisorder);
     w.bit(b + 4, 1, c.weLoveTheKingDay);
+    if (c.objective) w.bit(b + 7, 2, true);
     if (c.routes) {
       w.u8(b + 58, Math.min(3, c.routes.length));
       for (let i = 0; i < 3; i++) {

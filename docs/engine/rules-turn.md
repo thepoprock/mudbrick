@@ -59,8 +59,9 @@ The year limit runs with the calendar: in the year 2000 the players are told to 
 retirement (PLANRETIRE), and in 2020 the game ends (DORETIRE): options byte 8 bit 1 is set, a
 "game ending" state is entered and the turn driver stops. A scenario with an end turn warns five
 turns before it (SCENARIOENDS) and ends on it (SCENARIOEND) instead. The engine ends the game in
-2020 with the best civilization score as the winner (`reason: 'retirement'`); the scenario end
-turn is not modelled yet.
+2020 with the best civilization score as the winner (`reason: 'retirement'`); a scenario's end
+turn (`ScenarioState.endTurn`) takes the place of the years, with the same warning five turns
+before.
 
 The civilization score (`score.ts`): per city `size + happy − unhappy` (content citizens count
 1, happy 2; the record's bytes 82 and 83, cached each city turn); 20 a wonder owned; the landed
@@ -73,5 +74,9 @@ The last civilization in play also scores a conquest bonus: civilizations destro
 INFERRED from this use) × 100 + (570 − turn) × 2 + 400, the turn floored at 250 under "don't
 restart if eliminated" (options byte 1 bit 0), ×5/4 under dearer research and ×4/5 under
 cheaper (options byte 8 bits 2 and 3); the score is the larger of the two. A scenario with
-objective victory (scenario flag bit 1) scores decisive/marginal victory and defeat as 1000,
-750, 500, 250 or 0 plus 10 an objective held, doubled with a conquest bonus — not modelled.
+objective victory (scenario flag bit 1) scores instead by objectives: a city's objective value
+(0x0042bf49) is one when its record's byte 7 bit 2 is set, plus one per wonder in it when
+scenario flag bit 2 counts wonders; the protagonist's total (or the civilization's own without
+a protagonist) against the four thresholds gives decisive victory (1000), marginal victory
+(750), neither (500), marginal defeat (250) or decisive defeat (0) — every other civilization
+sees the level mirrored — plus ten an objective held, doubled with a conquest bonus.

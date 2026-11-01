@@ -32,6 +32,19 @@ export interface ScoreContext {
   massThrust: number;
   knowsFusion: (slot: number) => boolean;
   year: number;
+  /** A scenario with objective victory (scenario flag bit 1): the objective-based score. */
+  scenario?: {
+    /** Scenario flag bit 2: every wonder in a city is an objective too. */
+    countWondersAsObjectives: boolean;
+    /** The protagonist slot, 0 = each civilization is measured on its own objectives. */
+    protagonist: number;
+    objectives: {
+      decisiveVictory: number;
+      marginalVictory: number;
+      marginalDefeat: number;
+      decisiveDefeat: number;
+    };
+  };
 }
 
 export interface ScoreBreakdown {
@@ -46,7 +59,21 @@ export interface ScoreBreakdown {
   civilization: number;
   /** The conquest bonus, 0 unless the civilization is the last in play. */
   conquest: number;
+  /** Scenario objective victory: objectives held and the level (0 decisive victory … 4 decisive defeat). */
+  objectives?: number;
+  objectiveLevel?: number;
   total: number;
+}
+
+/** A city's objective value (0x0042bf49): one when flagged, plus one per wonder in it when the
+ * scenario counts wonders as objectives. */
+export function objectiveValue(
+  city: { objective?: boolean; improvements: boolean[] },
+  countWonders: boolean,
+): number {
+  let v = city.objective ? 1 : 0;
+  if (countWonders) for (let w = 39; w < 67; w++) if (city.improvements[w]) v += 1;
+  return v;
 }
 
 export function civilizationScore(world: World, civ: Civ, ctx: ScoreContext): ScoreBreakdown {
@@ -82,7 +109,7 @@ export function civilizationScore(world: World, civ: Civ, ctx: ScoreContext): Sc
     if (ctx.researchDearer) conquest = Math.trunc((conquest * 5) / 4);
     if (ctx.researchCheaper) conquest = Math.trunc((conquest * 4) / 5);
   }
-  return {
+  const base = {
     citizens,
     wonders,
     spaceship,
@@ -92,12 +119,49 @@ export function civilizationScore(world: World, civ: Civ, ctx: ScoreContext): Sc
     barbarians,
     civilization,
     conquest,
-    total: Math.max(civilization, conquest),
   };
+  if (!ctx.scenario) return { ...base, total: Math.max(civilization, conquest) };
+  // VERIFIED (the objective-victory branch): the protagonist's objectives (or the
+  // civilization's own without one) place it at decisive victory, marginal victory, neither,
+  // marginal defeat or decisive defeat against the four thresholds; everyone else sees the
+  // level mirrored; 1000 / 750 / 500 / 250 / 0 plus ten an objective held, doubled with a
+  // conquest bonus.
+  const sc = ctx.scenario;
+  let protagonistHeld = 0;
+  let mine = 0;
+  for (const c of world.cities) {
+    const v = objectiveValue(c, sc.countWondersAsObjectives);
+    if (c.owner === sc.protagonist) protagonistHeld += v;
+    if (c.owner === civ.slot) mine += v;
+  }
+  if (sc.protagonist === 0) protagonistHeld = mine;
+  const t = sc.objectives;
+  let level = 2;
+  if (protagonistHeld < t.decisiveVictory) {
+    if (protagonistHeld < t.marginalVictory) {
+      if (t.decisiveDefeat < protagonistHeld) {
+        if (protagonistHeld <= t.marginalDefeat) level = 3;
+      } else level = 4;
+    } else level = 1;
+  } else level = 0;
+  const own = sc.protagonist !== 0 && sc.protagonist !== civ.slot ? 4 - level : level;
+  let total = ([1000, 750, 500, 250, 0][own] ?? 0) + mine * 10;
+  if (conquest > 0) total *= 2;
+  return { ...base, objectives: mine, objectiveLevel: own, total };
 }
 
-/** The year limit (0x0046b0fa): 'warn' in the year 2000, 'end' in 2020. */
-export function retirementStage(year: number): 'warn' | 'end' | null {
+/** The year limit (0x0046b0fa): 'warn' in the year 2000, 'end' in 2020 — or, for a scenario
+ * with an end turn, 'warn' five turns before it and 'end' on it. */
+export function retirementStage(
+  year: number,
+  turn = 0,
+  scenarioEndTurn = 0,
+): 'warn' | 'end' | null {
+  if (scenarioEndTurn > 0) {
+    if (turn === scenarioEndTurn - 5) return 'warn';
+    if (turn === scenarioEndTurn) return 'end';
+    return null;
+  }
   if (year === 2000) return 'warn';
   if (year === 2020) return 'end';
   return null;

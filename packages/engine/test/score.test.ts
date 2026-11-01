@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { civilizationScore, retirementStage, type ScoreContext } from '../src/score.js';
+import {
+  civilizationScore,
+  objectiveValue,
+  retirementStage,
+  type ScoreContext,
+} from '../src/score.js';
 import { SHIP_FLAG, shipOf, shipScore } from '../src/spaceship.js';
 import { CITY_CENTRE_INDEX, World, type City, type Civ } from '../src/world.js';
 
@@ -113,10 +118,42 @@ describe('the civilization score (verified)', () => {
     expect(early.conquest).toBe((570 - 250) * 2 + 400);
   });
 
-  it('warns in 2000 and ends in 2020', () => {
+  it('warns in 2000 and ends in 2020, or five turns before and on a scenario end turn', () => {
     expect(retirementStage(1999)).toBeNull();
     expect(retirementStage(2000)).toBe('warn');
     expect(retirementStage(2020)).toBe('end');
     expect(retirementStage(2021)).toBeNull();
+    expect(retirementStage(2020, 95, 100)).toBe('warn');
+    expect(retirementStage(2020, 100, 100)).toBe('end');
+    expect(retirementStage(2020, 99, 100)).toBeNull();
+  });
+
+  it('scores a scenario by objectives held against the thresholds', () => {
+    const w = new World({ columns: 20, rows: 20, flatEarth: true });
+    const a = civ(1);
+    const b = civ(2);
+    w.civs.push(a, b);
+    const c1 = city(w, 1, 3, 0, 0);
+    c1.objective = true;
+    const c2 = city(w, 1, 3, 0, 0);
+    c2.objective = true;
+    c2.improvements[40] = true; // a wonder: another objective when they count
+    const c3 = city(w, 2, 3, 0, 0);
+    c3.objective = true;
+    expect(objectiveValue(c2, false)).toBe(1);
+    expect(objectiveValue(c2, true)).toBe(2);
+    const scenario = {
+      countWondersAsObjectives: true,
+      protagonist: 1,
+      objectives: { decisiveVictory: 4, marginalVictory: 3, marginalDefeat: 2, decisiveDefeat: 1 },
+    };
+    // The protagonist holds 3: a marginal victory (750 + 30); its rival sees the level mirrored
+    // (3 = marginal defeat: 250 + 10).
+    expect(civilizationScore(w, a, ctx({ scenario })).total).toBe(750 + 30);
+    expect(civilizationScore(w, b, ctx({ scenario })).total).toBe(250 + 10);
+    // Without a protagonist each civilization is measured on its own objectives.
+    const own = { ...scenario, protagonist: 0 };
+    expect(civilizationScore(w, b, ctx({ scenario: own })).objectiveLevel).toBe(4); // 1 ≤ decisive defeat
+    expect(civilizationScore(w, b, ctx({ scenario: own })).total).toBe(0 + 10);
   });
 });
