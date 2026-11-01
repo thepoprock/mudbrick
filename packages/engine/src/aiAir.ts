@@ -1,10 +1,9 @@
 /**
  * The computer's aircraft (the air chooser 0x004f2dd3, VERIFIED decode in docs/engine/ai-units.md
  * "Air units"): the fuel budget, returning to base, missiles, fighters and bombers. The engine
- * version keeps the documented tests; where the notes leave a detail open it is marked INFERRED.
+ * version keeps the documented tests.
  */
 import { gridDistance } from './city.js';
-import { attackStrength, defenceStrength } from './combat.js';
 import { fullMoves, movesLeft } from './movement.js';
 import { orderGoTo, sentry } from './orders.js';
 import { DOMAIN_AIR, DOMAIN_SEA, type EngineRules } from './rules.js';
@@ -170,12 +169,16 @@ export function airDecision(
             : stack.length > 1
         )
           continue;
-        // INFERRED: the attack and defence strengths stand in for "attack, hit points and
-        // firepower" against "defence, hit points, firepower and terrain".
-        const mine = attackStrength(rules, unit).value * (type.hitPointsTens * type.firepower);
-        const theirs =
-          defenceStrength(world, rules, e, unit).value * (et.hitPointsTens * et.firepower);
-        if (mine * 2 <= theirs * 3) continue;
+        // VERIFIED 0x004f2dd3: raw type figures, a veteran counting 3 to the others' 2. A lone
+        // carrier counts double, and the target's terrain scales it.
+        const rank = (u: Unit) => (u.veteran ? 3 : 2);
+        let theirs = et.defence * et.hitPointsTens * et.firepower * rank(e);
+        if ((et.holds ?? 0) !== 0 && stack.length === 1) theirs *= 2;
+        const halves =
+          rules.terrain[world.terrainAt(e.position.x, e.position.y)]?.defenceHalves ?? 2;
+        theirs = ((theirs * halves) >> 1) * 3;
+        const mine = rank(unit) * type.hitPointsTens * type.attack * type.firepower * 2;
+        if (theirs > mine) continue;
         score = d;
       }
       if (score < bestScore) {

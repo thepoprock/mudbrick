@@ -1279,6 +1279,8 @@ export class Game {
         ...(civ.strategy ? { strategy: civ.strategy } : {}),
         trade: this.tradeContext(),
         attitude: (other) => attitude(this.world, slot, other),
+        rankOf: (s) => this.powerRank(s),
+        raceWorry: this.spaceRace(civ).pressure,
         isAlly: (other) => hasTreaty(this.world, slot, other, TREATY.alliance),
         espionage: this.espionageContext(),
         isHuman: (s) => this.world.civs.find((c) => c.slot === s)?.isHuman ?? false,

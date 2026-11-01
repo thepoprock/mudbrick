@@ -86,6 +86,10 @@ export interface AiUnitContext extends MovementContext {
   trade?: TradeContext;
   /** Attitude toward a slot, for caravan destinations. */
   attitude?: (slot: number) => number;
+  /** Power rank, 7 for the strongest (0x005da842). */
+  rankOf?: (slot: number) => number;
+  /** The space race worries this civilization (0x0053ff14). */
+  raceWorry?: boolean;
   /** Allied with a slot (transports ferrying to friends). */
   isAlly?: (slot: number) => boolean;
   /** Espionage context for diplomats and spies (espionage.ts); without it they only guard. */
@@ -118,6 +122,7 @@ const ROLE_SETTLE = 5;
 const ROLE_DIPLOMAT = 6;
 const ROLE_TRADE = 7;
 const ROLE_TRANSFORM = 21;
+const SPY = 47;
 const FLOOR = -999;
 
 export interface Candidate {
@@ -283,7 +288,6 @@ export function chooseDirection(
   const left = movesLeft(rules, unit, ctx);
   const ownStack = world.unitsAt(here.x, here.y).filter((u) => u.owner === me);
   const canAttack = ctx.canAttack ?? ctx.atWar;
-  const atPeace = ctx.atPeace ?? (() => false);
   const hereZoc = inEnemyZoc(world, here.x, here.y, me);
 
   let best: Candidate | null = null;
@@ -407,11 +411,26 @@ export function chooseDirection(
 
     let attack = false;
     let bonus = 0; // the original's "ac": thirds of movement an attack may forgo
+    // VERIFIED 0x004f44cc: an ally's square is worth less.
+    if (occupantOwner !== null && occupantOwner !== me) {
+      if (hasTreaty(world, me, occupantOwner, TREATY.alliance)) score -= 6;
+    }
     if (occupants.length === 0) {
       // 5. Treaties around an empty square.
       if (!ocean && role < ROLE_SETTLE) {
+        const pact = (o: number) =>
+          hasTreaty(world, me, o, TREATY.ceaseFire | TREATY.peace) &&
+          !hasTreaty(world, me, o, TREATY.alliance);
+        const mood = (o: number) => ctx.attitude?.(o) ?? 50;
         let movingAway = false;
-        if (nearestAny && nearestAnyDist < 4 && nearestIsForeign && atPeace(nearestAny.owner)) {
+        const nearOwner = nearestAny?.owner ?? me;
+        if (
+          nearestAny &&
+          nearestAnyDist < 4 &&
+          nearOwner !== me &&
+          pact(nearOwner) &&
+          (hasTreaty(world, me, nearOwner, TREATY.peace) || mood(nearOwner) < 50)
+        ) {
           const d = distance(world, to, nearestAny.position);
           if (nearestAnyDist < d && nearestAnyDist < 3) {
             score += 5;
@@ -421,16 +440,22 @@ export function chooseDirection(
           if (d === nearestAnyDist) score -= 5;
         }
         const owner = world.territory[world.index(to.x, to.y)] ?? 0;
-        if (owner > 0 && owner !== me && atPeace(owner) && !movingAway) {
-          // INFERRED: the original rejects the square under a fresh peace and otherwise
-          // penalises it when attitude is low; without attitudes the penalty always applies.
-          score -= 5;
-          if (
-            world.hasFlag(to.x, to.y, SquareFlag.Irrigation) ||
-            world.hasFlag(to.x, to.y, SquareFlag.Mine) ||
-            world.hasFlag(to.x, to.y, SquareFlag.Road)
-          )
-            score -= 3;
+        if (owner > 0 && owner !== me && pact(owner)) {
+          // VERIFIED 0x004f44cc: a peace the other side's reputation still honours closes its
+          // land, unless the unit is already leaving a city's neighbourhood.
+          const rep = world.civs.find((c) => c.slot === owner)?.reputation ?? 0;
+          const fresh =
+            hasTreaty(world, me, owner, TREATY.peace) && rep - (ctx.civ.pardons?.[me] ?? 0) < 7;
+          if (fresh && !movingAway) continue;
+          if (fresh || mood(owner) < 50) {
+            score -= 5;
+            if (
+              world.hasFlag(to.x, to.y, SquareFlag.Irrigation) ||
+              world.hasFlag(to.x, to.y, SquareFlag.Mine) ||
+              world.hasFlag(to.x, to.y, SquareFlag.Road)
+            )
+              score -= 3;
+          }
         }
       }
       if (city && city.owner !== me) {
@@ -803,12 +828,78 @@ function agentArrives(
 }
 
 /**
- * A diplomat picks a city (VERIFIED scoring, docs/engine/ai-units.md "Diplomats"): own cities
- * `99 − distance`; foreign cities `100 + attitude (or 100 at war)` over `distance + 1`, halved
- * when worked already, halved when the owner is six or more advances ahead, halved for treaty
- * partners (INFERRED: the long fair-target list is reduced to "not at war"), then +100. The
- * best becomes the go-to; next to a foreign target the unit steps in.
+ * A diplomat picks a city it can reach by land (0x004f44cc): own cities `99 − distance`; others
+ * `100 + attitude` (+100 at war, half the base under a treaty) over `distance + 1`, halved when
+ * already robbed and again when its owner leads by more than six advances, then +100. A treaty
+ * partner is left alone unless it is a human who is ahead, or weak on our land mass when its
+ * government is a Republic or Democracy. Cities not in the unit's third count 8 squares further.
  */
+function diplomatTarget(world: World, unit: Unit, ctx: AiUnitContext): City | null {
+  const me = unit.owner;
+  const here = unit.position;
+  const atSea = world.terrainAt(here.x, here.y) === OCEAN;
+  const land = landOf(world, here);
+  const rank = (s: number) => ctx.rankOf?.(s) ?? 0;
+  const civ = (s: number) => world.civs.find((c) => c.slot === s);
+  const myAdvances = ctx.civ.advancesCount;
+  const home = world.cities.findIndex((c) => c.id === unit.homeCity);
+  const road = world.hasFlag(here.x, here.y, SquareFlag.Road) ? 1 : 0;
+  const treaties = TREATY.ceaseFire | TREATY.peace | TREATY.alliance;
+  const pressure = ctx.raceWorry === true;
+  let best: City | null = null;
+  let bestScore = -999;
+  for (const [i, c] of world.cities.entries()) {
+    const lm = landOf(world, c.position);
+    const reach = atSea
+      ? world
+          .neighbours(here.x, here.y)
+          .some((n) => n && world.terrainAt(n.x, n.y) !== OCEAN && landOf(world, n) === lm)
+      : lm === land;
+    if (!reach) continue;
+    let d = distance(world, here, c.position);
+    if ((home < 0 ? 255 : home) % 3 !== i % 3 && d > road + 3) d += 8;
+    let score: number;
+    if (c.owner === me) score = 99 - d;
+    else {
+      const o = c.owner;
+      const them = civ(o);
+      const theirs = them?.advancesCount ?? 0;
+      const allied = hasTreaty(world, me, o, TREATY.alliance);
+      score = 100;
+      if (hasTreaty(world, me, o, treaties)) {
+        const spy = unit.type === SPY;
+        const leave =
+          !(ctx.isHuman?.(o) ?? false) ||
+          c.techStolen === true ||
+          (!pressure &&
+            (rank(o) < rank(me) ||
+              (!spy &&
+                theirs - myAdvances < 10 &&
+                (ctx.civ.government > 4 || rank(o) < 7 || (allied && theirs < myAdvances))) ||
+              (!allied &&
+                (them?.government ?? 0) > 4 &&
+                (ctx.strategy?.unitsOn[land] ?? 0) < (them?.strategy?.attackOn[land] ?? 0) &&
+                (ctx.strategy?.citiesOn[land] ?? 0) !== 0)));
+        if (leave) continue;
+        score >>= 1;
+      }
+      score += hasTreaty(world, me, o, TREATY.war) ? 100 : (ctx.attitude?.(o) ?? 50);
+      score = Math.trunc(score / (d + 1));
+      if (c.techStolen) {
+        score >>= 1;
+        if (myAdvances + 6 < theirs) score >>= 1;
+        if (pressure) score = 1;
+      }
+      score += 100;
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      best = c;
+    }
+  }
+  return best;
+}
+
 function diplomatAct(
   world: World,
   rules: EngineRules,
@@ -818,33 +909,19 @@ function diplomatAct(
 ): boolean {
   const here = unit.position;
   const me = unit.owner;
-  const myAdvances = ctx.civ.advancesCount;
+  const goal = unit.gotoTarget;
+  const goalCity = unit.order === ORDER.goTo && goal ? world.cityAt(goal.x, goal.y) : null;
+  const mask = TREATY.ceaseFire | TREATY.peace | TREATY.alliance;
   let best: City | null = null;
-  let bestScore = -1;
-  for (const c of world.cities) {
-    const d = distance(world, here, c.position);
-    let score: number;
-    if (c.owner === me) score = 99 - d;
-    else {
-      if (c.owner === 0) continue;
-      const war = ctx.atWar(c.owner);
-      const canAct = ctx.canAttack ? ctx.canAttack(c.owner) : war;
-      if (!war && !(ctx.attitude && ctx.espionage)) continue;
-      score = Math.trunc((100 + (war ? 100 : (ctx.attitude?.(c.owner) ?? 50))) / (d + 1));
-      if (c.techStolen) score >>= 1;
-      const theirs = world.civs.find((x) => x.slot === c.owner)?.advancesCount ?? 0;
-      if (theirs - myAdvances >= 6) score >>= 1;
-      if (!war && !canAct) score >>= 1;
-      score += 100;
+  if (goalCity && goalCity.owner !== me && !hasTreaty(world, me, goalCity.owner, mask)) {
+    best = goalCity; // bound for a city with no treaty in the way
+  } else {
+    best = diplomatTarget(world, unit, ctx);
+    if (!best) {
+      if (unit.order === ORDER.goTo) return true;
+      world.units.splice(world.units.indexOf(unit), 1); // VERIFIED: nothing to do, it disbands
+      return false;
     }
-    if (score > bestScore) {
-      bestScore = score;
-      best = c;
-    }
-  }
-  if (!best) {
-    sentry(unit);
-    return false;
   }
   if (best.owner !== me && distance(world, here, best.position) <= 1) {
     const r = tryMove(world, rules, ctx.rng, unit, best.position, ctx);

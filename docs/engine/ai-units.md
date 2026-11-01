@@ -111,12 +111,17 @@ s t u`), the letter the original shows next to computer units in its debug mode.
   heads for the city.
 - **Damage.** A damaged unit adjacent to an own city goes home; badly damaged units fortify on
   rough or fortified ground to heal; a transport without moves waits.
-- **Diplomats (role 6)** pick a city: own cities score `99 − distance`; foreign cities score 100,
-  plus our attitude toward the owner, or plus 100 when at war, divided by `distance + 1`, halved
-  for a city already "worked" (city flag bit 3) and halved again when the owner is six or more
-  advances ahead, and halved for treaty partners unless a long list of conditions says the
-  partner is a fair target (not human, or behind in advances and score, or ahead on our land
-  mass). Then +100. The best city becomes the go-to target.
+- **Diplomats (role 6)** pick a city reachable by land: own cities score `99 − distance`; others
+  100, halved under a treaty, plus our attitude toward the owner or plus 100 at war, divided by
+  `distance + 1`, halved for a city already robbed (city flag bit 3) and again if its owner leads
+  by more than six advances (and set to 1 under space race pressure), then +100. Distance is 8 more
+  for a city not in the unit's third of the table, once beyond 3 squares (4 from a road). **A treaty partner is
+  skipped** if it is a computer player, or already robbed. Without space race pressure a human one
+  is also skipped if it ranks below us; if the unit is no Spy, its owner is under ten advances ahead
+  and we are a Republic or Democracy, it ranks under 7, or it is an ally behind us; or if, not
+  allied, it is a Republic or Democracy whose attack total here beats our unit count on a land mass
+  where we hold cities. A Diplomat with
+  no target and no go-to disbands (VERIFIED).
 - **Caravans (role 7)** pick a destination on their land mass: `(trade of home + trade of
 target) × distance / 24`, halved for own cities, scaled by `(200 − attitude) / 100` for foreign
   ones, halved when a route to it already exists, times `(5 − routes of the target) / 5`, and
@@ -310,7 +315,7 @@ square · 0x00556aea units of a role in a stack · 0x005567e1 stack totals (mode
 defence, 2 count, 3 attack, 4 homed defenders, 5 sea units, 6 free cargo room, 7 ranged aircraft,
 8–10 flag counts).
 
-## Air units (0x004f2dd3, VERIFIED; ported in `aiAir.ts` with the strength comparison marked INFERRED)
+## Air units (0x004f2dd3, VERIFIED; ported in `aiAir.ts`)
 
 The move chooser hands aircraft to their own routine. It first works out the **fuel budget** in
 movement points: `(range − turns flown − 1) × full moves + moves left` (twice the full moves for
