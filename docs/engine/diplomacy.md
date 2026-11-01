@@ -71,7 +71,7 @@ over the land masses where both are present, a is deterred when `4 × a's attack
 - b's units + 1)`is below`count − a's attack personality + 4` and a has cities there.
 
 **Ally tech exchange (0x005103ce):** each side's best advance the other lacks (AI value plus a
-random 0–2; the value routine 0x004920ac is INFERRED as the rules' AI value); both have one →
+random 0–2; the value routine 0x004920ac is in aiResearch.ts, used here only through its RULES base); both have one →
 swap; only one → the lagging ally receives it when `(6 − difficulty) × 2` or more advances
 behind (or the leading human is ahead of both), once per cycle (bit 18).
 

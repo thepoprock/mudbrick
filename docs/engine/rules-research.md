@@ -74,15 +74,48 @@ At the start of its turn, after its cities are processed, an AI civilization set
    Superconductor (everything the spaceship needs), science drops to 0.
 5. `tax = 10 − (science + lux)`.
 
-## The AI's research choice (VERIFIED shape, 0x00494f3a; value 0x004920ac partly read)
+## The AI's research choice (VERIFIED, 0x00494f3a and the value routine 0x004920ac)
 
 Every researchable advance (unknown, prerequisites known, reachable) scores `rand() % value`,
-and the highest score is researched (the earliest index on ties). The value starts from the RULES
-columns, `civilized modifier × leader civilize + AI value`, and the original adds situational
-bonuses (advances leading to units the AI wants, expansion room, Railroad, the spaceship, the
-human's known advances…) that are not yet modelled. For a human the science advisor suggests
-`value + rand() % 3 − 1`; at Chieftain the research list hides every advance for which
-`(index − advances known) % 3 == 0` except the first.
+and the highest score is researched (the earliest index on ties). For a human the science
+advisor suggests `value + rand() % 3 − 1`; at Chieftain the research list hides every advance
+for which `(index − advances known) % 3 == 0` except the first.
+
+The value (`aiResearch.ts`, `advanceValue`) is built as follows, with "leads to X" meaning the
+advance is X or one of X's prerequisite ancestors (0x00492025):
+
+1. The leader's civilize trait, lowered for a computer player at war with a human who has more
+   advances: one per advance the two share (floor −1), and to −1 outright when that human's
+   reputation is above 6. Then `civilized modifier × civilize + AI value` (RULES @CIVILIZE).
+2. The naval ladder: leads to the Trireme's advance 3, the Caravel's or Frigate's 2, the
+   Transport's 1 (RULES @UNITS slots 32, 33, 35, 43), doubled under dearer research; it adds one
+   point for a computer player (for a human only under dearer research) — the branch adding the
+   whole ladder to a player with no one to trade with can never run, its test finding another
+   civilization as soon as the player knows any advance.
+3. The Port Facility's advance (slot 34): + sea units / 4 (the civilization's +0x6a count,
+   INFERRED the strategic sea-unit tally).
+4. Computer players only: when a human knows advance 76 (Space Flight), +2 for anything leading
+   to advance 32 (Fusion Power) and +3 for the three spaceship parts' advances; when a human
+   knows the Bomber's advance (unit slot 28), +2 for anything leading to it and +5 for it;
+   per wonder whose expiring advance this is: −2 if the player holds the wonder (never for
+   advance 37, Industrialization), +2 if a human holds it.
+5. The Aqueduct's or Sewer System's advance: +2 (whenever the cosmic size caps are nonzero).
+6. With a civilize of 0 or more and advance 85 (University) known: + civilize + 1 for anything
+   leading to advance 16 (Computers), +2 for Computers itself. With advance 38 (Invention)
+   known: +1 for anything leading to 37 (Industrialization), +2 if 57 (Navigation) is known.
+7. The tribe's tastes (@LEADERS index): Romans +2 Iron Working, Bronze Working, Warrior Code,
+   −1 Monotheism; Babylonians +1 Code of Laws; Germans +1 Banking, Theology, Philosophy;
+   Egyptians +2 Masonry; Americans +2 Democracy, −1 Communism, +1 Rocketry, Computers,
+   Leadership; Greeks +1 Polytheism, Bronze Working, Alphabet, Map Making, −1 Monotheism, +2
+   Philosophy; Indians, Persians and Carthaginians +2 Polytheism, +1 Horseback Riding,
+   Mysticism, Ceremonial Burial, −1 Monotheism; Russians +2 Communism, +1 Philosophy, Guerrilla
+   Warfare; Zulus +2 Polytheism, +1 Horseback Riding, Mysticism, Ceremonial Burial, −1 Bronze
+   Working, Iron Working; French +1 Leadership, Tactics, Conscription; Aztecs −2 Gunpowder, −1
+   Monotheism; Chinese +1 Gunpowder; English +1 Monotheism and +1 for the naval ladder;
+   Japanese +1 Steel, Miniaturization; Vikings +1 Map Making; Spanish +1 Monotheism and +1 when
+   the ladder is above 1; Sioux +2 Horseback Riding; Mongols and Celts nothing.
+8. +1 when no civilization knows it; −1 for every advance the player knows that has it as a
+   prerequisite; never below 1.
 
 ## Civilization turn order (VERIFIED, 0x00467c61)
 

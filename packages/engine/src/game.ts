@@ -39,7 +39,14 @@ import {
   grantAdvance,
 } from './research.js';
 import type { Rng } from './rng.js';
-import { ADVANCE, advanceIndex, GOVERNMENT, IMPROVEMENT, type EngineRules } from './rules.js';
+import {
+  ADVANCE,
+  advanceIndex,
+  GOVERNMENT,
+  IMPROVEMENT,
+  type EngineRules,
+  DOMAIN_SEA,
+} from './rules.js';
 import { beginUnitsTurn, type UnitTurnEvent } from './turnStart.js';
 import { cityPollution, meltdownRoll, pollutionRoll, type PollutionEvent } from './pollution.js';
 import { aiChooseProduction } from './aiBuild.js';
@@ -87,6 +94,7 @@ import {
 import { aiMoveUnits, type AiUnitEvent } from './aiUnits.js';
 import { releaseCitySite } from './fertility.js';
 import { civilizationScore, retirementStage, type ScoreBreakdown } from './score.js';
+import { advanceValue } from './aiResearch.js';
 import { inEnemyZoc } from './movement.js';
 import { payUpkeep, type UpkeepEvent } from './upkeep.js';
 import { CITY_CENTRE_INDEX, type City, type Civ, type World, type Production } from './world.js';
@@ -1046,19 +1054,50 @@ export class Game {
   }
 
   /**
-   * The AI's research choice (VERIFIED shape, 0x00494f3a): every researchable advance scores
-   * `rand() % value` and the highest wins, where the value is the RULES civilized modifier ×
-   * the leader's civilize trait + the AI value (the base of 0x004920ac; its situational bonuses
-   * are not yet modelled).
+   * The AI's research choice (VERIFIED, 0x00494f3a): every researchable advance scores
+   * `rand() % value` with the value of 0x004920ac (aiResearch.ts) and the highest wins.
    */
   aiChooseResearch(civ: Civ): void {
     const options = researchableAdvances(this.rules, civ);
-    const civilize = this.rules.leaders?.[civ.tribe ?? -1]?.civilize ?? 0;
+    const leader = this.rules.leaders?.[civ.tribe ?? -1];
+    const slot = civ.slot;
+    const knownBy = (a: number) => {
+      let m = 0;
+      for (const c of this.world.civs) if (c.slot !== 0 && c.knownAdvances[a]) m |= 1 << c.slot;
+      return m;
+    };
+    let humanMask = 0;
+    let maxCitySize = 0;
+    for (const c of this.world.civs) if (c.isHuman) humanMask |= 1 << c.slot;
+    for (const c of this.world.cities)
+      if (c.owner === slot && c.size > maxCitySize) maxCitySize = c.size;
+    const ctx = {
+      knows: (s: number, a: number) => this.knows(s, a),
+      knownBy,
+      humanMask,
+      isHuman: (s: number) => this.world.civs.find((c) => c.slot === s)?.isHuman ?? false,
+      atWar: (a: number, b: number) => hasTreaty(this.world, a, b, TREATY.war),
+      advancesOf: (s: number) => this.world.civs.find((c) => c.slot === s)?.advancesCount ?? 0,
+      reputationOf: (s: number) => this.world.civs.find((c) => c.slot === s)?.reputation ?? 0,
+      civilize: leader?.civilize ?? 0,
+      tribe: civ.tribe ?? -1,
+      researchDearer: this.state.researchDearer ?? false,
+      ownsWonder: (s: number, w: number) => this.ownsWonder(s, w),
+      wonderOwner: (w: number) => {
+        const id = this.wonderCity(w);
+        return id === null ? null : (this.world.cities.find((c) => c.id === id)?.owner ?? null);
+      },
+      seaUnits:
+        civ.strategy?.seaUnits ??
+        this.world.units.filter(
+          (u) => u.owner === slot && this.rules.units[u.type]?.domain === DOMAIN_SEA,
+        ).length,
+      maxCitySize,
+    };
     let best = -1;
     let pick: number | null = null;
     for (const a of options) {
-      const adv = this.rules.advances[a];
-      const value = Math.max(1, (adv?.civilizedModifier ?? 0) * civilize + (adv?.aiValue ?? 1));
+      const value = advanceValue(this.rules, slot, a, ctx);
       const score = value > 1 ? this.rng.nextInt(value) : 0;
       if (score > best) {
         best = score;
