@@ -1,3 +1,4 @@
+import { PART_SHEETS, PARTS_OVER, PARTS_UNDER, SHIP_FRAMES, type PartRow } from './shipParts.js';
 import { decodeText, descriptionFor } from '@mudbrick/formats';
 /**
  * The interactive layer: a human plays one civilization from a loaded save.
@@ -101,6 +102,8 @@ import {
   buildPart,
   PART_LIMITS,
   shipOf,
+  partLimit,
+  type Spaceship,
   PART_NAMES,
   type SpaceshipEvent,
   yearOf,
@@ -1739,38 +1742,51 @@ export class PlaySession {
         const canvas = document.createElement('canvas');
         canvas.style.width = '100%';
         box.appendChild(canvas);
-        void this.drawShip(canvas, ship.parts[0] ?? 0);
+        void this.drawShip(canvas, ship);
       }
     }
     this.talkButton(box, 'Close', () => this.closeTalk());
   }
 
-  /** The ship against the stars: the picture for as many structurals as are built (ss.dll). */
-  private async drawShip(canvas: HTMLCanvasElement, structurals: number): Promise<void> {
+  /** The ship against the stars (0x004a224f): under-parts, the frame, then the parts on top. */
+  private async drawShip(canvas: HTMLCanvasElement, ship: Spaceship): Promise<void> {
     const g = canvas.getContext('2d');
     if (!g) return;
     canvas.width = 640;
     canvas.height = 480;
-    const load = (url: string) =>
-      new Promise<HTMLImageElement>((resolve, reject) => {
+    const load = async (id: number, opaque = false): Promise<HTMLImageElement | null> => {
+      const url = await this.folder.art('SS.DLL', id, opaque);
+      if (!url) return null;
+      return new Promise((resolve) => {
         const i = new Image();
         i.onload = () => resolve(i);
-        i.onerror = reject;
+        i.onerror = () => resolve(null);
         i.src = url;
       });
-    const stars = await this.folder.art('SS.DLL', 499, true);
+    };
+    const stars = await load(499, true);
     if (!stars) {
       canvas.remove();
       return;
     }
-    g.drawImage(await load(stars), 0, 0);
-    const frames = [
-      0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 21, 24, 25, 26, 27, 28, 29, 30, 33, 36, 39,
-    ];
-    let frame = 0;
-    for (const f of frames) if (f <= structurals) frame = f;
-    const url = await this.folder.art('SS.DLL', 400 + frame);
-    if (url) g.drawImage(await load(url), 0, 0);
+    g.drawImage(stars, 0, 0);
+    const parts = async (rows: readonly PartRow[]) => {
+      for (const [kind, count, x, y, w, h, sheetX] of rows) {
+        if ((ship.parts[kind] ?? 0) < count) continue;
+        const fits = count <= Math.min(ship.parts[kind] ?? 0, partLimit(ship, kind, true));
+        const sheet = await load(PART_SHEETS[kind]?.[fits ? 0 : 1] ?? 491);
+        if (sheet) g.drawImage(sheet, sheetX, 1, w, h, x, y, w, h);
+      }
+    };
+    await parts(PARTS_UNDER);
+    const built = ship.parts[0] ?? 0;
+    const frame = SHIP_FRAMES.filter((f) => f[0] <= built).at(-1);
+    if (frame) {
+      const [, id, x, y, w, h] = frame;
+      const image = await load(id);
+      if (image) g.drawImage(image, x, y, w, h, x, y, w, h);
+    }
+    await parts(PARTS_OVER);
   }
 
   private reportPage(key: string): { title: string; lines: string[] } {

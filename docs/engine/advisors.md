@@ -110,6 +110,8 @@ the table at 0x005a9068. The extra pieces from flags at +0x3fb (pictures 160 on)
 
 ## Spaceship picture (0x004a224f)
 
-The ship is picture `400 + n` of ss.dll, n the largest entry of a table not above the structurals
-built, over the starfield 499. The original then draws each part on the frame from the same table;
-only the frames are ported.
+The screen builds an 88-row table (`apps/web/src/shipParts.ts`). Over the starfield (ss.dll 499) it
+draws rows 0 to 6, then the frame for the structurals built (pictures 400 to 440, cropped to the
+row's rectangle), then rows 31 to 87. A part row appears once its kind's count reaches the row's
+count, from the kind's lit sheet if the structure supports that many (0x0053ddd8), else from its
+dim sheet.
