@@ -67,12 +67,13 @@ const problems = new Map<string, number>();
 function problem(text: string): void {
   problems.set(text, (problems.get(text) ?? 0) + 1);
 }
-const recomputed = new Map<number, { size: number; turn: number }>();
+const recomputed = new WeakMap<object, { size: number; turn: number; owner: number }>();
 {
-  const ensureWorkers = game.ensureWorkers.bind(game);
-  game.ensureWorkers = (city, ...rest) => {
-    ensureWorkers(city, ...rest);
-    recomputed.set(city.id, { size: city.size, turn: game.state.turn });
+  // On the prototype, so that it survives the reloads below.
+  const ensureWorkers = Game.prototype.ensureWorkers;
+  Game.prototype.ensureWorkers = function (this: Game, city, ...rest) {
+    ensureWorkers.call(this, city, ...rest);
+    recomputed.set(city, { size: city.size, turn: this.state.turn, owner: city.owner });
   };
 }
 
@@ -95,9 +96,11 @@ function check(): void {
     // the next recompute (0x0052d472, 0x00528720). So what is exact is this: no more citizens than
     // the city's size at its last recompute, and a recompute every round.
     const placed = workers + sp.entertainers + sp.taxCollectors + sp.scientists;
-    const last = recomputed.get(c.id);
+    const last = recomputed.get(c);
     if (last && placed > last.size) problem('too many citizens placed');
-    if (last && game.state.turn - last.turn > 1) problem('a city missed its recompute');
+    // A city taken before its own turn in the round waits for its new owner's next turn.
+    if (last && last.owner === c.owner && game.state.turn - last.turn > 1)
+      problem('a city missed its recompute');
     if (c.production.kind === 'unit' && !rules.units[c.production.index])
       problem('bad unit production');
     if (c.production.kind === 'improvement' && !rules.improvements[c.production.index])
