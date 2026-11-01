@@ -1,0 +1,17 @@
+{
+  "name": "@mudbrick/relay",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Rooms for network play: passes the game state between seats.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "start": "vite-node src/server.ts"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.12"
+  }
+}

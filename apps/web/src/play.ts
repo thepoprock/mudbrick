@@ -162,6 +162,9 @@ export class PlaySession {
   wantedGovernment: number | null = null;
   /** A diplomat or spy waiting for the player's choice at a foreign city or unit. */
   pendingAgent: { unit: Unit; city: City } | { unit: Unit; target: Unit } | null = null;
+  /** Network play: this browser's seat, and the call that sends the game on. */
+  seat: number | null = null;
+  onTurnPassed: ((moving: number) => void) | null = null;
   /** The conversation on screen, if any. */
   private talk: Conversation | null = null;
   selected: Unit | null = null;
@@ -261,6 +264,7 @@ export class PlaySession {
       return true;
     }
     if (this.talk) return true;
+    if (!this.ourMove) return false;
     if (e.key === 'Escape' && document.getElementById('talkBox')?.style.display === 'block') {
       this.closeTalk();
       return true;
@@ -812,7 +816,13 @@ export class PlaySession {
     this.afterAction();
   }
 
+  /** Is it this browser's move? */
+  get ourMove(): boolean {
+    return this.seat === null || (this.game.state.movingHuman ?? this.seat) === this.seat;
+  }
+
   endTurn(): void {
+    if (!this.ourMove) return;
     this.playOn();
   }
 
@@ -820,7 +830,14 @@ export class PlaySession {
   private playOn(): void {
     const before = this.humanSlot;
     const events = this.game.playUntilHuman();
-    this.humanSlot = this.game.state.movingHuman ?? this.humanSlot;
+    const moving = this.game.state.movingHuman ?? this.humanSlot;
+    if (this.onTurnPassed && moving !== this.seat) {
+      this.onTurnPassed(moving);
+      this.log(`Waiting for the ${this.game.civ(moving).name}.`);
+      this.refresh();
+      return;
+    }
+    this.humanSlot = moving;
     if (this.humanSlot !== before) {
       this.log(`— The ${this.civ.name} to move —`);
       this.announceSeat();

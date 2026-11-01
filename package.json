@@ -14,7 +14,7 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
-    "typecheck": "tsc -b packages/formats packages/engine apps/web scripts",
+    "typecheck": "tsc -b packages/formats packages/engine apps/web scripts && tsc -p apps/relay/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",

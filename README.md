@@ -13,7 +13,9 @@ this project. See [LEGAL.md](LEGAL.md) for the full picture.
   the menus and the sound effects, all read from your own files.
 - Saved games load and save in the original format.
 
-Not yet: multiplayer, the map and scenario editors, wonder and council videos, music.
+- Hot seat, and network play through a small relay, with players moving in turn.
+
+Not yet: simultaneous moves, the map and scenario editors, wonder and council videos, music.
 
 ## Why
 

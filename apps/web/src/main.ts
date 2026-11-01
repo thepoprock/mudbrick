@@ -21,6 +21,7 @@ import { installDevLoader } from './devLoader.js';
 import { gameFromSave } from './gameFromSave.js';
 import { loadGameFolder, type GameFolder, withScenarioFolder } from './gameFiles.js';
 import { drawMap, hitTest } from './mapRenderer.js';
+import { NetLink } from './net.js';
 import { PlaySession } from './play.js';
 import { downloadBytes, saveFromGame } from './saveFromGame.js';
 import { engineRules, worldFromSave } from './worldFromSave.js';
@@ -392,6 +393,62 @@ window.addEventListener('keydown', (e) => {
 canvas.addEventListener('click', (e) => {
   if (!session) return;
   session.handleClick(e.clientX, e.clientY);
+});
+
+// ---- network play: a room on a relay, one seat per browser (apps/relay, net.ts)
+let net: NetLink | undefined;
+
+function restoreFrom(text: string, seat: number): void {
+  if (!folder) return;
+  const restored = restoreGame(text, engineRules(folder.rules));
+  const moving = restored.game.state.movingHuman ?? seat;
+  world = restored.game.world;
+  session = new PlaySession(
+    restored.game,
+    folder,
+    moving === seat ? seat : moving,
+    {
+      canvas,
+      status: byId('status'),
+      unitPanel: byId('unitPanel'),
+      cityPanel: byId('cityPanel'),
+      researchPanel: byId('researchPanel'),
+      log: byId('log'),
+    },
+    renderOptions,
+  );
+  attachNet(session, seat);
+  if (moving === seat) session.log('Your move.');
+  else session.log(`Waiting for the ${restored.game.civ(moving).name}.`);
+  saveButton.disabled = false;
+}
+
+function attachNet(s: PlaySession, seat: number): void {
+  s.seat = seat;
+  s.humanSlot = seat;
+  s.onTurnPassed = (moving) => net?.sendState(snapshotGame(s.game, moving), moving);
+}
+
+byId<HTMLButtonElement>('netJoin').addEventListener('click', () => {
+  const url = byId<HTMLInputElement>('netUrl').value;
+  const room = byId<HTMLInputElement>('netRoom').value;
+  const seat = Number(byId<HTMLInputElement>('netSeat').value);
+  net = new NetLink(url, room, seat, (m) => {
+    if (m.type === 'state' && m.text) {
+      if (m.moving === seat) restoreFrom(m.text, seat);
+      else if (!session) restoreFrom(m.text, seat);
+    }
+    if (m.type === 'seats') byId('netStatus').textContent = `seats: ${(m.seats ?? []).join(', ')}`;
+    if (m.type === 'error') byId('netStatus').textContent = m.message ?? 'error';
+    if (m.type === 'chat') session?.log(`Seat ${m.seat}: ${m.text}`);
+  });
+  if (session) {
+    attachNet(session, seat);
+    const s = session;
+    window.setTimeout(() => {
+      net?.sendState(snapshotGame(s.game, s.humanSlot), s.game.state.movingHuman ?? seat);
+    }, 300);
+  }
 });
 
 if (import.meta.env.DEV) {

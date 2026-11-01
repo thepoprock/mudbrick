@@ -148,6 +148,14 @@
       >
         Save
       </button>
+      <details id="netPanel">
+        <summary>Network play</summary>
+        <label>Relay <input id="netUrl" value="ws://localhost:8787" /></label>
+        <label>Room <input id="netRoom" value="game" size="8" /></label>
+        <label>Seat <input id="netSeat" value="1" size="2" /></label>
+        <button id="netJoin">Join</button>
+        <span id="netStatus" class="hint"></span>
+      </details>
       <details id="newGamePanel">
         <summary title="Make a random world and start at 4000 BC">New game</summary>
         <div>
