@@ -32,21 +32,27 @@ write down the rule in your own words, cite the address, and mark it VERIFIED or
 
 Every function in `docs/engine/function-status.tsv` has a `category`:
 
-| Category              | Functions |   Bytes | Meaning                                                                              |
-| --------------------- | --------- | ------: | ------------------------------------------------------------------------------------ |
-| `read`                | 728       | 825,024 | Opened and compared with the rules                                                   |
-| `library`             | 508       |  85,009 | The C and MFC runtime, not the game's own                                            |
-| `generic`             | 3,166     | 316,138 | Touches no game table: arithmetic, lists, graphics, windows                          |
-| `interface`           | 486       | 254,258 | Draws or handles a window                                                            |
-| `game-data`           | 211       | 151,114 | Reads game tables but is display, file loading, options or the map and event editors |
-| `editor-or-reference` | 20        |  40,142 | Editors, cheats, the Civilopedia                                                     |
-| `network`             | 21        |  19,996 | Multiplayer transport                                                                |
+| Category    | Functions |     Bytes | Meaning                                                                                  |
+| ----------- | --------- | --------: | ---------------------------------------------------------------------------------------- |
+| `read`      | 1,981     | 1,351,518 | Opened one by one and compared with the rules                                            |
+| `same-code` | 1,937     |    63,086 | Identical in shape to another function: constructors, list handlers, message wrappers    |
+| `framework` | 650       |   186,971 | The window, graphics, sound and file library above 0x0055a000; seen as a one-line digest |
+| `library`   | 377       |    80,722 | The C and MFC runtime, not the game's own                                                |
+| `thunk`     | 195       |     9,384 | One line forwarding to another function                                                  |
 
-The categories other than `read` came from a signature search, then a scan of all 227 `game-data`
-functions and of every unread function that writes game state and is reachable from the turn
-routines: none held a game rule missed by the port. A later search of all unread code for random rolls, treasury changes and calls into rule routines flagged 32 functions; reading the rule-like ones found the random choice of civilizations, Parley and the world roll, all now ported. The `generic` and `interface` functions were not
-read one by one, and the network packet code is not ported, since the relay does that job differently. So the claim is:
-no rule of the single-player game is known to be missing, not that every line has been read.
+Long framework bodies in the `read` group were opened through a filter that drops drawing calls,
+and bodies over 1,800 characters in the last pass show only their first 30 lines. All functions
+below 0x0055a000 that differ in shape were opened. The 650 `framework` functions were sorted by
+what they touch and judged from a digest of their strings and calls, with any that looked like
+game code opened in full. They are image decoders, blitters, window, sound and timer code. The
+1,937 `same-code` functions match another function once addresses and numbers are abstracted.
+The network packet code is not ported, since the relay does that job differently.
+
+That pass found rules the earlier searches missed: the locator grid for long trips, map size
+rules, custom map limits, passwords, the Hall of Fame, Find Commodity, custom tribes, the Parley
+cancel button and the computer taking over a lost player. All are ported. So the claim is: no rule
+of the standard game is known to be missing. It is not that every line of the window library has
+been read.
 
 ## Checking against the original
 
