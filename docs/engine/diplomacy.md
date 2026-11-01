@@ -38,9 +38,11 @@ original's loops skip slot 0).
 
 ## Contact and the review (0x00510ac7)
 
-A unit that ends its move beside a foreign city or unit of a civilization it has no contact
-with (the arrival handler 0x0041aad6) triggers the review; the engine sweeps each civilization's
-units once a turn instead (INFERRED equivalence). With a human on either side the original
+A unit that arrives beside a foreign unit of a civilization it has no contact with opens the
+contact (VERIFIED in the arrival handler 0x0041aad6: one of the eight neighbouring squares, the
+mover a land unit on land and not a Caravan, and only when the move allows talking); the engine
+sweeps each civilization's units once a turn instead and also counts cities (INFERRED
+equivalence). With a human on either side the original
 opens the negotiation screens; the engine asks `humanAccepts` (default: accept peace, decline
 alliances). Between computer players the review records contact and, on first contact or every
 fourth turn for the pair (`(turn + a + b) & 3 == 0`):
@@ -70,8 +72,8 @@ over the land masses where both are present, a is deterred when `4 × a's attack
 
 - b's units + 1)`is below`count − a's attack personality + 4` and a has cities there.
 
-**Ally tech exchange (0x005103ce):** each side's best advance the other lacks (AI value plus a
-random 0–2; the value routine 0x004920ac is in aiResearch.ts, used here only through its RULES base); both have one →
+**Ally tech exchange (0x005103ce):** each side's best advance the other lacks (the receiver's
+research value, 0x004920ac in aiResearch.ts, plus a random 0–2 — VERIFIED); both have one →
 swap; only one → the lagging ally receives it when `(6 − difficulty) × 2` or more advances
 behind (or the leading human is ahead of both), once per cycle (bit 18).
 

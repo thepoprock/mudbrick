@@ -95,7 +95,7 @@ import {
 import { aiMoveUnits, type AiUnitEvent } from './aiUnits.js';
 import { releaseCitySite } from './fertility.js';
 import { civilizationScore, retirementStage, type ScoreBreakdown } from './score.js';
-import { advanceValue } from './aiResearch.js';
+import { advanceValue, type ResearchValueContext } from './aiResearch.js';
 import { restartCivilization, type NewGameLeader } from './newGame.js';
 import { lookAround } from './sight.js';
 import {
@@ -320,6 +320,10 @@ export class Game {
       spaceshipLaunched: () => false,
       mainHuman: humans[0] ?? null,
       negotiationAllowed: (a, b) => this.negotiationAllowed(a, b),
+      advanceValue: (slot, adv) => {
+        const c = this.world.civs.find((x) => x.slot === slot);
+        return c ? advanceValue(this.rules, slot, adv, this.researchValueContext(c)) : 1;
+      },
       nextInt: (n) => this.rng.nextInt(n),
       ...(this.humanAccepts ? { humanAccepts: this.humanAccepts } : {}),
     };
@@ -1216,12 +1220,8 @@ export class Game {
     this.ensureWorkers(city, ctx, true);
   }
 
-  /**
-   * The AI's research choice (VERIFIED, 0x00494f3a): every researchable advance scores
-   * `rand() % value` with the value of 0x004920ac (aiResearch.ts) and the highest wins.
-   */
-  aiChooseResearch(civ: Civ): void {
-    const options = researchableAdvances(this.rules, civ);
+  /** The context the research value (0x004920ac) reads for a civilization. */
+  researchValueContext(civ: Civ): ResearchValueContext {
     const leader = this.rules.leaders?.[civ.tribe ?? -1];
     const slot = civ.slot;
     const knownBy = (a: number) => {
@@ -1234,7 +1234,7 @@ export class Game {
     for (const c of this.world.civs) if (c.isHuman) humanMask |= 1 << c.slot;
     for (const c of this.world.cities)
       if (c.owner === slot && c.size > maxCitySize) maxCitySize = c.size;
-    const ctx = {
+    return {
       knows: (s: number, a: number) => this.knows(s, a),
       knownBy,
       humanMask,
@@ -1257,6 +1257,16 @@ export class Game {
         ).length,
       maxCitySize,
     };
+  }
+
+  /**
+   * The AI's research choice (VERIFIED, 0x00494f3a): every researchable advance scores
+   * `rand() % value` with the value of 0x004920ac (aiResearch.ts) and the highest wins.
+   */
+  aiChooseResearch(civ: Civ): void {
+    const options = researchableAdvances(this.rules, civ);
+    const slot = civ.slot;
+    const ctx = this.researchValueContext(civ);
     let best = -1;
     let pick: number | null = null;
     for (const a of options) {

@@ -126,7 +126,7 @@ export function attitude(world: World, a: number, b: number): number {
   return civ ? (attitudesOf(civ)[b] ?? 0) : 0;
 }
 
-/** Raise or lower a's attitude toward b (0x00440a60); INFERRED: clamped to 0–100. */
+/** Raise or lower a's attitude toward b (0x00440a60; the setter 0x0044dfa3 clamps to 0–100, VERIFIED). */
 export function adjustAttitude(world: World, a: number, b: number, delta: number): void {
   const civ = civOf(world, a);
   if (!civ) return;
@@ -165,6 +165,8 @@ export function atPeace(world: World, a: number, b: number): boolean {
 export interface DiplomacyContext {
   /** Scenario events: may `talker` approach `listener` (NEGOTIATION)? Default yes. */
   negotiationAllowed?: (talker: number, listener: number) => boolean;
+  /** The research value of an advance to a slot (0x004920ac); the RULES base when absent. */
+  advanceValue?: (slot: number, advance: number) => number;
   rules: EngineRules;
   turn: number;
   difficulty: number;
@@ -287,15 +289,18 @@ export function techExchange(world: World, a: number, b: number, ctx: DiplomacyC
   for (let adv = 0; adv < ctx.rules.advances.length; adv++) {
     const rule = ctx.rules.advances[adv];
     if (!rule || (rule.preq1.kind === 'never' && rule.preq2.kind === 'never')) continue;
-    const value = () => ctx.nextInt(3) + (rule.aiValue ?? 1); // INFERRED: the advance-value routine 0x004920ac is unread
+    // VERIFIED: rand() % 3 plus the receiver's research value (0x004920ac, aiResearch.ts); the
+    // RULES base stands in when the context brings no value routine.
+    const value = (receiver: number) =>
+      ctx.nextInt(3) + (ctx.advanceValue ? ctx.advanceValue(receiver, adv) : (rule.aiValue ?? 1));
     if (!ctx.knows(a, adv) && ctx.knows(b, adv)) {
-      const v = value();
+      const v = value(a);
       if (bestA < 0 || bestAValue < v) {
         bestA = adv;
         bestAValue = v;
       }
     } else if (!ctx.knows(b, adv) && ctx.knows(a, adv)) {
-      const v = value();
+      const v = value(b);
       if (bestB < 0 || bestBValue < v) {
         bestB = adv;
         bestBValue = v;
@@ -538,8 +543,10 @@ export function reviewRelations(
 
 /**
  * First contacts for a civilization's units: a foreign city or unit beside one of them with no
- * contact yet triggers the review (the arrival handler 0x0041aad6 does this per move; the
- * engine sweeps once per turn, INFERRED equivalence).
+ * contact yet triggers the review. VERIFIED trigger in the original (the arrival handler
+ * 0x0041aad6): on each arrival, a foreign unit on one of the eight neighbouring squares whose
+ * owner has no contact bit with the mover opens the contact when the mover may talk (a land
+ * unit on land, not a Caravan); the engine sweeps once per turn instead (INFERRED equivalence).
  */
 export function contactSweep(
   world: World,
