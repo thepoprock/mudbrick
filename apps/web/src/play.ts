@@ -28,11 +28,24 @@ import {
   ORDER,
   orderGoTo,
   cityRows,
+  cycleSpecialist,
+  airlift,
+  airliftTargets,
+  buyCost,
+  buyProduction,
+  CITY_CENTRE_INDEX,
   councilRatings,
   councilSpeech,
   defenseRows,
   demographics,
   foreignRows,
+  maxRate,
+  paradropCheck,
+  sellImprovement,
+  setHomeCity,
+  setRates,
+  squareYield,
+  toggleWorker,
   HISTORY_KINDS,
   parseCouncil,
   scienceReport,
@@ -149,6 +162,7 @@ export class PlaySession {
   selected: Unit | null = null;
   openCity: City | null = null;
   gotoMode = false;
+  paradropMode = false;
   private readonly logLines: string[] = [];
   private cityNames = 0;
 
@@ -254,6 +268,31 @@ export class PlaySession {
       case 'Enter':
         this.endTurn();
         return true;
+      case 'H':
+        return this.withSelected((u) => {
+          const c = setHomeCity(this.world, u);
+          this.log(c ? `Home city is now ${c.name}.` : 'Move into one of your cities first.');
+        });
+      case 'l':
+        return this.withSelected((u) => {
+          this.airliftMenu(u);
+        });
+      case 'j':
+        return this.withSelected((u) => {
+          this.paradropMode = !this.paradropMode;
+          this.log(
+            this.paradropMode ? `${this.unitName(u)}: click the drop square.` : 'Drop cancelled.',
+          );
+        });
+      case 'u':
+        return this.withSelected((u) => {
+          for (const o of this.world.unitsAt(u.position.x, u.position.y))
+            if (o !== u && o.owner === u.owner && o.order === ORDER.sleep) o.order = null;
+          this.log('Units aboard are awake.');
+        });
+      case 'C':
+        this.findCity();
+        return true;
       case 'w':
       case ' ':
         this.skipSelected();
@@ -331,6 +370,10 @@ export class PlaySession {
     const x = hit.c * 2 + (hit.y & 1);
     const y = hit.y;
     const p = { x, y };
+    if (this.paradropMode && this.selected) {
+      this.paradrop(this.selected, p);
+      return;
+    }
     if (this.gotoMode && this.selected) {
       orderGoTo(this.selected, p);
       const r = gotoStep(this.world, this.rules, this.game.rng, this.selected, this.moveCtx());
@@ -912,6 +955,65 @@ export class PlaySession {
       `P pillage · D disband · t trade route · h help wonder · Tab next unit · c centre · Enter end turn`;
   }
 
+  private airliftMenu(unit: Unit): void {
+    const r = airliftTargets(this.world, this.rules, unit);
+    if ('refused' in r) {
+      const text = {
+        ship: 'Ships cannot be airlifted.',
+        plane: 'Aircraft cannot be airlifted.',
+        'no-airport': 'This city has no airport.',
+        used: 'This city has used its airlift this turn.',
+        'no-other': 'You have no other airport.',
+      };
+      this.log(text[r.refused]);
+      return;
+    }
+    const box = this.talkBox();
+    box.replaceChildren();
+    for (const c of r.targets)
+      this.talkButton(box, c.name, () => {
+        if (airlift(this.world, unit, c)) this.log(`${this.unitName(unit)} flies to ${c.name}.`);
+        this.closeTalk();
+      });
+    this.talkButton(box, 'Close', () => this.closeTalk());
+  }
+
+  private findCity(): void {
+    const box = this.talkBox();
+    box.replaceChildren();
+    const list = document.createElement('div');
+    list.style.cssText = 'max-height:60vh;overflow:auto';
+    for (const c of this.world.cities.filter((x) =>
+      this.world.isSeen(x.position.x, x.position.y, this.humanSlot),
+    ))
+      this.talkButton(list, c.name, () => {
+        this.centreOn(c.position);
+        this.closeTalk();
+      });
+    box.appendChild(list);
+    this.talkButton(box, 'Close', () => this.closeTalk());
+  }
+
+  private paradrop(unit: Unit, to: Point): void {
+    this.paradropMode = false;
+    const range = this.folder.rules.cosmic.maxParadropRange;
+    const why = paradropCheck(this.world, unit, to.x, to.y, range);
+    if (why) {
+      const text = {
+        moved: 'Paratroopers must start the turn unmoved.',
+        'not-from-base': 'They must start in a city or at an airbase.',
+        ocean: 'They cannot land on ocean.',
+        enemy: 'Enemy units hold that square.',
+        range: `They can drop only ${range} squares.`,
+      };
+      this.log(text[why]);
+      return;
+    }
+    unit.position = to;
+    unit.movesSpent = fullMoves(this.rules, unit, this.moveCtx()) - 1;
+    this.afterAction();
+  }
+
   /** The High Council: each advisor rates us and speaks, others answering (council.ts). */
   private showCouncil(): void {
     const box = this.talkBox();
@@ -1462,7 +1564,93 @@ export class PlaySession {
       }
     });
     label.append(select);
-    el.replaceChildren(header, label);
+    el.replaceChildren(header, label, this.cityOrders(city));
+  }
+
+  /** Buy, sell and the workers (humanOrders.ts). */
+  private cityOrders(city: City): HTMLElement {
+    const box = document.createElement('div');
+    const civ = this.civ;
+    const button = (label: string, run: () => void) => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.addEventListener('click', () => {
+        run();
+        this.refresh();
+      });
+      return b;
+    };
+    const price = buyCost(this.rules, city);
+    if (price !== null)
+      box.appendChild(
+        button(`Buy for ${price} gold`, () => {
+          const r = buyProduction(this.rules, civ, city);
+          if (r === 'gold') this.log(`You need ${price} gold.`);
+          if (r === 'disorder') this.log(`${city.name} is in disorder: no units can be bought.`);
+        }),
+      );
+    const sell = document.createElement('select');
+    const none = document.createElement('option');
+    none.textContent = city.soldThisTurn ? '(sold this turn)' : 'Sell…';
+    none.value = '';
+    sell.append(none);
+    if (!city.soldThisTurn) {
+      for (let i = 2; i < 39; i++) {
+        if (!city.improvements[i]) continue;
+        const o = document.createElement('option');
+        const r = this.rules.improvements[i];
+        o.value = String(i);
+        o.textContent = `${r?.name ?? '?'} (${(r?.costRows ?? 0) * this.rules.cosmic.shieldBoxRows} gold)`;
+        sell.append(o);
+      }
+    }
+    sell.addEventListener('change', () => {
+      if (sell.value === '') return;
+      sellImprovement(this.rules, civ, city, Number(sell.value));
+      this.log(`${city.name} sells ${this.rules.improvements[Number(sell.value)]?.name ?? ''}.`);
+      this.refresh();
+    });
+    box.appendChild(sell);
+    const grid = document.createElement('div');
+    grid.style.cssText = 'display:grid;grid-template-columns:repeat(7,28px);gap:1px;margin-top:4px';
+    const { x: cx, y: cy } = city.position;
+    const ctx = this.game.cityContext(city);
+    const cells: (HTMLElement | null)[] = Array<HTMLElement | null>(49).fill(null);
+    for (let i = 0; i <= CITY_CENTRE_INDEX; i++) {
+      const p = this.world.radiusSquare(cx, cy, i);
+      if (!p) continue;
+      let dx = p.x - cx;
+      if (dx > this.world.widthX2 / 2) dx -= this.world.widthX2;
+      if (dx < -this.world.widthX2 / 2) dx += this.world.widthX2;
+      const col = Math.round(dx / 2 + (p.y - cy) / 2) + 3;
+      const row = Math.round((p.y - cy) / 2 - dx / 2) + 3;
+      const cell = document.createElement('button');
+      const worked = i === CITY_CENTRE_INDEX || (city.worked & (1 << i)) !== 0;
+      const y = ([0, 1, 2] as const).map((k) =>
+        squareYield(this.world, this.rules, city, i, k, ctx),
+      );
+      cell.textContent = y.join('');
+      cell.title = 'food shields trade';
+      cell.style.cssText = `padding:0;font:10px monospace;height:22px;background:${worked ? '#9c9' : '#ddd'}`;
+      if (i !== CITY_CENTRE_INDEX)
+        cell.addEventListener('click', () => {
+          toggleWorker(city, i);
+          this.refresh();
+        });
+      cells[row * 7 + col] = cell;
+    }
+    for (const c of cells) grid.appendChild(c ?? document.createElement('span'));
+    box.appendChild(grid);
+    const sp = city.specialists;
+    (['entertainers', 'taxCollectors', 'scientists'] as const).forEach((k, n) => {
+      if (sp[k] > 0)
+        box.appendChild(
+          button(`${sp[k]} ${['entertainers', 'tax collectors', 'scientists'][n]}`, () => {
+            cycleSpecialist(city, n as 0 | 1 | 2);
+          }),
+        );
+    });
+    return box;
   }
 
   private renderResearchPanel(): void {
@@ -1517,6 +1705,31 @@ export class PlaySession {
       this.refresh();
     });
     label.append(select);
+    const rates = document.createElement('div');
+    const max = maxRate(civ.government);
+    const slider = (name: string, value: number, set: (v: number) => void) => {
+      const l = document.createElement('label');
+      l.textContent = ` ${name} ${value * 10} %`;
+      const r = document.createElement('input');
+      r.type = 'range';
+      r.min = '0';
+      r.max = String(max);
+      r.value = String(value);
+      r.addEventListener('change', () => {
+        set(Number(r.value));
+        this.refresh();
+      });
+      l.append(r);
+      return l;
+    };
+    rates.append(
+      slider('Tax', civ.taxRate, (v) => {
+        setRates(civ, v, civ.scienceRate);
+      }),
+      slider('Science', civ.scienceRate, (v) => {
+        setRates(civ, civ.taxRate, v);
+      }),
+    );
     const govLabel = document.createElement('label');
     govLabel.textContent = ' Government: ';
     const govSelect = document.createElement('select');
@@ -1565,6 +1778,6 @@ export class PlaySession {
       this.refresh();
     });
     govLabel.append(govSelect);
-    el.replaceChildren(text, label, govLabel);
+    el.replaceChildren(text, label, rates, govLabel);
   }
 }

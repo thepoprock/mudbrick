@@ -640,6 +640,8 @@ export class Game {
   /** One city's turn in the verified order. */
   processCity(city: City): TurnEvent[] {
     const out: TurnEvent[] = [];
+    city.soldThisTurn = false;
+    city.airlifted = false;
     const slot = city.owner;
     const civ = this.civ(slot);
     const ctx = this.cityContext(city);

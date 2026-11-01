@@ -132,6 +132,7 @@ export function worldFromSave(save: SaveFile, rules: Rules): World {
       production: c.production,
       inDisorder: c.civilDisorder,
       celebrating: c.weLoveTheKingDay,
+      soldThisTurn: c.improvementSoldThisTurn,
       ...(typeof c.founder === 'number' ? { previousOwner: c.founder } : {}),
       ...(c.objectiveX1 ? { objective: true } : {}),
       ...(c.wonderCity ? { wonderCity: true } : {}),

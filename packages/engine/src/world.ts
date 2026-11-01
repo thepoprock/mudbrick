@@ -172,6 +172,10 @@ export interface City {
   specialists: Specialists;
   production: Production;
   inDisorder: boolean;
+  /** An improvement was sold this turn (city flag bit 2). */
+  soldThisTurn?: boolean;
+  /** Used for an airlift this turn (city flag bit 16). */
+  airlifted?: boolean;
   /** Set on the second consecutive turn of disorder (the original's flag bit 13). */
   disorderRepeated?: boolean;
   /** Owner before the last capture (the save's byte 10); a recapture by it is a liberation. */
