@@ -23,6 +23,7 @@ import {
   gotoStep,
   hutAt,
   joinCity,
+  lookAround,
   mood,
   movesLeft,
   GOVERNMENT,
@@ -32,6 +33,7 @@ import {
   cycleSpecialist,
   airlift,
   airliftTargets,
+  airliftThreat,
   buyCost,
   buyProduction,
   CITY_CENTRE_INDEX,
@@ -46,7 +48,6 @@ import {
   setHomeCity,
   setRates,
   squareYield,
-  toggleWorker,
   attackSound,
   HISTORY_KINDS,
   improvementSound,
@@ -1111,7 +1112,20 @@ export class PlaySession {
     box.replaceChildren();
     for (const c of r.targets)
       this.talkButton(box, c.name, () => {
-        if (airlift(this.world, unit, c)) this.log(`${this.unitName(unit)} flies to ${c.name}.`);
+        const threat = airliftThreat(
+          this.world,
+          this.rules,
+          unit,
+          c,
+          (o) => ((treatiesOf(this.civ)[o] ?? 0) & TREATY.war) !== 0,
+        );
+        if (threat.count > 0 && !window.confirm('Enemy fighters are in range. Fly anyway?')) return;
+        if (airlift(this.world, this.game.rng, unit, c, threat.count))
+          this.log(`${this.unitName(unit)} flies to ${c.name}.`);
+        else {
+          this.log(`${this.unitName(unit)} is shot down.`);
+          this.selected = null;
+        }
         this.closeTalk();
       });
     this.talkButton(box, 'Close', () => this.closeTalk());
@@ -1148,8 +1162,21 @@ export class PlaySession {
       this.log(text[why]);
       return;
     }
+    const city = this.world.cityAt(to.x, to.y);
+    if (city && city.owner !== unit.owner) {
+      const word = treaty(this.world, unit.owner, city.owner);
+      if ((word & (TREATY.ceaseFire | TREATY.peace | TREATY.alliance)) !== 0) {
+        const name = this.world.civs.find((c) => c.slot === city.owner)?.name ?? '';
+        if (!window.confirm(`This breaks your treaty with the ${name}. Proceed?`)) return;
+        const events: DiplomacyEvent[] = [];
+        declareWar(this.world, unit.owner, city.owner, this.game.diplomacyContext(), events);
+        for (const e of events) this.log(`${e.text}.`);
+      }
+    }
     unit.position = to;
-    unit.movesSpent = fullMoves(this.rules, unit, this.moveCtx()) - 1;
+    unit.dropped = true;
+    lookAround(this.world, this.rules, unit);
+    if (city && city.owner !== unit.owner) this.takeCity(unit, city);
     this.afterAction();
   }
 
@@ -1509,6 +1536,12 @@ export class PlaySession {
     const text = document.createElement('div');
     text.textContent = message.map(fill).join('\n');
     box.appendChild(text);
+    if (d.title) text.textContent = d.title;
+    if (d.pick) {
+      this.talkButton(box, 'Never mind', () => this.answerTalk(-1));
+      for (const p of d.pick) this.talkButton(box, p.label, () => this.answerTalk(p.value));
+      return;
+    }
     if (d.civs) {
       this.talkButton(box, 'Never mind', () => this.answerTalk(0));
       for (const s of d.civs) this.talkButton(box, this.game.civ(s).name, () => this.answerTalk(s));
@@ -1775,11 +1808,10 @@ export class PlaySession {
       cell.textContent = y.join('');
       cell.title = 'food shields trade';
       cell.style.cssText = `padding:0;font:10px monospace;height:22px;background:${worked ? '#9c9' : '#ddd'}`;
-      if (i !== CITY_CENTRE_INDEX)
-        cell.addEventListener('click', () => {
-          toggleWorker(city, i);
-          this.refresh();
-        });
+      cell.addEventListener('click', () => {
+        this.game.clickCitySquare(city, i);
+        this.refresh();
+      });
       cells[row * 7 + col] = cell;
     }
     for (const c of cells) grid.appendChild(c ?? document.createElement('span'));

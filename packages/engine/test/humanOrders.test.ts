@@ -6,7 +6,7 @@ import {
   maxRate,
   sellImprovement,
   setRates,
-  toggleWorker,
+  citySquareClick,
 } from '../src/humanOrders.js';
 import { IMPROVEMENT, type EngineRules } from '../src/rules.js';
 import type { City, Civ } from '../src/world.js';
@@ -82,18 +82,26 @@ describe('rates', () => {
 describe('workers', () => {
   it('freeing and taking back a square moves a citizen', () => {
     const c = city();
-    expect(toggleWorker(c, 0)).toBe(true);
+    expect(citySquareClick(c, 0, false)).toBe(true);
     expect(c.worked).toBe(0);
     expect(c.specialists.entertainers).toBe(1);
-    expect(toggleWorker(c, 3)).toBe(true);
+    expect(citySquareClick(c, 3, false)).toBe(true);
     expect(c.worked).toBe(8);
     expect(c.specialists.entertainers).toBe(0);
-    expect(toggleWorker(c, 5)).toBe(false);
+    expect(citySquareClick(c, 4, true)).toBe(false);
+    expect(citySquareClick(c, 5, false)).toBe(true); // no specialist left: start over
+    expect(c.worked).toBe(0);
   });
-  it('specialists cycle only from size 5', () => {
+  it('specialists cycle from size 5, and below it return to entertaining', () => {
     const c = city({ specialists: { entertainers: 1, taxCollectors: 0, scientists: 0 } });
     expect(cycleSpecialist(c, 0)).toBe(true);
     expect(c.specialists.taxCollectors).toBe(1);
-    expect(cycleSpecialist(city({ size: 4 }), 0)).toBe(false);
+    const small = city({
+      size: 4,
+      specialists: { entertainers: 1, taxCollectors: 1, scientists: 0 },
+    });
+    expect(cycleSpecialist(small, 0)).toBe(false);
+    expect(cycleSpecialist(small, 1)).toBe(true);
+    expect(small.specialists.entertainers).toBe(2);
   });
 });

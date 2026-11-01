@@ -208,5 +208,6 @@ Fallout on the nine squares: a city loses `size >> 1` citizens. Land outside cit
 fortress, and at even odds each of railroad, mine and irrigation, and takes pollution two times in
 three. Everyone's memory of the square is refreshed.
 
-A computer player that detonates follows up with paratroopers and an advance on the target
-(0x0052cfed). This is not ported.
+A computer player that detonates follows up (0x0052cfed): one paratrooper in a city within range
+drops on the target, and land attackers within six squares on the same land mass, its own or a
+non-human ally's, get a go-to there.

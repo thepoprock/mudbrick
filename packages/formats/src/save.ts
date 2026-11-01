@@ -175,6 +175,10 @@ export interface UnitRecord {
   position: Point | null;
   hasMoved: boolean;
   veteran: boolean;
+  /** Flag 0x8000: on automatic. */
+  automated: boolean;
+  /** Flag 0x20: warned off a computer player's territory (0x0050edb0). */
+  warned: boolean;
   waiting: boolean;
   type: number;
   owner: Slot;
@@ -201,6 +205,8 @@ export interface CityRecord {
   wonderCity: boolean;
   weLoveTheKingDay: boolean;
   improvementSoldThisTurn: boolean;
+  /** Byte 6 bit 0: used for an airlift this turn (VERIFIED 0x0049d26b). */
+  airlifted: boolean;
   stolenTech: boolean;
   canBuildCoastal: boolean;
   canBuildHydro: boolean;
@@ -711,6 +717,8 @@ export function parseSave(bytes: Uint8Array): SaveFile {
       hasMoved: r.bit(o + 4, 6),
       veteran: r.bit(o + 5, 5),
       waiting: r.bit(o + 5, 6),
+      automated: r.bit(o + 5, 7),
+      warned: r.bit(o + 4, 5),
       type: r.u8(o + 6),
       owner: r.u8(o + 7),
       movesSpent: r.u8(o + 8),
@@ -748,6 +756,7 @@ export function parseSave(bytes: Uint8Array): SaveFile {
       wonderCity: r.bit(o + 5, 0),
       weLoveTheKingDay: r.bit(o + 4, 1),
       improvementSoldThisTurn: r.bit(o + 4, 2),
+      airlifted: r.bit(o + 6, 0),
       stolenTech: r.bit(o + 4, 3),
       autoBuildMilitary: r.bit(o + 7, 0),
       autoBuildDomestic: r.bit(o + 7, 1),

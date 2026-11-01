@@ -133,6 +133,7 @@ export function worldFromSave(save: SaveFile, rules: Rules): World {
       inDisorder: c.civilDisorder,
       celebrating: c.weLoveTheKingDay,
       soldThisTurn: c.improvementSoldThisTurn,
+      airlifted: c.airlifted,
       ...(typeof c.founder === 'number' ? { previousOwner: c.founder } : {}),
       ...(c.objectiveX1 ? { objective: true } : {}),
       ...(c.wonderCity ? { wonderCity: true } : {}),
@@ -154,6 +155,8 @@ export function worldFromSave(save: SaveFile, rules: Rules): World {
       owner: u.owner,
       type: u.type,
       veteran: u.veteran,
+      automated: u.automated,
+      warned: u.warned,
       hitPointsLost: u.hitPointsLost,
       movesSpent: u.movesSpent,
       // The save stores RULES @ORDERS index + 1, 0xFF for none (VERIFIED in the executable).

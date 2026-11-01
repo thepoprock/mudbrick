@@ -29,6 +29,7 @@ import type { Rng } from './rng.js';
 import { DOMAIN_AIR, DOMAIN_GROUND, IMPROVEMENT, type EngineRules, DOMAIN_SEA } from './rules.js';
 import { ORDER } from './terraform.js';
 import { workerRules } from './aiTerraform.js';
+import { nuclearFollowUp } from './nuclear.js';
 import { applyShipDecision, transportDecision } from './aiShips.js';
 import { airDecision, applyAirDecision } from './aiAir.js';
 import {
@@ -565,6 +566,15 @@ function act(
       attackerMovesLeft: movesLeft(rules, unit, ctx),
       ...(ctx.onUnitKilled ? { onUnitKilled: ctx.onUnitKilled } : {}),
     });
+    if (ev.kind === 'nuclear' && !ev.blast.stoppedBy)
+      nuclearFollowUp(
+        world,
+        rules,
+        unit.owner,
+        c.to.x,
+        c.to.y,
+        (s) => ctx.isAlly?.(s) === true && ctx.isHuman?.(s) !== true,
+      );
     if (ev.kind === 'fought') {
       events.push({
         kind: 'ai-unit',

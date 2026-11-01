@@ -222,6 +222,8 @@ export interface Unit {
   veteran: boolean;
   hitPointsLost: number;
   movesSpent: number;
+  /** Dropped by parachute this turn; cleared with `moved` (unit flag 0x10). */
+  dropped?: boolean;
   /** On automatic: the computer moves it (order `k`). */
   automated?: boolean;
   /** Warned off a computer player's territory (unit flag 0x20). */

@@ -206,6 +206,7 @@ export function beginUnitTurn(
   const healed = healUnit(world, rules, unit);
   if (healed) out.push(healed);
   unit.moved = false;
+  unit.dropped = false;
   unit.movesSpent = 0;
   const fuel = checkFuel(world, rules, unit);
   if (fuel) {

@@ -17,6 +17,7 @@ import {
   shieldTotals,
   tradeSplit,
   unitSupport,
+  workerStatus,
   type CityContext,
   corruption,
   assignWorkers,
@@ -113,6 +114,7 @@ import {
 } from './events.js';
 import { inEnemyZoc } from './movement.js';
 import { payUpkeep, type UpkeepEvent } from './upkeep.js';
+import { citySquareClick } from './humanOrders.js';
 import { history, type HistoryEvent } from './reports.js';
 import { advanceEffects, leonardoUpgrades, type AdvanceEvent } from './advances.js';
 import {
@@ -364,6 +366,25 @@ export class Game {
   private settleQuietly(talk: Conversation): void {
     let step = talk.next();
     while (!step.done) step = talk.next(0);
+  }
+
+  /** A click on a square of the city map (0x004c8b01), then the placement again. */
+  clickCitySquare(city: City, square: number): boolean {
+    const ctx = this.cityContext(city);
+    const civ = this.civ(city.owner);
+    const blocked =
+      (workerStatus(this.world, this.rules, city, {
+        turn: this.state.turn,
+        isHuman: civ.isHuman,
+        inCityTurn: false,
+        settlers: 0,
+        support: 0,
+        isAlly: (a, b) => hasTreaty(this.world, a, b, TREATY.alliance),
+        isHumanSlot: (s) => this.world.civs.find((c) => c.slot === s)?.isHuman ?? false,
+      })[square] ?? 0) !== 0;
+    const changed = citySquareClick(city, square, blocked);
+    if (changed) this.ensureWorkers(city, ctx);
+    return changed;
   }
 
   /** Leonardo's Workshop's sweep over a civilization's units (0x00492c44). */

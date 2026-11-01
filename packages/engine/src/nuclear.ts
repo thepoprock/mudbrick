@@ -4,7 +4,8 @@
 import { gridDistance } from './city.js';
 import { adjustAttitude, civOf, treatiesOf, TREATY } from './diplomacy.js';
 import type { Rng } from './rng.js';
-import { IMPROVEMENT } from './rules.js';
+import { orderGoTo } from './orders.js';
+import { IMPROVEMENT, type EngineRules } from './rules.js';
 import { SquareFlag, type City, type Unit, type World } from './world.js';
 
 /** An attack of 99 or more is a nuclear weapon. */
@@ -82,4 +83,41 @@ export function nuclearStrike(
   }
   for (const u of killed) world.units.splice(world.units.indexOf(u), 1);
   return { stoppedBy: null, killed, cities: fallout(world, rng, x, y) };
+}
+
+/**
+ * A computer player follows its strike (VERIFIED 0x0052cfed): a paratrooper in a city within range
+ * drops on the square when it can, and every land attacker within six squares on the same land
+ * mass, its own or a non-human ally's, heads for it.
+ */
+export function nuclearFollowUp(
+  world: World,
+  rules: EngineRules,
+  attacker: number,
+  x: number,
+  y: number,
+  isAlliedComputer: (slot: number) => boolean,
+): void {
+  const range = rules.cosmic.maxParadropRange ?? 0;
+  const mass = world.landmass[world.index(x, y)];
+  for (const u of world.units) {
+    const t = rules.units[u.type];
+    if (u.owner !== attacker || !t?.flags.canParadrop || !world.cityAt(u.position.x, u.position.y))
+      continue;
+    if (u.movesSpent !== 0 || u.dropped || gridDistance(world, u.position, { x, y }) > range)
+      continue;
+    if (!world.isLand(x, y) || world.unitsAt(x, y).some((o) => o.owner !== attacker)) break;
+    u.position = { x, y };
+    u.dropped = true;
+    break;
+  }
+  for (const u of world.units) {
+    const t = rules.units[u.type];
+    if (!t || t.domain !== 0 || t.attack === 0) continue;
+    if (u.owner !== attacker && !isAlliedComputer(u.owner)) continue;
+    if (t.role === 1 && world.cityAt(u.position.x, u.position.y)) continue;
+    if (gridDistance(world, u.position, { x, y }) >= 7) continue;
+    if (world.landmass[world.index(u.position.x, u.position.y)] !== mass) continue;
+    orderGoTo(u, { x, y });
+  }
 }

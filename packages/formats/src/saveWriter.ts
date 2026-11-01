@@ -37,6 +37,8 @@ export interface UnitWrite {
   veteran: boolean;
   hasMoved: boolean;
   waiting?: boolean;
+  automated?: boolean;
+  warned?: boolean;
   movesSpent: number;
   hitPointsLost: number;
   lastMoveDirection: number | null;
@@ -72,6 +74,8 @@ export interface CityWrite {
   improvements: boolean[];
   production: { kind: 'unit' | 'improvement'; index: number };
   civilDisorder: boolean;
+  soldThisTurn?: boolean;
+  airlifted?: boolean;
   weLoveTheKingDay: boolean;
   /** Scenario objective city (byte 7 bit 2). */
   objective?: boolean;
@@ -114,6 +118,8 @@ export interface CivWrite {
   reputation?: number;
   /** Sets or clears byte 0 bit 4. */
   eiffelApplied?: boolean;
+  everAllied?: boolean;
+  everExchanged?: boolean;
   patience?: number;
   talks?: number;
   pardons?: number[];
@@ -323,6 +329,8 @@ export function writeSave(original: Uint8Array, save: SaveFile, patch: SavePatch
     if (c.treaties) for (let n = 0; n < 8; n++) w.i32(b + 32 + 4 * n, (c.treaties[n] ?? 0) | 0);
     if (c.attitudes) for (let n = 0; n < 8; n++) w.u8(b + 64 + n, c.attitudes[n] ?? 0);
     if (c.reputation !== undefined) w.u8(b + 30, c.reputation);
+    if (c.everExchanged !== undefined) w.bit(b, 7, c.everExchanged);
+    if (c.everAllied !== undefined) w.bit(b + 1, 0, c.everAllied);
     if (c.eiffelApplied !== undefined) {
       const old = w.bytes[b] ?? 0;
       w.u8(b, c.eiffelApplied ? old | 0x10 : old & ~0x10);
@@ -378,6 +386,8 @@ export function writeSave(original: Uint8Array, save: SaveFile, patch: SavePatch
     w.bit(b + 4, 6, u.hasMoved);
     w.bit(b + 5, 5, u.veteran);
     if (u.waiting !== undefined) w.bit(b + 5, 6, u.waiting);
+    if (u.automated !== undefined) w.bit(b + 5, 7, u.automated);
+    if (u.warned !== undefined) w.bit(b + 4, 5, u.warned);
     w.u8(b + 6, u.type);
     w.u8(b + 7, u.owner);
     w.u8(b + 8, u.movesSpent);
@@ -438,6 +448,8 @@ export function writeSave(original: Uint8Array, save: SaveFile, patch: SavePatch
     w.bit(b + 4, 1, c.weLoveTheKingDay);
     if (c.objective) w.bit(b + 7, 2, true);
     if (c.wonderCity !== undefined) w.bit(b + 5, 0, c.wonderCity);
+    if (c.soldThisTurn !== undefined) w.bit(b + 4, 2, c.soldThisTurn);
+    if (c.airlifted !== undefined) w.bit(b + 6, 0, c.airlifted);
     if (c.routes) {
       w.u8(b + 58, Math.min(3, c.routes.length));
       for (let i = 0; i < 3; i++) {

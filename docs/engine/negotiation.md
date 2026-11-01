@@ -107,8 +107,9 @@ party may turn on H (MERCBETRAY). Maps need Map Making on both sides and `mood` 
 Gifts raise attitude and take `talks` back down. An advance counts 4 × its value, or 2 × for the
 second; gold counts 1.5 × `goldGoodwill` (0x00444fba).
 
-Not ported: the gift of a military unit, which needs a garrison picker in the UI (MILITARYNONE
-stands in), and the BREAKTHROUGH chance that goes with it.
+A military unit goes to C's nearest city, unless C dislikes H or has more advances, rank or power.
+It counts `cost rows × 3` attitude, half if C knows its prerequisite. If C does not, the first
+advance C lacks in that tree may come with it (BREAKTHROUGH, even odds).
 
 ## A computer player's turn toward a human (0x00513f7e, 0x0050edb0)
 

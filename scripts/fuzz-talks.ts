@@ -47,6 +47,7 @@ for (const file of rest) {
         const count = gap < 0 ? 1 : lines.slice(gap + 1).filter((l) => l !== '').length;
         let answer = dice.nextInt(Math.max(1, count));
         if (d.offer) answer = d.offer[dice.nextInt(d.offer.length)] ?? 0;
+        if (d.pick) answer = d.pick[dice.nextInt(d.pick.length)]?.value ?? -1;
         if (d.civs) answer = d.civs[dice.nextInt(d.civs.length + 1)] ?? 0;
         if (d.amounts) answer = d.amounts[dice.nextInt(d.amounts.length + 1)] ?? 0;
         step = talk.next(answer);

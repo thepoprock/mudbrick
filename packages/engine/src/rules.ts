@@ -53,6 +53,8 @@ export interface UnitFlagsRule {
   doubleDefenceVsHorse: boolean;
   doubleDefenceVsAir: boolean;
   submarine: boolean;
+  /** Paratroopers (RULES flag bit 8). */
+  canParadrop?: boolean;
   canAttackAir: boolean;
   destroyedAfterAttack: boolean;
   freeSupportUnderFundamentalism: boolean;
@@ -131,6 +133,8 @@ export interface CosmicRule {
   unhappinessCitySizeChieftain: number;
   riotFactor: number;
   aqueductSize: number;
+  /** Squares a paratrooper drops. */
+  maxParadropRange?: number;
   sewerSize: number;
   monarchyFreeUnits: number;
   communismFreeUnits: number;

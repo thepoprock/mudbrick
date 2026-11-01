@@ -18,13 +18,15 @@ the city turn). Never the Palace.
 
 **Airlift** (0x005373fc, 0x0049d26b). Land units only, from a city with an Airport to another of
 yours, one airlift per city per turn, at either end. Enemy fighters in range of either city may
-shoot it down: each counts 1, or 2 if veteran, and on a warning the unit dies one time in six. This
-fighter check is not ported. INFERRED that the flag clears each turn.
+shoot it down: each counts 1, or 2 if veteran, and each point is a one-in-six chance of losing the
+unit, after the ENEMYFIGHTERS warning. INFERRED that the flag clears each turn.
 
 **Paradrop** (0x00536a8b, 0x0049d43c). The unit must not have moved, and must start in a city or
 at an airbase. The target must be land, free of enemy units, within @COSMIC's range by the grid
-measure. Capture on landing and the check against treaties are not ported.
+measure. Moves are not spent, but flag 0x10 stops a second drop that turn. Landing in an empty
+enemy city captures it, after the treaty prompt (0x00527010) if one stands.
 
-**Workers** INFERRED: the click handler in the city window was not found. A worked square freed
-becomes an entertainer; a free square takes a specialist back. Specialists other than entertainers
-need size 5.
+**Workers** (0x004c8b01). The centre clears all workers and specialists and the placement runs
+again. A worked square becomes a specialist. A free square, if not blocked, takes a specialist
+back, or with none starts over. A click on a specialist (0x004c8059) cycles entertainer, tax
+collector, scientist; below size 5 only entertainers exist, and the ELVISERR text says so.

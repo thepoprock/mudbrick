@@ -9,7 +9,7 @@
  * Specification: docs/engine/negotiation.md. VERIFIED from those routines unless marked. The
  * scenario-only branches and the multiplayer messages are not ported.
  */
-import { IMPROVEMENT, type EngineRules } from './rules.js';
+import { advanceIndex, IMPROVEMENT, type EngineRules } from './rules.js';
 import {
   adjustAttitude,
   attitude,
@@ -73,6 +73,10 @@ export interface Dialog {
   amounts?: number[];
   /** Civilizations to pick from, for MUSTATTACK. */
   civs?: number[];
+  /** Replaces the section's own text. */
+  title?: string;
+  /** A list to pick from: the answer is the entry's `value`, or −1 to cancel. */
+  pick?: { label: string; value: number }[];
 }
 
 /** One answer per dialog. */
@@ -1799,6 +1803,16 @@ function* favours(t: Talk): Generator<Dialog, void, number> {
   }
 }
 
+/** Is `target` in `advance`'s prerequisite tree (0x00492025)? */
+function leadsTo(env: NegotiationEnv, advance: number | null, target: number): boolean {
+  if (advance === null) return false;
+  if (advance === target) return true;
+  const r = env.rules.advances[advance];
+  return (
+    leadsTo(env, advanceIndex(r?.preq1), target) || leadsTo(env, advanceIndex(r?.preq2), target)
+  );
+}
+
 /** "Wish to offer you a gift" (0x00448bf8). */
 function* gifts(t: Talk): Generator<Dialog, void, number> {
   const { env, h, c, hs, cs } = t;
@@ -1862,9 +1876,82 @@ function* gifts(t: Talk): Generator<Dialog, void, number> {
     return;
   }
   if (pick === 3) {
-    // Giving a unit needs a pick from a city's garrison: the UI does not offer it yet.
-    yield { key: 'MILITARYNONE' };
-    t.talks -= 1;
+    const cities = env.world.cities.filter((x) => x.owner === hs);
+    if (cities.length === 0) {
+      yield { key: 'MILITARYNONE' };
+      t.talks -= 1;
+      return;
+    }
+    const pickCity = yield {
+      key: 'MILITARYSOURCE',
+      pick: cities.map((x) => ({ label: x.name, value: x.id })),
+    };
+    const from = cities.find((x) => x.id === pickCity);
+    if (!from) {
+      t.talks -= 1;
+      return;
+    }
+    const here = env.world.unitsAt(from.position.x, from.position.y);
+    if (here.length === 0) {
+      yield { key: 'MILITARYNONE' };
+      t.talks -= 1;
+      return;
+    }
+    const nearest = env.world.cities
+      .filter((x) => x.owner === cs)
+      .sort(
+        (a2, b) =>
+          gridDistance(env.world, from.position, a2.position) -
+          gridDistance(env.world, from.position, b.position),
+      )[0];
+    if (
+      !nearest ||
+      attitudeBand(a.mood) > 4 ||
+      h.advancesCount < c.advancesCount ||
+      t.rankOf(hs) < t.rankOf(cs) ||
+      env.power(hs) < env.power(cs)
+    ) {
+      yield { key: 'MILITARYNO', strings: { 1: c.name } };
+      return;
+    }
+    const pickUnit = yield {
+      key: 'MILITARYSOURCE',
+      title: 'Select the unit to give',
+      pick: here.map((u) => ({ label: env.rules.units[u.type]?.name ?? '?', value: u.id })),
+    };
+    const unit = here.find((u) => u.id === pickUnit);
+    if (!unit) {
+      t.talks -= 1;
+      return;
+    }
+    const type = env.rules.units[unit.type];
+    const closing = advanceIndex(type?.obsoleteWith);
+    if (closing !== null && env.knows(cs, closing)) {
+      yield { key: 'MILITARYNO', strings: { 1: c.name } };
+      return;
+    }
+    unit.owner = cs;
+    unit.homeCity = null;
+    unit.position = { x: nearest.position.x, y: nearest.position.y };
+    unit.order = null;
+    let goodwill = (type?.costRows ?? 0) * 3;
+    const preq = advanceIndex(type?.preq);
+    if (preq !== null && env.knows(cs, preq)) goodwill = Math.trunc(goodwill / 2);
+    t.warm(-goodwill);
+    yield { key: 'ACCEPT', strings: { 1: c.name } };
+    if (preq !== null && !env.knows(cs, preq)) {
+      let found = -1;
+      for (let i = 0; i < 100; i++) {
+        if (!env.knows(cs, i) && leadsTo(env, preq, i)) {
+          found = i;
+          break;
+        }
+      }
+      if (found > 0 && env.rng.nextInt(2) === 0) {
+        yield { key: 'BREAKTHROUGH', strings: { 1: c.name } };
+        env.gain(c, found, hs);
+      }
+    }
   }
 }
 
