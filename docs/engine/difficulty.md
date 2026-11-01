@@ -21,13 +21,10 @@ port that drops one changes how hard the game is, so check here before changing 
 | Levels 0 and 1: no wonder before a human knows its advance, and none a human city is building | 0x00474edb | `aiChooseProduction`  |
 | Any level: a civilization holding Rocketry alone leaves all wonders but the Manhattan Project | 0x00474edb | `aiChooseProduction`  |
 | Level 0: a size 1 city never finishes Settlers                                                | 0x004b7e74 | `processProduction`   |
-| Level 0: spaceship and full land mass bonuses off                                             | 0x00474edb | see note              |
+| Level 0: no spaceship pressure, and no spaceship priority                                     | 0x00474edb | see note              |
 | Level 2 and above: Diplomats and Spies valued higher under space race pressure                | 0x00474edb | `aiChooseProduction`  |
 | Wonder made obsolete: `value × 3 + level × 50`                                                | 0x00474edb | `aiChooseProduction`  |
 | Barracks and Courthouse priority for humans' auto-build                                       | 0x00474edb | `improvementPriority` |
-
-Note: the spaceship adjustments at 0x00474edb lines around the `case 0x23` branch are ported only
-in part: the base of 4 or 2 is there, the level-dependent reduction and the shield tests are not.
 
 ## Combat
 

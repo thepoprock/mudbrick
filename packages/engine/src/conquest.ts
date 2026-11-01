@@ -156,15 +156,18 @@ export function captureCity(
         continue;
       }
       const standingIn = world.cityAt(u.position.x, u.position.y);
-      if (
-        standingIn &&
-        standingIn.owner === loser.slot &&
-        standingIn !== city &&
-        rules.units[u.type]?.role === 1
-      ) {
-        u.homeCity = standingIn.id;
-        rehomed.push(u);
-        continue;
+      // VERIFIED 0x00528720: only a computer's lone defender in another of its cities stays, homed
+      // there; any other unit of a computer's that dies in such a city leaves the city alarmed.
+      if (!loser.isHuman && standingIn && standingIn.owner === loser.slot && standingIn !== city) {
+        const defenders = world
+          .unitsAt(standingIn.position.x, standingIn.position.y)
+          .filter((x) => rules.units[x.type]?.role === 1).length;
+        if (rules.units[u.type]?.role === 1 && defenders === 1) {
+          u.homeCity = standingIn.id;
+          rehomed.push(u);
+          continue;
+        }
+        standingIn.attacked = true;
       }
       world.units.splice(world.units.indexOf(u), 1);
       disbanded.push(u);

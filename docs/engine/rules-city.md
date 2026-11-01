@@ -424,8 +424,7 @@ again. Then it spends a share of treasury `t`, applied in this order, each repla
 Above 2000 gold it adds `t >> 9`, and the share stops at what the box still needs. Shields rise by
 the share. The treasury pays the share less a refund of `difficulty × share / 10 / (8 − r)`, with `r`
 the highest human power rank; the refund halves when the civilization is richer than the main human
-and has 1000 gold, and vanishes at 2000. Not traced: the flag is also raised on cities receiving
-units displaced by a conquest (0x00528720).
+and has 1000 gold, and vanishes at 2000.
 
 ## The computer's choice of units (VERIFIED 0x00474edb)
 

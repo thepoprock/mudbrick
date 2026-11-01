@@ -557,18 +557,57 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
       if (imp !== 35) continue;
       if (env.wonderCity(IMPROVEMENT.apolloProgram) === null || hasLaunched(civ)) continue;
       if ((env.nextShipKind?.(0) ?? 0) < 0) continue;
-      const humanShip = world.civs.some((c) => c.isHuman && hasStarted(c));
-      consider(
-        scaleCommon(
-          humanShip ? 2 : 4,
-          f.expanding,
-          f.civilize,
-          city,
-          barracksOnContinent,
-          shakespeares,
-        ),
-        { kind: 'improvement', index: imp },
+      // VERIFIED 0x00474edb, case 0x23: worth 4, or 2 once a human has a ship. Under race pressure
+      // above Chieftain it is worth less still; and when no other city is on it, or the human is
+      // ahead, a productive city puts it before everything else.
+      const humans = world.civs.filter((c) => c.isHuman && c.slot !== 0);
+      const humanLaunched = humans.some((c) => hasLaunched(c));
+      let v = humans.some((c) => hasStarted(c)) ? 2 : 4;
+      const landFlagHere = civ.strategy?.landFlags[mass] ?? 0;
+      let favoured = f.plan !== 0 && (landFlagHere & 0x10) === 0 ? true : !f.expanding;
+      const race = f.spaceRace ?? 0;
+      if (race > 1 && f.difficulty !== 0) {
+        v -= humanLaunched ? 2 : 1;
+        if (urgent === 0) favoured = true;
+      }
+      const isPart = (c: City) =>
+        c.production.kind === 'improvement' && c.production.index > 34 && c.production.index < 38;
+      const others = myCities.filter((c) => c !== city && isPart(c)).length;
+      const humanParts = world.cities.filter(
+        (c) => c !== city && isPart(c) && humans.some((h) => h.slot === c.owner),
+      ).length;
+      const shipValue = (c: Civ) => {
+        let n = 0;
+        const parts = c.spaceship?.parts;
+        for (let i = 0; i < 6; i++) {
+          const kind = Math.min(2, (i + 1) >> 1);
+          n += (parts?.[i] ?? 0) * (rules.improvements[35 + kind]?.costRows ?? 0);
+        }
+        return n;
+      };
+      const top = humans.reduce(
+        (b, h) =>
+          (env.foreign?.rankOf?.(h.slot) ?? 0) > (env.foreign?.rankOf?.(b?.slot ?? 0) ?? -1)
+            ? h
+            : b,
+        humans[0],
       );
+      const net = f.shields * 2 - f.support;
+      if (
+        (others === 0 ||
+          (others <= humanParts && (!top || shipValue(civ) <= shipValue(top))) ||
+          humanLaunched) &&
+        !city.inDisorder &&
+        f.difficulty !== 0 &&
+        ((f.bestProduction ?? 0) >> 1 <= net || net > 19)
+      ) {
+        best = NEVER * 100;
+        pick = null;
+      }
+      consider(scaleCommon(v, favoured, f.civilize, city, barracksOnContinent, shakespeares), {
+        kind: 'improvement',
+        index: imp,
+      });
       continue;
     }
     const r = improvementPriority(imp, city, f, {

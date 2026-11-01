@@ -8,6 +8,7 @@
  * interim approximations until the objective and plan machinery is ported.
  */
 import { landmassStats } from './aiStrategy.js';
+import { fertilityAt } from './fertility.js';
 import { addGoal, addObjective, removeGoals, type CivStrategy } from './aiStrategy.js';
 import { resolveAttack } from './attack.js';
 import { captureCity } from './conquest.js';
@@ -1156,6 +1157,29 @@ function settlersAct(
   const nearestDist = nearestAny ? distance(world, here, nearestAny.position) : 99;
   const nearestOwn = nearestCity(world, here, (c) => c.owner === me);
   const ownDist = nearestOwn ? distance(world, here, nearestOwn.position) : 99;
+  // VERIFIED 0x004f44cc: above Chieftain, a backward civilization's settler in rich land near a
+  // human's city claims it at once rather than be crowded out.
+  const rival = nearestAny ? world.civs.find((c) => c.slot === nearestAny.owner) : undefined;
+  if (
+    ctx.difficulty !== 0 &&
+    rival?.isHuman &&
+    nearestDist > 1 &&
+    ctx.civ.advancesCount < rival.advancesCount &&
+    !world.neighbours(here.x, here.y).some((n) => {
+      const u = n && world.unitsAt(n.x, n.y)[0];
+      return !!u && u.owner !== me;
+    })
+  ) {
+    const rich = fertilityAt(world, rules, here.x, here.y);
+    if (rich > 8 && 14 - nearestDist <= rich) {
+      const verdict = canFoundCity(world, rules, unit);
+      if (verdict.ok && verdict.joins === null) {
+        const city = foundCity(world, rules, ctx.civ, unit, { name: ctx.nextCityName() });
+        events.push({ kind: 'ai-unit', text: `founds ${city.name}` });
+        return false;
+      }
+    }
+  }
   // VERIFIED (the handler's setup): more than eight squares from the nearest own city, or on
   // another land mass, a computer settler stops being a "wanted" worker for this move.
   if (
