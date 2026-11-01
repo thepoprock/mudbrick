@@ -10,7 +10,7 @@
  * scenario-only branches and the multiplayer messages are not ported.
  */
 import { senateBlocks } from './diplomacy.js';
-import { advanceIndex, IMPROVEMENT, type EngineRules } from './rules.js';
+import { ADVANCE, advanceIndex, IMPROVEMENT, type EngineRules } from './rules.js';
 import {
   adjustAttitude,
   attitude,
@@ -847,8 +847,27 @@ export function* conversation(
   if (!calledByHuman) t.talks = 0;
   t.assess();
   t.firstPass = false;
+  const hadCease = (t.cw & TREATY.ceaseFire) !== 0;
   yield* talk(t);
   finish(t);
+  if (
+    hadCease &&
+    (t.cw & TREATY.ceaseFire) === 0 &&
+    (t.hw & (TREATY.war | TREATY.peace | TREATY.alliance)) === 0
+  )
+    yield { key: 'CEASEEXPIRE', strings: { 1: t.c.name } };
+  // On the easiest level, a civilization with Writing swaps ambassadors unasked.
+  if (
+    env.difficulty === 0 &&
+    (t.cw & TREATY.war) === 0 &&
+    (t.hw & TREATY.embassy) === 0 &&
+    !env.ownsWonder(human, IMPROVEMENT.unitedNations) &&
+    !env.ownsWonder(human, IMPROVEMENT.marcoPolo) &&
+    env.knows(computer, ADVANCE.writing)
+  ) {
+    treatiesOf(t.h)[computer] = t.hw | TREATY.embassy;
+    yield { key: 'AMBASSADORS', strings: { 1: t.name(t.c) } };
+  }
 }
 
 function* talk(t: Talk): Generator<Dialog, void, number> {
@@ -1238,10 +1257,80 @@ function* talk(t: Talk): Generator<Dialog, void, number> {
     if ((!t.met || t.refused) && !calledByHuman) {
       if (!a.betrayal) yield* autoTerms(t);
     } else {
-      if (!spoke || resolved || a.tribute !== NO_DEAL) yield greeting(t, calledByHuman, resolved);
+      if (spoke) {
+        if ((t.cw & (TREATY.vendetta | TREATY.grudge)) === 0 || !calledByHuman) yield* notoriety(t);
+      } else yield greeting(t, calledByHuman, resolved);
+      yield* warnings(t);
       yield* menuLoop(t);
     }
   }
+}
+
+/** Word of the human's betrayals travels: the worst unpardoned one is raised once (0x00449c70). */
+function* notoriety(t: Talk): Generator<Dialog, void, number> {
+  const { env, h, hs, cs } = t;
+  let third = -1;
+  let lowest = -1;
+  for (let s = 1; s < 8; s++) {
+    if (s === hs || s === cs || (t.word(t.c, s) & TREATY.war) !== 0) continue;
+    const p = h.pardons?.[s] ?? 0;
+    if (p <= lowest) {
+      third = s;
+      lowest = p;
+    }
+  }
+  if (third < 0) return;
+  h.pardons ??= new Int8Array(8);
+  h.pardons[third] = (h.pardons[third] ?? 0) + 1;
+  const size = env.power(hs) < env.power(cs) ? 'BIG' : 'SMALL';
+  const other = civOf(env.world, third);
+  yield { key: `NOTORIOUS${size}`, strings: { 1: other ? t.name(other) : '' } };
+}
+
+/** What the emissary adds before the menu: troops near a city, an ally's war (0x00449c70). */
+function* warnings(t: Talk): Generator<Dialog, void, number> {
+  const { env, c, hs, cs } = t;
+  if ((t.cw & (TREATY.peace | TREATY.alliance)) === 0) {
+    const seen = scanIntrusions(env, cs, hs);
+    if (seen.units !== 0 && seen.city) {
+      const key = seen.city.id < 2 ? 'PLEASECITY' : 'PLEASECITIES'; // the original tests the index
+      yield { key, strings: { 1: seen.city.name, 2: t.name(t.h) } };
+    }
+  }
+  if ((t.hw & TREATY.alliance) === 0) return;
+  let strongest = -1;
+  let weakest = -1;
+  let top = 0;
+  let least = 9999;
+  for (let s = 1; s < 8; s++) {
+    if (s === cs || s === hs) continue;
+    if ((t.word(c, s) & (TREATY.war | TREATY.attacked)) !== (TREATY.war | TREATY.attacked))
+      continue;
+    const p = env.power(s);
+    if (top < p) {
+      top = p;
+      strongest = s;
+    }
+    if (p < least) {
+      least = p;
+      weakest = s;
+    }
+  }
+  const pressed = (attacker: number, defender: number) => {
+    const a = civOf(env.world, attacker)?.strategy;
+    const d = civOf(env.world, defender)?.strategy;
+    if (!a || !d) return false;
+    const floor = t.citiesOf(defender) > 1 ? 1 : 0;
+    for (let m = 1; m < 63; m++)
+      if (floor < (d.citiesOn[m] ?? 0) && (d.unitsOn[m] ?? 0) < (a.attackOn[m] ?? 0)) return true;
+    return false;
+  };
+  const foe = (s: number) => {
+    const civ = civOf(env.world, s);
+    return { 1: civ ? t.name(civ) : '' };
+  };
+  if (strongest > 0 && pressed(strongest, cs)) yield { key: 'ALLYPLEA', strings: foe(strongest) };
+  else if (weakest > 0 && pressed(cs, weakest)) yield { key: 'ALLYBRAG', strings: foe(weakest) };
 }
 
 /** An emissary turned away: the human's senate settles it (end of 0x00449c70). */

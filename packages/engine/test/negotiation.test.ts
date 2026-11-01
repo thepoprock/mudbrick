@@ -94,6 +94,21 @@ describe('a conversation', () => {
     expect(keys).not.toContain('DIPLOMACYMENU');
   });
 
+  it('on the easiest level a civilization with Writing swaps ambassadors after the talk', () => {
+    const { w, h } = setup();
+    setTreaty(w, 1, 2, TREATY.contact);
+    const e = { ...env(w), difficulty: 0, knows: (_: number, a: number) => a === 88 };
+    const talk = conversation(e, 1, 2, false);
+    const keys: string[] = [];
+    let step = talk.next();
+    while (!step.done && keys.length < 60) {
+      keys.push(step.value.key);
+      step = talk.next(0);
+    }
+    expect(keys).toContain('AMBASSADORS');
+    expect((h.treaties?.[2] ?? 0) & TREATY.embassy).not.toBe(0);
+  });
+
   it('a human who calls and accepts peace gets a treaty on both sides', () => {
     const { w, h, c } = setup();
     setTreaty(w, 1, 2, TREATY.contact);

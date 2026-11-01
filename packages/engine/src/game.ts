@@ -789,6 +789,26 @@ export class Game {
     h.treasury += call.gold;
   }
 
+  /** The call as the emissary puts it (HELPME, HELPME2, the INSTEAD forms, CRUSADE, JIHAD). */
+  *helpTalk(call: HelpCall): Conversation {
+    const foe = this.civ(call.foe);
+    const ally = hasTreaty(this.world, call.human, call.foe, TREATY.alliance);
+    const tech = call.advance !== null ? this.rules.advances[call.advance]?.name : undefined;
+    const key =
+      call.kind === 'help'
+        ? `HELPME${ally ? 'INSTEAD' : ''}${tech ? '2' : ''}`
+        : ally
+          ? 'JIHAD'
+          : 'CRUSADE';
+    const answer = yield {
+      key,
+      strings: { 0: this.civ(call.computer).name, 1: foe.name, 2: tech ?? 'extend our' },
+      numbers: { 0: call.gold },
+      speaker: call.computer,
+    };
+    this.answerHelpCall(call, answer !== 0);
+  }
+
   /** A civilization's military strength, summed in the strategy pass (0x005d132e). */
   private civStrength(slot: number): number {
     return this.civ(slot).strategy?.strengthSum ?? 0;

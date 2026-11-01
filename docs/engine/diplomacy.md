@@ -227,3 +227,15 @@ if the human has no embassy with the caller, no Marco Polo and no United Nations
 gets it too. A weaker computer with either side outside the top two ranks asks for the alliance
 alone. Accepting allies the two, breaks any treaty with the foe, and declares war. Refusing delays
 further talks by moving the last contact turn to 14 turns ago at the least, 15 if no talk could open.
+
+## What an emissary adds (VERIFIED 0x00449c70)
+
+After a settled proposal, unless the caller holds a vendetta or grudge against a human who called,
+the emissary brings up a human betrayal: of the third civilizations it is not fighting, the one with
+the lowest pardon count at -1 or below has that count raised by one, and the message varies with
+relative strength. Otherwise it greets. Then, short of peace, it asks the human to withdraw from its
+cities (0x0050edb0); the singular form is chosen by the city's index below 2, an original quirk. An
+ally reports on the strongest and weakest foes that attacked it, by whether attackers outnumber
+defenders on a landmass where the side has cities. After the talk a lapsed cease-fire is announced,
+and on the easiest level a civilization with Writing exchanges ambassadors with a human lacking
+Marco Polo and the United Nations.

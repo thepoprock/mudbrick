@@ -264,6 +264,7 @@ export const IMPROVEMENT = {
 
 /** RULES @CIVILIZE indices the rules refer to by position (alphabetical in the shipped file). */
 export const ADVANCE = {
+  writing: 88,
   automobile: 5,
   fusionPower: 32,
   ceremonialBurial: 9,
