@@ -402,6 +402,7 @@ export class PlaySession {
       realisticCombat: this.game.state.realisticCombat,
       barbarianActivity: 1,
       attackerMovesLeft: movesLeft(this.rules, unit, this.moveCtx()),
+      onUnitKilled: (t, a, d) => this.game.unitKilled(t, a, d),
     });
     if (ev.kind === 'cannot-attack') {
       this.log('This unit cannot attack.');
@@ -472,6 +473,7 @@ export class PlaySession {
       conquest: true,
       guerillaWarfareDiscovered: (this.game.state.firstDiscoveredBy[34] ?? 0) !== 0,
       ...(this.game.state.forbidGovernmentChange ? { forbidGovernmentSwitching: true } : {}),
+      onCityTaken: (c, a, d) => this.game.cityTaken(c, a, d),
     });
     if (ev.cityDestroyed) {
       this.log(`${this.unitName(unit)} destroys the ${loser.adjective} city of ${city.name}.`);
@@ -654,6 +656,14 @@ export class PlaySession {
         return 'Choose what to research next.';
       case 'retirement':
         return ev.text;
+      case 'scenario-text':
+        return ev.lines.join(' ');
+      case 'scenario-sound':
+        return `(sound: ${ev.file})`;
+      case 'scenario-track':
+        return `(music: CD track ${ev.track})`;
+      case 'scenario-note':
+        return `Scenario: ${ev.text}.`;
       case 'disorder':
         return `Civil disorder in ${cityName}!`;
       case 'restored':

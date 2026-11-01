@@ -9,3 +9,4 @@ export * from './cityNames.js';
 export * from './descriptions.js';
 export * from './debugColours.js';
 export * as sprites from './sprites.js';
+export * from './events.js';

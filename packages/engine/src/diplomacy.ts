@@ -163,6 +163,8 @@ export function atPeace(world: World, a: number, b: number): boolean {
 }
 
 export interface DiplomacyContext {
+  /** Scenario events: may `talker` approach `listener` (NEGOTIATION)? Default yes. */
+  negotiationAllowed?: (talker: number, listener: number) => boolean;
   rules: EngineRules;
   turn: number;
   difficulty: number;
@@ -655,6 +657,9 @@ export function diplomacyTurn(
     if (j === slot) continue;
     t[j] = (t[j] ?? 0) & 0xff5fbfff; // first contact, war-this-turn and bit 23 lapse
     if (!ctx.inPlay(j) || human) continue;
+    // INFERRED placement: the original asks at the diplomacy screen; the engine asks before a
+    // computer player's review of the pair.
+    if (ctx.negotiationAllowed && !ctx.negotiationAllowed(slot, j)) continue;
     if (((t[j] ?? 0) & TREATY.strain) !== 0) {
       const rep = civOf(world, j)?.reputation ?? 0;
       const chance = Math.max(1, Math.min(3, 3 - (rep >> 2)));

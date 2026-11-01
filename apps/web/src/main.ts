@@ -14,6 +14,8 @@ import {
   toGameCoords,
   type MapFile,
   type SaveFile,
+  decodeText,
+  parseEvents,
 } from '@mudbrick/formats';
 import { installDevLoader } from './devLoader.js';
 import { gameFromSave } from './gameFromSave.js';
@@ -249,9 +251,46 @@ function startNewGame(): void {
   if (session.selected) session.centreOn(session.selected.position);
 }
 
-function startPlay(): void {
+/**
+ * A scenario's events: the EVENTS.TXT beside the picked .SCN/.SAV inside the game folder (the
+ * original reads it from the scenario's folder when the scenario loads), parsed with the save's
+ * civilization names and the rules' unit names, then SCENARIOLOADED runs.
+ */
+async function attachScenarioEvents(
+  game: Game,
+  loaded: SaveFile,
+  gameFolder: GameFolder,
+  name: string,
+): Promise<string[]> {
+  const upper = name.toUpperCase();
+  const hit = gameFolder.paths.find((p) => p === upper || p.endsWith('/' + upper));
+  if (hit === undefined) return [];
+  const dir = hit.includes('/') ? hit.slice(0, hit.lastIndexOf('/') + 1) : '';
+  const eventsPath = gameFolder.paths.find((p) => p === dir + 'EVENTS.TXT');
+  if (eventsPath === undefined) return [];
+  const blob = await gameFolder.file(eventsPath);
+  if (!blob) return [];
+  const text = decodeText(new Uint8Array(await blob.arrayBuffer()));
+  const tribes: (string | undefined)[] = ['Barbarians'];
+  for (const n of loaded.civNames) tribes[n.slot] = n.plural;
+  const parsed = parseEvents(text, { tribes, units: gameFolder.rules.units.map((u) => u.name) });
+  if (!parsed.ok) return [`${eventsPath}: rejected — ${parsed.error} (line ${parsed.line}).`];
+  game.loadEvents(parsed.events);
+  const lines = [`${parsed.events.length} scenario events loaded from ${eventsPath}.`];
+  for (const e of game.scenarioLoaded()) {
+    const ev = e.event;
+    if (ev.kind === 'scenario-text') lines.push(ev.lines.join(' '));
+    else if (ev.kind === 'scenario-track') lines.push(`(music: CD track ${ev.track})`);
+    else if (ev.kind === 'scenario-sound') lines.push(`(sound: ${ev.file})`);
+    else if (ev.kind === 'scenario-note') lines.push(`Scenario: ${ev.text}.`);
+  }
+  return lines;
+}
+
+async function startPlay(): Promise<void> {
   if (!save || !world || !folder) return;
   const game = gameFromSave(save, folder.rules, world);
+  const eventLines = await attachScenarioEvents(game, save, folder, sourceName);
   const human =
     world.civs.find((c) => c.isHuman && c.slot !== 0) ??
     world.civs.find((c) => c.slot === save?.parameters.humanSlot);
@@ -273,6 +312,7 @@ function startPlay(): void {
     },
     renderOptions,
   );
+  for (const line of eventLines) session.log(line);
   redraw();
   if (session.selected) session.centreOn(session.selected.position);
 }

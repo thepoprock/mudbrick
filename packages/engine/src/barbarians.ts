@@ -79,6 +79,8 @@ const ROLE_DEFEND = 1;
 const ROLE_LEADER = 6;
 
 export interface BarbarianContext extends MovementContext {
+  /** Scenario events: UNITKILLED. */
+  onUnitKilled?: (type: number, attacker: number, defender: number) => void;
   rng: Rng;
   turn: number;
   /** Game year, for the ransom rule. */
@@ -750,6 +752,7 @@ function attackSquare(
     realisticCombat: ctx.realisticCombat,
     barbarianActivity: ctx.activity,
     attackerMovesLeft: movesLeft(rules, unit, ctx),
+    ...(ctx.onUnitKilled ? { onUnitKilled: ctx.onUnitKilled } : {}),
   });
   if (ev.kind === 'fought') {
     events.push({

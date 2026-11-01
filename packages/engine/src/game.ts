@@ -97,6 +97,14 @@ import { releaseCitySite } from './fertility.js';
 import { civilizationScore, retirementStage, type ScoreBreakdown } from './score.js';
 import { advanceValue } from './aiResearch.js';
 import { restartCivilization, type NewGameLeader } from './newGame.js';
+import {
+  newEventState,
+  ScenarioEvents,
+  type EventContext,
+  type EventState,
+  type ScenarioEffect,
+  type ScenarioEvent,
+} from './events.js';
 import { inEnemyZoc } from './movement.js';
 import { payUpkeep, type UpkeepEvent } from './upkeep.js';
 import { CITY_CENTRE_INDEX, type City, type Civ, type World, type Production } from './world.js';
@@ -129,6 +137,11 @@ export interface GameState {
   noRestart?: boolean;
   /** Times each tribe (leader index) has played, for restarts. */
   tribesPlayed?: number[];
+  /** The scenario's events (events.txt, parsed) and their mutable state. */
+  scenarioEvents?: ScenarioEvent[];
+  eventState?: EventState;
+  /** DONTPLAYWONDERS has run. */
+  wonderMoviesOff?: boolean;
   /** The game has ended: who won and how; 'retirement' is the year 2020 (the best score wins). */
   gameOver?: { winner: number; reason: 'spaceship' | 'conquest' | 'retirement' };
 }
@@ -175,6 +188,7 @@ export type TurnEvent =
   | { slot: number; event: SpaceshipEvent }
   | { slot: number; event: DiplomacyEvent }
   | { slot: number; event: RetirementEvent }
+  | { slot: number; event: ScenarioEffect }
   | { slot: number; event: GovernmentEvent }
   | { slot: number; event: { kind: 'rates'; science: number; tax: number; luxuries: number } };
 
@@ -304,6 +318,7 @@ export class Game {
       },
       spaceshipLaunched: () => false,
       mainHuman: humans[0] ?? null,
+      negotiationAllowed: (a, b) => this.negotiationAllowed(a, b),
       nextInt: (n) => this.rng.nextInt(n),
       ...(this.humanAccepts ? { humanAccepts: this.humanAccepts } : {}),
     };
@@ -647,6 +662,86 @@ export class Game {
     return out;
   }
 
+  /** The scenario's event runtime, when the game carries events. */
+  events(): ScenarioEvents | null {
+    const list = this.state.scenarioEvents;
+    if (!list || list.length === 0) return null;
+    this.state.eventState ??= newEventState(list);
+    this.eventRuntime ??= new ScenarioEvents(this.world, this.rules, list, this.state.eventState);
+    return this.eventRuntime;
+  }
+
+  private eventRuntime: ScenarioEvents | null = null;
+
+  eventContext(): EventContext {
+    return {
+      turn: this.state.turn,
+      rng: this.rng,
+      isHuman: (s) => this.world.civs.find((c) => c.slot === s)?.isHuman ?? false,
+      inPlay: (s) => this.world.civs.find((c) => c.slot === s)?.inPlay ?? false,
+      knows: (s, a) => this.knows(s, a),
+      destroyCivilization: (s) => {
+        for (const c of [...this.world.cities]) {
+          if (c.owner !== s) continue;
+          releaseCitySite(this.world, c);
+          this.world.cities.splice(this.world.cities.indexOf(c), 1);
+        }
+        for (const u of [...this.world.units])
+          if (u.owner === s) this.world.units.splice(this.world.units.indexOf(u), 1);
+        const civ = this.world.civs.find((c) => c.slot === s);
+        if (civ) civ.hadCity = true;
+        this.pendingEvents.push(...this.eliminateCityless());
+      },
+      eliminateCityless: () => {
+        this.pendingEvents.push(...this.eliminateCityless());
+      },
+      dontPlayWonders: () => {
+        this.state.wonderMoviesOff = true;
+      },
+    };
+  }
+
+  /** Install a scenario's parsed events (the loader does this once); state starts fresh. */
+  loadEvents(events: ScenarioEvent[]): void {
+    this.state.scenarioEvents = events;
+    this.state.eventState = newEventState(events);
+    this.eventRuntime = null;
+  }
+
+  /** SCENARIOLOADED (the loader runs it right after the events are read, with music on). */
+  scenarioLoaded(): TurnEvent[] {
+    return (this.events()?.scenarioLoaded(this.eventContext()) ?? []).map((e) => ({
+      slot: 0,
+      event: e,
+    }));
+  }
+
+  /** UNITKILLED hook for the attack routines. */
+  unitKilled(type: number, attacker: number, defender: number): void {
+    const ev = this.events();
+    if (!ev) return;
+    for (const e of ev.unitKilled(type, attacker, defender, this.eventContext()))
+      this.pendingEvents.push({ slot: 0, event: e });
+  }
+
+  /** CITYTAKEN hook for the capture routine. */
+  cityTaken(city: string, attacker: number, defender: number): void {
+    const ev = this.events();
+    if (!ev) return;
+    for (const e of ev.cityTaken(city, attacker, defender, this.eventContext()))
+      this.pendingEvents.push({ slot: 0, event: e });
+  }
+
+  /** NEGOTIATION hook for diplomacy: may `talker` approach `listener`? */
+  negotiationAllowed(talker: number, listener: number): boolean {
+    const ev = this.events();
+    if (!ev) return true;
+    const effects: ScenarioEffect[] = [];
+    const ok = ev.negotiationAllowed(talker, listener, this.eventContext(), effects);
+    for (const e of effects) this.pendingEvents.push({ slot: 0, event: e });
+    return ok;
+  }
+
   /** The civilization score and its parts (0x0047c9e0). */
   scoreOf(slot: number): ScoreBreakdown {
     const civ = this.civ(slot);
@@ -798,6 +893,8 @@ export class Game {
         wondersOf: (s) => this.wondersOf(s),
         cityCount: (s) => this.citiesOf(s).length,
         nextCityName: () => `${civ.adjective} City ${++names}`,
+        onUnitKilled: (t, a, d) => this.unitKilled(t, a, d),
+        onCityTaken: (c, a, d) => this.cityTaken(c, a, d),
         guerillaWarfareDiscovered: (this.state.firstDiscoveredBy[34] ?? 0) !== 0,
         ...(civ.strategy ? { strategy: civ.strategy } : {}),
         trade: this.tradeContext(),
@@ -851,6 +948,9 @@ export class Game {
   /** End the turn: every civilization in play, in slot order (INFERRED), then the counter. */
   endTurn(): TurnEvent[] {
     const out: TurnEvent[] = [];
+    // Scenario events at the turn's commencement (TURN, TURNINTERVAL, RANDOMTURN, RECEIVEDTECHNOLOGY).
+    for (const e of this.events()?.turnStart(this.eventContext()) ?? [])
+      out.push({ slot: 0, event: e });
     // The turn driver spawns barbarians before the civilizations move (0x00467591, turn ≠ 0).
     if (this.state.turn !== 0) {
       for (const e of spawnBarbarians(this.world, this.rules, this.barbarianContext()))
@@ -1053,6 +1153,7 @@ export class Game {
       year: gameYear(this.state.turn, this.state.difficulty),
       difficulty: this.state.difficulty,
       activity: this.state.barbarianActivity ?? 0,
+      onUnitKilled: (t, a, d) => this.unitKilled(t, a, d),
       realisticCombat: this.state.realisticCombat,
       anyoneKnows: (a) => this.world.civs.some((c) => c.slot !== 0 && c.knownAdvances[a] === true),
       humanKnows: (a) => this.world.civs.some((c) => c.isHuman && c.knownAdvances[a] === true),

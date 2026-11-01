@@ -228,7 +228,8 @@ slots · `+50` 12 × 24 names. Size VERIFIED, fields INFERRED.
 
 - Version 44 (MGE-written) record sizes need a real MGE save to confirm. Anyone who owns the
   game can produce one in a minute: start a game, save, and run the conformance test.
-- `EVNT` blocks (scenario events) are detected but not parsed.
+- `EVNT` blocks (scenario events compiled from the scenario's EVENTS.TXT) are detected but not
+  parsed; the record layout is in events-format.md and the engine reads the text itself.
 - The 48-byte per-human blocks, the 110- and 70-byte gaps and the two minimap-sized blocks are
   unmapped.
 

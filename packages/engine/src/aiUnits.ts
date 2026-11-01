@@ -92,6 +92,9 @@ export interface AiUnitContext extends MovementContext {
   isHuman?: (slot: number) => boolean;
   /** The civilization's continent plan for a land mass (cargo on a "defend" land mass stays home). */
   planOf?: (slot: number, landmass: number) => number;
+  /** Scenario event hooks (UNITKILLED, CITYTAKEN). */
+  onUnitKilled?: (type: number, attacker: number, defender: number) => void;
+  onCityTaken?: (city: string, attacker: number, defender: number) => void;
 }
 
 export interface AiUnitEvent {
@@ -555,6 +558,7 @@ function act(
       realisticCombat: ctx.realisticCombat,
       barbarianActivity: 1,
       attackerMovesLeft: movesLeft(rules, unit, ctx),
+      ...(ctx.onUnitKilled ? { onUnitKilled: ctx.onUnitKilled } : {}),
     });
     if (ev.kind === 'fought') {
       events.push({
@@ -603,6 +607,7 @@ function takeCityHere(
     difficulty: ctx.difficulty,
     conquest: true,
     guerillaWarfareDiscovered: ctx.guerillaWarfareDiscovered ?? false,
+    ...(ctx.onCityTaken ? { onCityTaken: ctx.onCityTaken } : {}),
   });
   events.push({
     kind: 'ai-unit',
@@ -739,6 +744,8 @@ export function aiMoveUnits(
             realisticCombat: ctx.realisticCombat,
             barbarianActivity: 1,
             attackerMovesLeft: movesLeft(rules, unit, ctx),
+            ...(ctx.onUnitKilled ? { onUnitKilled: ctx.onUnitKilled } : {}),
+            ...(ctx.onUnitKilled ? { onUnitKilled: ctx.onUnitKilled } : {}),
           });
           if (ev.kind === 'fought')
             events.push({

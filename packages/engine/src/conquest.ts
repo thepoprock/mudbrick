@@ -26,6 +26,8 @@ export const CONQUEST_ADVANCES = {
 export const GOVERNMENT_ADVANCES = [31, 54, 15, 71, 21] as const;
 
 export interface CaptureContext {
+  /** Scenario events: CITYTAKEN, after the city has changed hands. */
+  onCityTaken?: (city: string, attacker: number, defender: number) => void;
   turn: number;
   difficulty: number;
   /** Conquest by force (true) or another transfer such as diplomacy (false). */
@@ -269,6 +271,7 @@ export function captureCity(
       }
     }
   }
+  ctx.onCityTaken?.(city.name, captor.slot, loser.slot);
   return {
     plunder: gold,
     liberated,

@@ -40,6 +40,8 @@ export interface GameFolder {
   citySize: CellAnchors[][];
   /** Fetch any other file from the folder by name (case-insensitive), e.g. a save. */
   file: (name: string) => Promise<Blob | undefined>;
+  /** Every file the folder holds, as upper-case paths relative to it (empty for the dev path). */
+  paths: string[];
 }
 
 /** Abstracts "a folder of files" over FileList and fetch. */
@@ -108,7 +110,7 @@ function anchorFor(img: ImageData, r: sprites.Rect, colour: sprites.Rgb): Anchor
   return { x: ax < 0 ? r.w / 2 : ax, y: ay < 0 ? r.h / 2 : ay };
 }
 
-async function loadFrom(source: FileSource): Promise<GameFolder> {
+async function loadFrom(source: FileSource, paths: string[] = []): Promise<GameFolder> {
   const rulesFile = await source('RULES.TXT');
   if (!rulesFile) throw new Error('RULES.TXT not found: choose the folder that contains it');
   const rules = parseRules(decodeText(new Uint8Array(await rulesFile.arrayBuffer())));
@@ -149,7 +151,7 @@ async function loadFrom(source: FileSource): Promise<GameFolder> {
       citySize.push(sizeRow);
     }
   }
-  return { rules, sheets, unitFlag, cityFlag, citySize, file: source };
+  return { rules, sheets, unitFlag, cityFlag, citySize, file: source, paths };
 }
 
 /** Player path: the FileList of an `<input type="file" webkitdirectory>`. */
@@ -160,7 +162,7 @@ export function loadGameFolder(list: FileList): Promise<GameFolder> {
     const rel = f.webkitRelativePath.split('/').slice(1).join('/');
     byName.set(rel.toUpperCase(), f);
   }
-  return loadFrom((name) => Promise.resolve(byName.get(name.toUpperCase())));
+  return loadFrom((name) => Promise.resolve(byName.get(name.toUpperCase())), [...byName.keys()]);
 }
 
 /** Development path: files served under `base` (e.g. `/dev-game/`) by the dev server. */

@@ -42,6 +42,8 @@ export interface AttackContext {
   barbarianActivity: number;
   /** Attacker's moves left in thirds (FATIGUE scaling). */
   attackerMovesLeft: number;
+  /** Scenario events: a unit of this type, owned by `defender`, fell to `attacker` (UNITKILLED). */
+  onUnitKilled?: (type: number, attacker: number, defender: number) => void;
 }
 
 export type AttackEvent =
@@ -111,6 +113,7 @@ export function resolveAttack(
 
   if (result.attackerWon) {
     remove(defender);
+    ctx.onUnitKilled?.(defender.type, attacker.owner, defender.owner);
     const dType = rules.units[defender.type];
     if (defender.owner === 0 && (dType?.role ?? 0) > 4) {
       ransom = ctx.barbarianActivity * 50;
