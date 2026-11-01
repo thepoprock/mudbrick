@@ -298,4 +298,27 @@ describe('scenario events (verified against the original)', () => {
     expect(w.units.some((u) => u.position.x === 12 && u.position.y === 10)).toBe(false);
     expect(calls).toContain('eliminate');
   });
+
+  it('a restored state keeps fired JUSTONCE events quiet and written-over slots bound', () => {
+    const w = world();
+    const events = [
+      ev({ kind: 'turn', turn: 'every' }, { text: ['once'], justOnce: true }),
+      ev(
+        {
+          kind: 'cityTaken',
+          city: 'Rome',
+          attacker: { kind: 'anybody' },
+          defender: { kind: 'anybody' },
+        },
+        { text: ['taken'] },
+      ),
+    ];
+    const st = newEventState(events);
+    st.fired[0] = true;
+    st.attacker[1] = 3;
+    const se = new ScenarioEvents(w, rules, events, st);
+    expect(se.turnStart(ctx(w))).toHaveLength(0);
+    expect(se.cityTaken('Rome', 2, 1, ctx(w))).toHaveLength(0);
+    expect(se.cityTaken('Rome', 3, 1, ctx(w))).toHaveLength(1);
+  });
 });

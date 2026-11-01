@@ -71,8 +71,11 @@ move-to · `[49]`/`[50]` MAKEAGGRESSION whom · `[51]`/`[52]` who · `[53]`/`[54
 name · `[93]`/`[94]` CHANGEMONEY receiver · `[95]` amount · `[96]` 0x1000 for NEGOTIATION (the
 "block the talk" mark) · `[97]` wave file name · `[98]` CD track · `[99]` CHANGETERRAIN terrain ·
 `[100]`–`[107]` rectangle · `[108]` DESTROYACIVILIZATION whom · `[109]`/`[110]` GIVETECHNOLOGY
-technology and receiver · `[111]`/`[112]` next and previous record. Name pointers point into the
-pool, so the saved copy needs the pool's strings to mean anything — INFERRED, not yet read.
+technology and receiver · `[111]`/`[112]` next and previous record (not written to a save).
+Name fields are pointers into the string pool; a save's `EVNT` block (save-format.md) writes the
+first 111 ints of every record and then the strings, so a non-zero name field means "a string
+follows". `[80]` and `[82]` are string fields the save routines handle but the text parser never
+sets.
 
 `packages/formats/src/events.ts` (`parseEvents`) reads the text; the runtime is described in
 docs/engine/events.md.

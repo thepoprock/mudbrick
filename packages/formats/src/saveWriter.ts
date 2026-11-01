@@ -13,7 +13,18 @@
  */
 import { encodeText } from './text.js';
 import type { Point } from './map.js';
-import type { CityRecord, CivRecord, SaveFile, UnitRecord } from './save.js';
+import {
+  EVENT_RECORD_BYTES,
+  EVENT_RECORD_INTS,
+  EVENT_STRING_SLOTS_AFTER_TEXT,
+  EVENT_STRING_SLOTS_BEFORE_TEXT,
+  eventStringOrder,
+  type CityRecord,
+  type CivRecord,
+  type SaveEventRecord,
+  type SaveFile,
+  type UnitRecord,
+} from './save.js';
 
 export interface UnitWrite {
   /** Original record id to copy unknown bytes from; omit for a new unit. */
@@ -114,6 +125,8 @@ export interface CivWrite {
 }
 
 export interface SavePatch {
+  /** Scenario events: omit to keep the file's `EVNT` block, null to drop it, records to replace it. */
+  events?: SaveEventRecord[] | null;
   turn?: number;
   year?: number;
   pollutionSquares?: number;
@@ -254,11 +267,18 @@ export function writeSave(original: Uint8Array, save: SaveFile, patch: SavePatch
   const unitsLen = patch.units.length * usz;
   const citiesLen = patch.cities.length * csz;
   const tailStart = o.citiesFounded;
-  const out = new Uint8Array(o.units + unitsLen + citiesLen + (original.length - tailStart));
+  // The `EVNT` block is the last thing in the file (VERIFIED 0x00457ffe); it is kept, dropped or
+  // replaced as the patch says.
+  const tailEnd = patch.events === undefined ? original.length : (o.events ?? original.length);
+  const eventBlock = patch.events ? encodeEventBlock(patch.events) : new Uint8Array(0);
+  const out = new Uint8Array(
+    o.units + unitsLen + citiesLen + (tailEnd - tailStart) + eventBlock.length,
+  );
   out.set(original.subarray(0, o.units), 0);
   const citiesOff = o.units + unitsLen;
   const newTail = citiesOff + citiesLen;
-  out.set(original.subarray(tailStart), newTail);
+  out.set(original.subarray(tailStart, tailEnd), newTail);
+  out.set(eventBlock, newTail + (tailEnd - tailStart));
   const w = new Writer(out);
 
   // Header.
@@ -441,3 +461,46 @@ export function writeSave(original: Uint8Array, save: SaveFile, patch: SavePatch
 }
 
 export const UNIT_TYPE_COUNT = UNIT_TYPES;
+
+/**
+ * An `EVNT` block (VERIFIED 0x00457ffe): the tag, an i32 count, every record's 0x1bc bytes, then
+ * for each record in turn a NUL-terminated string for every non-zero name-pointer field in the
+ * order `eventStringOrder` gives. A pointer field is written as it stands (the game writes its
+ * memory address); here it is 1 when the record carries that string and 0 otherwise.
+ */
+export function encodeEventBlock(records: SaveEventRecord[]): Uint8Array {
+  const parts: Uint8Array[] = [];
+  const head = new Uint8Array(8);
+  head.set([0x45, 0x56, 0x4e, 0x54]);
+  new DataView(head.buffer).setInt32(4, records.length, true);
+  parts.push(head);
+  const strings: Uint8Array[] = [];
+  for (const rec of records) {
+    const ints = rec.ints.slice(0, EVENT_RECORD_INTS);
+    while (ints.length < EVENT_RECORD_INTS) ints.push(0);
+    const mark = (k: number) => {
+      ints[k] = rec.strings[k] !== undefined ? ints[k] || 1 : 0;
+    };
+    for (const k of EVENT_STRING_SLOTS_BEFORE_TEXT) mark(k);
+    for (let k = 14; k < 34; k++) mark(k);
+    for (const k of EVENT_STRING_SLOTS_AFTER_TEXT) mark(k);
+    const buf = new Uint8Array(EVENT_RECORD_BYTES);
+    const dv = new DataView(buf.buffer);
+    ints.forEach((v, k) => dv.setInt32(4 * k, v | 0, true));
+    parts.push(buf);
+    for (const k of eventStringOrder(ints)) {
+      const text = encodeText(rec.strings[k] ?? '');
+      const b = new Uint8Array(text.length + 1);
+      b.set(text);
+      strings.push(b);
+    }
+  }
+  const all = [...parts, ...strings];
+  const out = new Uint8Array(all.reduce((n, b) => n + b.length, 0));
+  let p = 0;
+  for (const b of all) {
+    out.set(b, p);
+    p += b.length;
+  }
+  return out;
+}

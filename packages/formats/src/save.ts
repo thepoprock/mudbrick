@@ -248,6 +248,71 @@ export interface ScenarioParameters {
   objectivesDecisiveDefeat: number;
 }
 
+/**
+ * One record of an `EVNT` block (VERIFIED 0x00457ffe writer / 0x004594a6 reader): the 111 ints
+ * of the parsed event as the game holds them in memory, followed in the file by a NUL-terminated
+ * string for every non-zero name-pointer field. The layout of the ints is in
+ * docs/formats/events-format.md; `eventsFromRecords` turns records into events.
+ */
+export interface SaveEventRecord {
+  ints: number[];
+  /** Strings by the index of the pointer field they belong to. */
+  strings: Record<number, string>;
+}
+export const EVENT_RECORD_INTS = 111;
+export const EVENT_RECORD_BYTES = 0x1bc;
+/** The name-pointer fields outside the TEXT lines, in the order their strings are written. */
+export const EVENT_STRING_SLOTS_BEFORE_TEXT = [2, 4, 5, 8];
+export const EVENT_STRING_SLOTS_AFTER_TEXT = [34, 36, 49, 51, 53, 55, 79, 80, 82, 93, 97];
+
+/** The pointer fields whose strings follow a record, in file order (TEXT lines stop at the first zero). */
+export function eventStringOrder(ints: number[]): number[] {
+  const out: number[] = [];
+  for (const k of EVENT_STRING_SLOTS_BEFORE_TEXT) if ((ints[k] ?? 0) !== 0) out.push(k);
+  for (let k = 14; k < 34 && (ints[k] ?? 0) !== 0; k++) out.push(k);
+  for (const k of EVENT_STRING_SLOTS_AFTER_TEXT) if ((ints[k] ?? 0) !== 0) out.push(k);
+  return out;
+}
+
+/** Read an `EVNT` block at `off` (the tag): count, records, then each record's strings. */
+export function readEventBlock(
+  bytes: Uint8Array,
+  off: number,
+  warnings: string[],
+): SaveEventRecord[] | null {
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let p = off + 4;
+  if (p + 4 > bytes.length) {
+    warnings.push('EVNT block: no record count');
+    return null;
+  }
+  const count = dv.getInt32(p, true);
+  p += 4;
+  if (count < 0 || p + count * EVENT_RECORD_BYTES > bytes.length) {
+    warnings.push(`EVNT block: ${count} records do not fit`);
+    return null;
+  }
+  const records: SaveEventRecord[] = [];
+  for (let i = 0; i < count; i++) {
+    const ints = Array.from({ length: EVENT_RECORD_INTS }, (_, k) => dv.getInt32(p + 4 * k, true));
+    p += EVENT_RECORD_BYTES;
+    records.push({ ints, strings: {} });
+  }
+  for (const rec of records) {
+    for (const k of eventStringOrder(rec.ints)) {
+      let end = p;
+      while (end < bytes.length && bytes[end] !== 0) end++;
+      if (end >= bytes.length) {
+        warnings.push('EVNT block: strings truncated');
+        return records;
+      }
+      rec.strings[k] = decodeText(bytes.subarray(p, end));
+      p = end + 1;
+    }
+  }
+  return records;
+}
+
 export interface DestroyedCiv {
   turn: number;
   destroyedBy: Slot;
@@ -302,6 +367,8 @@ export interface SaveFile {
   scenario: ScenarioParameters | null;
   destroyed: DestroyedCiv[];
   hasEvents: boolean;
+  /** The `EVNT` block's records (a save made inside a scenario), else null. */
+  events: SaveEventRecord[] | null;
   offsets: SaveOffsets;
   warnings: string[];
 }
@@ -724,6 +791,7 @@ export function parseSave(bytes: Uint8Array): SaveFile {
     scenario,
     destroyed,
     hasEvents: eventsOff !== null,
+    events: eventsOff === null ? null : readEventBlock(bytes, eventsOff, warnings),
     offsets: {
       techs: techsOff,
       wonders: wondersOff,

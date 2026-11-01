@@ -701,10 +701,10 @@ export class Game {
     };
   }
 
-  /** Install a scenario's parsed events (the loader does this once); state starts fresh. */
-  loadEvents(events: ScenarioEvent[]): void {
+  /** Install a scenario's parsed events (the loader does this once), with a saved state or fresh. */
+  loadEvents(events: ScenarioEvent[], state?: EventState): void {
     this.state.scenarioEvents = events;
-    this.state.eventState = newEventState(events);
+    this.state.eventState = state ?? newEventState(events);
     this.eventRuntime = null;
   }
 

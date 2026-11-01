@@ -13,6 +13,8 @@
  * (BADEVENTSFILE), as does an unknown name that leaves a field unsatisfied.
  */
 
+import { EVENT_RECORD_INTS, type SaveEventRecord } from './save.js';
+
 export type TribeRef =
   | { kind: 'slot'; slot: number }
   | { kind: 'anybody' }
@@ -814,4 +816,349 @@ function parseAction(
     return true;
   }
   return null;
+}
+
+// ---------------------------------------------------------------------------------------------
+// The record layout (what the game keeps in memory and a save's `EVNT` block stores)
+
+/** The mutable part of the events: what has fired, and the slots triggers wrote over ANYBODY. */
+export interface EventRecordState {
+  fired: boolean[];
+  attacker: number[];
+  defender: number[];
+  receiver: number[];
+}
+
+const TRIGGER_TYPE: Record<Exclude<EventTrigger['kind'], 'none'>, number> = {
+  unitKilled: 1,
+  cityTaken: 2,
+  turn: 4,
+  turnInterval: 8,
+  negotiation: 0x10,
+  scenarioLoaded: 0x20,
+  randomTurn: 0x40,
+  noSchism: 0x80,
+  receivedTechnology: 0x100,
+};
+const ACTION_BIT = {
+  text: 1,
+  moveUnit: 2,
+  createUnit: 4,
+  changeMoney: 8,
+  playWaveFile: 0x10,
+  makeAggression: 0x20,
+  justOnce: 0x40,
+  playCdTrack: 0x80,
+  dontPlayWonders: 0x100,
+  changeTerrain: 0x200,
+  destroyACivilization: 0x400,
+  giveTechnology: 0x800,
+  fired: 0x2000,
+} as const;
+
+/** The parser's tribe codes: −2 ANYBODY, −3 TRIGGERATTACKER, −4 TRIGGERDEFENDER / TRIGGERRECEIVER, else a slot. */
+export function tribeRefOf(code: number): TribeRef {
+  if (code === -2) return { kind: 'anybody' };
+  if (code === -3) return { kind: 'triggerAttacker' };
+  if (code === -4) return { kind: 'triggerDefender' };
+  return { kind: 'slot', slot: Math.max(0, Math.min(7, code)) };
+}
+export function tribeCode(ref: TribeRef): number {
+  switch (ref.kind) {
+    case 'anybody':
+      return -2;
+    case 'triggerAttacker':
+      return -3;
+    case 'triggerDefender':
+      return -4;
+    default:
+      return ref.slot;
+  }
+}
+const unitRefOf = (code: number): UnitRef =>
+  code === -2 ? { kind: 'anyunit' } : { kind: 'type', type: code };
+const unitCode = (ref: UnitRef): number => (ref.kind === 'anyunit' ? -2 : ref.type);
+const negotiatorType = (v: number): NegotiatorType => (v === 1 || v === 2 ? v : 4);
+
+function tribeName(code: number, names: EventNames): string {
+  if (code === -2) return 'ANYBODY';
+  if (code === -3) return 'TRIGGERATTACKER';
+  if (code === -4) return 'TRIGGERDEFENDER';
+  return names.tribes[code] ?? `Tribe${code}`;
+}
+function unitName(code: number, names: EventNames): string {
+  return code === -2 ? 'ANYUNIT' : (names.units[code] ?? `Unit${code}`);
+}
+
+function rectOf(ints: number[], base: number): [EventPoint, EventPoint, EventPoint, EventPoint] {
+  const p = (i: number): EventPoint => ({
+    x: ints[base + 2 * i] ?? 0,
+    y: ints[base + 2 * i + 1] ?? 0,
+  });
+  return [p(0), p(1), p(2), p(3)];
+}
+
+/** Events and their state from a save's `EVNT` records (VERIFIED layout, docs/formats/events-format.md). */
+export function eventsFromRecords(records: SaveEventRecord[]): {
+  events: ScenarioEvent[];
+  state: EventRecordState;
+} {
+  const events: ScenarioEvent[] = [];
+  const state: EventRecordState = { fired: [], attacker: [], defender: [], receiver: [] };
+  for (const rec of records) {
+    const i = rec.ints;
+    const at = (k: number) => i[k] ?? 0;
+    const str = (k: number) => rec.strings[k];
+    const names: Record<string, string> = {};
+    const name = (key: string, k: number) => {
+      const v = str(k);
+      if (v !== undefined) names[key] = v;
+    };
+    name('unit', 2);
+    name('city', 4);
+    name('attacker', 5);
+    name('defender', 8);
+    name('owner', 34);
+    name('whom', 49);
+    name('who', 51);
+    name('receiver', 93);
+    let trigger: EventTrigger;
+    switch (at(0)) {
+      case 1:
+        trigger = {
+          kind: 'unitKilled',
+          unit: unitRefOf(at(3)),
+          attacker: tribeRefOf(at(6)),
+          defender: tribeRefOf(at(9)),
+        };
+        break;
+      case 2:
+        trigger = {
+          kind: 'cityTaken',
+          city: str(4) ?? '',
+          attacker: tribeRefOf(at(6)),
+          defender: tribeRefOf(at(9)),
+        };
+        break;
+      case 4:
+        trigger = { kind: 'turn', turn: at(11) === -1 ? 'every' : at(11) };
+        break;
+      case 8:
+        trigger = { kind: 'turnInterval', interval: at(11) };
+        break;
+      case 0x10:
+        trigger = {
+          kind: 'negotiation',
+          talker: tribeRefOf(at(6)),
+          talkerType: negotiatorType(at(7)),
+          listener: tribeRefOf(at(9)),
+          listenerType: negotiatorType(at(10)),
+        };
+        break;
+      case 0x20:
+        trigger = { kind: 'scenarioLoaded' };
+        break;
+      case 0x40:
+        trigger = { kind: 'randomTurn', denominator: at(12) };
+        break;
+      case 0x80:
+        trigger = { kind: 'noSchism', defender: tribeRefOf(at(9)) };
+        break;
+      case 0x100:
+        trigger = { kind: 'receivedTechnology', receiver: tribeRefOf(at(9)), technology: at(13) };
+        break;
+      default:
+        trigger = { kind: 'none' };
+    }
+    const bits = at(1);
+    const actions: EventActions = {
+      justOnce: (bits & ACTION_BIT.justOnce) !== 0,
+      dontPlayWonders: (bits & ACTION_BIT.dontPlayWonders) !== 0,
+    };
+    if (bits & ACTION_BIT.text) {
+      const lines: string[] = [];
+      for (let k = 14; k < 34; k++) {
+        const v = str(k);
+        if (v === undefined) break;
+        lines.push(v);
+      }
+      actions.text = lines;
+    }
+    if (bits & ACTION_BIT.moveUnit)
+      actions.moveUnit = {
+        unit: unitRefOf(at(37)),
+        owner: tribeRefOf(at(35)),
+        rect: rectOf(i, 39),
+        moveTo: { x: at(47), y: at(48) },
+        numberToMove: at(38),
+      };
+    if (bits & ACTION_BIT.createUnit) {
+      const count = Math.max(0, Math.min(10, at(77)));
+      actions.createUnit = {
+        unit: at(56),
+        owner: tribeRefOf(at(54)),
+        veteran: at(78) !== 0,
+        homeCity: str(79) ?? 'none',
+        locations: Array.from({ length: count }, (_, n) => ({
+          x: at(57 + 2 * n),
+          y: at(58 + 2 * n),
+        })),
+      };
+    }
+    if (bits & ACTION_BIT.changeMoney)
+      actions.changeMoney = { receiver: tribeRefOf(at(94)), amount: at(95) };
+    if (bits & ACTION_BIT.playWaveFile) actions.playWaveFile = str(97) ?? '';
+    if (bits & ACTION_BIT.makeAggression)
+      actions.makeAggression = { who: tribeRefOf(at(52)), whom: tribeRefOf(at(50)) };
+    if (bits & ACTION_BIT.playCdTrack) actions.playCdTrack = at(98);
+    if (bits & ACTION_BIT.changeTerrain)
+      actions.changeTerrain = { terrain: at(99), rect: rectOf(i, 100) };
+    if (bits & ACTION_BIT.destroyACivilization)
+      actions.destroyACivilization = { whom: tribeRefOf(at(108)) };
+    if (bits & ACTION_BIT.giveTechnology)
+      actions.giveTechnology = { receiver: tribeRefOf(at(110)), technology: at(109) };
+    events.push({ trigger, actions, names });
+    state.fired.push((bits & ACTION_BIT.fired) !== 0);
+    state.attacker.push(at(6));
+    state.defender.push(at(9));
+    state.receiver.push(at(9));
+  }
+  return { events, state };
+}
+
+/** The `EVNT` records for events and their state; the names table supplies the strings. */
+export function recordsFromEvents(
+  events: ScenarioEvent[],
+  state: EventRecordState | undefined,
+  names: EventNames,
+): SaveEventRecord[] {
+  return events.map((e, n) => {
+    const ints = Array<number>(EVENT_RECORD_INTS).fill(0);
+    const strings: Record<number, string> = {};
+    const setTribe = (k: number, code: number, nameSlot?: number) => {
+      ints[k] = code;
+      if (nameSlot !== undefined) strings[nameSlot] = tribeName(code, names);
+    };
+    const t = e.trigger;
+    if (t.kind !== 'none') ints[0] = TRIGGER_TYPE[t.kind];
+    const attacker = state?.attacker[n];
+    const defender = state?.defender[n];
+    const receiver = state?.receiver[n];
+    switch (t.kind) {
+      case 'unitKilled': {
+        const u = unitCode(t.unit);
+        ints[3] = u;
+        strings[2] = unitName(u, names);
+        setTribe(6, attacker ?? tribeCode(t.attacker), 5);
+        setTribe(9, defender ?? tribeCode(t.defender), 8);
+        break;
+      }
+      case 'cityTaken':
+        strings[4] = t.city;
+        setTribe(6, attacker ?? tribeCode(t.attacker), 5);
+        setTribe(9, defender ?? tribeCode(t.defender), 8);
+        break;
+      case 'turn':
+        ints[11] = t.turn === 'every' ? -1 : t.turn;
+        break;
+      case 'turnInterval':
+        ints[11] = t.interval;
+        break;
+      case 'negotiation':
+        setTribe(6, tribeCode(t.talker), 5);
+        ints[7] = t.talkerType;
+        setTribe(9, tribeCode(t.listener), 8);
+        ints[10] = t.listenerType;
+        ints[96] = 0x1000;
+        break;
+      case 'randomTurn':
+        ints[12] = t.denominator;
+        break;
+      case 'noSchism':
+        setTribe(9, defender ?? tribeCode(t.defender), 8);
+        break;
+      case 'receivedTechnology':
+        setTribe(9, receiver ?? tribeCode(t.receiver), 8);
+        ints[13] = t.technology;
+        break;
+      default:
+        break;
+    }
+    const a = e.actions;
+    let bits = 0;
+    if (a.text) {
+      bits |= ACTION_BIT.text;
+      a.text.slice(0, 20).forEach((line, k) => {
+        strings[14 + k] = line;
+      });
+    }
+    if (a.moveUnit) {
+      bits |= ACTION_BIT.moveUnit;
+      setTribe(35, tribeCode(a.moveUnit.owner), 34);
+      const u = unitCode(a.moveUnit.unit);
+      ints[37] = u;
+      strings[36] = unitName(u, names);
+      ints[38] = a.moveUnit.numberToMove;
+      a.moveUnit.rect.forEach((p, k) => {
+        ints[39 + 2 * k] = p.x;
+        ints[40 + 2 * k] = p.y;
+      });
+      ints[47] = a.moveUnit.moveTo.x;
+      ints[48] = a.moveUnit.moveTo.y;
+    }
+    if (a.createUnit) {
+      bits |= ACTION_BIT.createUnit;
+      setTribe(54, tribeCode(a.createUnit.owner), 53);
+      ints[56] = a.createUnit.unit;
+      strings[55] = unitName(a.createUnit.unit, names);
+      a.createUnit.locations.slice(0, 10).forEach((p, k) => {
+        ints[57 + 2 * k] = p.x;
+        ints[58 + 2 * k] = p.y;
+      });
+      ints[77] = Math.min(10, a.createUnit.locations.length);
+      ints[78] = a.createUnit.veteran ? 1 : 0;
+      strings[79] = a.createUnit.homeCity;
+    }
+    if (a.changeMoney) {
+      bits |= ACTION_BIT.changeMoney;
+      setTribe(94, tribeCode(a.changeMoney.receiver), 93);
+      ints[95] = a.changeMoney.amount;
+    }
+    if (a.playWaveFile !== undefined) {
+      bits |= ACTION_BIT.playWaveFile;
+      strings[97] = a.playWaveFile;
+    }
+    if (a.makeAggression) {
+      bits |= ACTION_BIT.makeAggression;
+      setTribe(50, tribeCode(a.makeAggression.whom), 49);
+      setTribe(52, tribeCode(a.makeAggression.who), 51);
+    }
+    if (a.justOnce) bits |= ACTION_BIT.justOnce;
+    if (a.playCdTrack !== undefined) {
+      bits |= ACTION_BIT.playCdTrack;
+      ints[98] = a.playCdTrack;
+    }
+    if (a.dontPlayWonders) bits |= ACTION_BIT.dontPlayWonders;
+    if (a.changeTerrain) {
+      bits |= ACTION_BIT.changeTerrain;
+      ints[99] = a.changeTerrain.terrain;
+      a.changeTerrain.rect.forEach((p, k) => {
+        ints[100 + 2 * k] = p.x;
+        ints[101 + 2 * k] = p.y;
+      });
+    }
+    if (a.destroyACivilization) {
+      bits |= ACTION_BIT.destroyACivilization;
+      ints[108] = tribeCode(a.destroyACivilization.whom);
+    }
+    if (a.giveTechnology) {
+      bits |= ACTION_BIT.giveTechnology;
+      ints[109] = a.giveTechnology.technology;
+      ints[110] = tribeCode(a.giveTechnology.receiver);
+    }
+    if (state?.fired[n]) bits |= ACTION_BIT.fired;
+    ints[1] = bits;
+    for (const k of Object.keys(strings)) ints[Number(k)] = 1;
+    return { ints, strings };
+  });
 }

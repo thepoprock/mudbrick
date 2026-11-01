@@ -1,7 +1,15 @@
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { decodeText } from '../src/text.js';
-import { parseEvents, type EventNames } from '../src/events.js';
+import {
+  eventsFromRecords,
+  parseEvents,
+  recordsFromEvents,
+  type EventNames,
+  type ScenarioEvent,
+} from '../src/events.js';
+import { parseSave, readEventBlock } from '../src/save.js';
+import { encodeEventBlock, patchFromSave, writeSave } from '../src/saveWriter.js';
 
 const dir = process.env.ORIGINAL_GAME_DIR;
 const names: EventNames = {
@@ -18,10 +26,7 @@ const names: EventNames = {
   units: ['Settlers', 'Engineers', 'Infantry', 'C Raiders', 'Block. Runner', 'Ironclad'],
 };
 
-describe('the events macro language', () => {
-  it('parses triggers, fields, text, rectangles and locations as the original does', () => {
-    const r = parseEvents(
-      `
+const SAMPLE = `
 @BEGINEVENTS
 @IF
 SCENARIOLOADED
@@ -70,9 +75,13 @@ receiver=Federals
 amount=-50
 @ENDIF
 @ENDEVENTS
-`,
-      names,
-    );
+`;
+
+const strip = (e: ScenarioEvent) => ({ trigger: e.trigger, actions: e.actions });
+
+describe('the events macro language', () => {
+  it('parses triggers, fields, text, rectangles and locations as the original does', () => {
+    const r = parseEvents(SAMPLE, names);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.events).toHaveLength(3);
@@ -174,5 +183,64 @@ amount=-50
     expect(files).toBeGreaterThan(10);
     expect(events).toBe(blocks);
     expect(events).toBeGreaterThan(400);
+  });
+
+  it('round-trips events through the EVNT record layout and its byte encoding', () => {
+    const parsed = parseEvents(SAMPLE, names);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const records = recordsFromEvents(parsed.events, undefined, names);
+    expect(records[1]?.ints[0]).toBe(2); // CITYTAKEN
+    expect(records[1]?.strings[4]).toBe('Kansas City');
+    expect(records[1]?.strings[5]).toBe('Federals');
+    expect(records[1]?.ints[9]).toBe(-2); // defender=Anybody
+    expect((records[2]?.ints[1] ?? 0) & 0x2000).toBe(0);
+    const back = eventsFromRecords(records);
+    expect(back.events.map(strip)).toEqual(parsed.events.map(strip));
+    expect(back.state.fired).toEqual([false, false, false]);
+    // A fired JUSTONCE event and a written-over ANYBODY survive the trip.
+    const state = {
+      fired: [false, true, false],
+      attacker: [0, 1, 0],
+      defender: [0, 5, 0],
+      receiver: [0, 5, 0],
+    };
+    const again = eventsFromRecords(recordsFromEvents(parsed.events, state, names));
+    expect(again.state.fired[1]).toBe(true);
+    expect(again.state.defender[1]).toBe(5);
+    expect(again.events[1]?.trigger).toMatchObject({ defender: { kind: 'slot', slot: 5 } });
+    // Bytes: tag, count, 444-byte records, then the strings.
+    const bytes = encodeEventBlock(records);
+    expect(String.fromCharCode(...bytes.subarray(0, 4))).toBe('EVNT');
+    expect(new DataView(bytes.buffer).getInt32(4, true)).toBe(3);
+    const read = readEventBlock(bytes, 0, []);
+    expect(read).toEqual(records);
+  });
+
+  it.skipIf(!dir)('a scenario file takes an EVNT block and gives it back', () => {
+    if (!dir) return;
+    const scen = `${dir}/SCENARIO`;
+    const folder = readdirSync(scen).find((s) =>
+      readdirSync(`${scen}/${s}`).some((f) => f.toUpperCase().endsWith('.SCN')),
+    );
+    if (!folder) return;
+    const file = readdirSync(`${scen}/${folder}`).find((f) => f.toUpperCase().endsWith('.SCN'));
+    const bytes = new Uint8Array(readFileSync(`${scen}/${folder}/${file}`));
+    const save = parseSave(bytes);
+    expect(save.events).toBeNull();
+    const parsed = parseEvents(SAMPLE, names);
+    if (!parsed.ok) return;
+    const records = recordsFromEvents(parsed.events, undefined, names);
+    const withEvents = writeSave(bytes, save, { ...patchFromSave(save), events: records });
+    const reread = parseSave(withEvents);
+    expect(reread.events).toEqual(records);
+    expect(reread.warnings.filter((w) => w.includes('EVNT'))).toEqual([]);
+    // Omitting the field keeps the block; null drops it.
+    expect(parseSave(writeSave(withEvents, reread, patchFromSave(reread))).events).toEqual(records);
+    const dropped = parseSave(
+      writeSave(withEvents, reread, { ...patchFromSave(reread), events: null }),
+    );
+    expect(dropped.events).toBeNull();
+    expect(dropped.hasEvents).toBe(false);
   });
 });

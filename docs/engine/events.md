@@ -57,3 +57,11 @@ slots the trigger wrote.
 
 The web app reads the EVENTS.TXT beside a picked .SCN/.SAV inside the game folder, with the
 save's civilization names and the rules' unit names, and logs the effects.
+
+## Saves
+
+A save made inside a scenario carries the events and their state in its `EVNT` block
+(docs/formats/save-format.md): `gameFromSave` installs them with the fired marks and written-over
+slots restored, and the EVENTS.TXT beside the file is then not read (VERIFIED in the loader).
+`saveFromGame` writes the block back from the game's events and state. The engine's own
+snapshots keep both as plain state.

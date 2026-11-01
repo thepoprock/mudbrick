@@ -228,8 +228,8 @@ slots · `+50` 12 × 24 names. Size VERIFIED, fields INFERRED.
 
 - Version 44 (MGE-written) record sizes need a real MGE save to confirm. Anyone who owns the
   game can produce one in a minute: start a game, save, and run the conformance test.
-- `EVNT` blocks (scenario events compiled from the scenario's EVENTS.TXT) are detected but not
-  parsed; the record layout is in events-format.md and the engine reads the text itself.
+- `EVNT` blocks (scenario events, in a save made inside a scenario) are read and written; see
+  the `EVNT` section below.
 - The 48-byte per-human blocks, the 110- and 70-byte gaps and the two minimap-sized blocks are
   unmapped.
 
@@ -243,3 +243,27 @@ onward copied unchanged. `patchFromSave` turns a parsed file into the identity p
 round-trip test writes every shipped save and scenario back and checks that parsing the result
 gives the same units, cities, civilizations, techs, wonders, parameters and squares, with fewer
 than one byte in a thousand differing (stale link bytes in the originals).
+
+## `EVNT` — scenario events (VERIFIED 0x00457ffe writer, 0x004594a6 reader)
+
+A game that has events in memory writes them at the very end of a normal save (not of a `.SCN`
+export, and no shipped file carries the block): the four bytes `EVNT` (no terminator), an i32
+record count, then every record's first 0x1bc bytes (the 111 ints of
+docs/formats/events-format.md; the list links at [111]/[112] are not written), then for each
+record in turn a NUL-terminated string for every name-pointer field that is non-zero, in this
+order: [2] unit name, [4] city name, [5] attacker/talker name, [8] defender/listener/receiver
+name, [14]–[33] the TEXT lines up to the first zero, [34] MOVEUNIT owner, [36] MOVEUNIT unit,
+[49] MAKEAGGRESSION whom, [51] who, [53] CREATEUNIT owner, [55] CREATEUNIT unit, [79] home city,
+[80], [82] (never set by the text parser), [93] CHANGEMONEY receiver, [97] wave file. The
+pointer fields hold the game's memory addresses; only zero / non-zero matters to the reader,
+which allocates a fresh string for each (0x00457aa8, at most 255 characters).
+
+Loading a save with the block restores the events **with their state**: the fired mark (bit
+0x2000 of [1]) and the slots a trigger wrote over ANYBODY ([6], [9]). The scenario loader then
+leaves EVENTS.TXT alone (it parses the text only when no events came with the save and scenario
+parameters are in effect), and the post-load routine 0x004a04f5 runs in both cases.
+
+`parseSave` gives the records as `events` (`SaveEventRecord[]`, ints plus strings by field
+index); `writeSave` keeps, drops or replaces the block as the patch's `events` says
+(`encodeEventBlock`). `eventsFromRecords` / `recordsFromEvents` in events.ts convert to and from
+the engine's events and their state.

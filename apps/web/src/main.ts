@@ -262,21 +262,27 @@ async function attachScenarioEvents(
   gameFolder: GameFolder,
   name: string,
 ): Promise<string[]> {
-  const upper = name.toUpperCase();
-  const hit = gameFolder.paths.find((p) => p === upper || p.endsWith('/' + upper));
-  if (hit === undefined) return [];
-  const dir = hit.includes('/') ? hit.slice(0, hit.lastIndexOf('/') + 1) : '';
-  const eventsPath = gameFolder.paths.find((p) => p === dir + 'EVENTS.TXT');
-  if (eventsPath === undefined) return [];
-  const blob = await gameFolder.file(eventsPath);
-  if (!blob) return [];
-  const text = decodeText(new Uint8Array(await blob.arrayBuffer()));
-  const tribes: (string | undefined)[] = ['Barbarians'];
-  for (const n of loaded.civNames) tribes[n.slot] = n.plural;
-  const parsed = parseEvents(text, { tribes, units: gameFolder.rules.units.map((u) => u.name) });
-  if (!parsed.ok) return [`${eventsPath}: rejected — ${parsed.error} (line ${parsed.line}).`];
-  game.loadEvents(parsed.events);
-  const lines = [`${parsed.events.length} scenario events loaded from ${eventsPath}.`];
+  const lines: string[] = [];
+  if (game.state.scenarioEvents) {
+    // The save's own EVNT block (VERIFIED: the loader skips EVENTS.TXT when a save brought events).
+    lines.push(`${game.state.scenarioEvents.length} scenario events restored from the save.`);
+  } else {
+    const upper = name.toUpperCase();
+    const hit = gameFolder.paths.find((p) => p === upper || p.endsWith('/' + upper));
+    if (hit === undefined) return [];
+    const dir = hit.includes('/') ? hit.slice(0, hit.lastIndexOf('/') + 1) : '';
+    const eventsPath = gameFolder.paths.find((p) => p === dir + 'EVENTS.TXT');
+    if (eventsPath === undefined) return [];
+    const blob = await gameFolder.file(eventsPath);
+    if (!blob) return [];
+    const text = decodeText(new Uint8Array(await blob.arrayBuffer()));
+    const tribes: (string | undefined)[] = ['Barbarians'];
+    for (const n of loaded.civNames) tribes[n.slot] = n.plural;
+    const parsed = parseEvents(text, { tribes, units: gameFolder.rules.units.map((u) => u.name) });
+    if (!parsed.ok) return [`${eventsPath}: rejected — ${parsed.error} (line ${parsed.line}).`];
+    game.loadEvents(parsed.events);
+    lines.push(`${parsed.events.length} scenario events loaded from ${eventsPath}.`);
+  }
   for (const e of game.scenarioLoaded()) {
     const ev = e.event;
     if (ev.kind === 'scenario-text') lines.push(ev.lines.join(' '));

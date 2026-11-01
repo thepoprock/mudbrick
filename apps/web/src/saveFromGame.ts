@@ -10,6 +10,7 @@ import {
   type CivWrite,
   type SaveFile,
   type UnitWrite,
+  recordsFromEvents,
 } from '@mudbrick/formats';
 
 const SQUARE_BYTES = 6;
@@ -135,9 +136,18 @@ export function saveFromGame(original: Uint8Array, parsed: SaveFile, game: Game)
     wonders.push(holder ? (cityIndex.get(holder.id) ?? null) : was?.destroyed ? 'destroyed' : null);
   }
   void IMPROVEMENT;
-  void rules;
+
+  const tribes: (string | undefined)[] = ['Barbarians'];
+  for (const n of parsed.civNames) tribes[n.slot] = n.plural;
+  const events = state.scenarioEvents
+    ? recordsFromEvents(state.scenarioEvents, state.eventState, {
+        tribes,
+        units: rules.units.map((u) => u.name),
+      })
+    : null;
 
   return writeSave(original, parsed, {
+    events,
     turn: state.turn,
     year: gameYear(state.turn, state.difficulty),
     ...(state.pollutionSquares !== undefined ? { pollutionSquares: state.pollutionSquares } : {}),

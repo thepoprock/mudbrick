@@ -3,7 +3,7 @@
  * state the engine's turn loop needs. Every field is read from the save's verified header fields.
  */
 import { Game, Rng, type GameState, type World } from '@mudbrick/engine';
-import type { Rules, SaveFile } from '@mudbrick/formats';
+import { eventsFromRecords, type Rules, type SaveFile } from '@mudbrick/formats';
 import { engineRules } from './worldFromSave.js';
 
 export function gameFromSave(save: SaveFile, rules: Rules, world: World): Game {
@@ -51,5 +51,12 @@ export function gameFromSave(save: SaveFile, rules: Rules, world: World): Game {
   // The original seeds the C runtime's rand(); the save does not carry its state, so any seed is
   // as faithful as another. Derive one from the turn so reloads replay the same way.
   const rng = new Rng(0x9e3779b9 ^ (save.parameters.turn * 2654435761));
-  return new Game(world, engineRules(rules), rng, state);
+  const game = new Game(world, engineRules(rules), rng, state);
+  // A save made inside a scenario carries its events with their state (VERIFIED: the loader
+  // then leaves EVENTS.TXT alone).
+  if (save.events) {
+    const restored = eventsFromRecords(save.events);
+    game.loadEvents(restored.events, restored.state);
+  }
+  return game;
 }
