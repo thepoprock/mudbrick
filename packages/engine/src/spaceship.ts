@@ -252,6 +252,8 @@ export interface SpaceshipContext {
   massThrust: number;
   isHuman: (slot: number) => boolean;
   knowsFusion: (slot: number) => boolean;
+  /** A screen can put the choice of part to a human. */
+  askHuman?: boolean;
   /** Power ranking per slot (the original's 0x005da842), higher is stronger. */
   rank: (slot: number) => number;
   /** The computer re-chooses every city's production on launch; the game passes it. */
@@ -260,6 +262,9 @@ export interface SpaceshipContext {
   knowsPartAdvance?: (slot: number, kind: number) => boolean;
 }
 
+/** buildPart's answer when the human has been asked. */
+export const PART_ASKED = -2;
+
 export interface SpaceshipEvent {
   kind: 'spaceship';
   text: string;
@@ -267,9 +272,10 @@ export interface SpaceshipEvent {
 }
 
 /**
- * Add a part of a production kind (0x0053f36b). Components go to the emptier of propulsion and
- * fuel, modules to the lowest of the three (a human chooses in the original — INFERRED: the
- * same pick). Returns the part index, or −1 when the kind is complete. The first part marks
+ * Add a part of a production kind (0x0053f36b). A computer's components go to the emptier of
+ * propulsion and fuel and its modules to the lowest of the three; a human is asked when a screen
+ * can ask, and otherwise gets the same pick. Returns the part index, −1 when the kind is complete,
+ * or PART_ASKED. The first part marks
  * the ship started and clears every human's war-turn memory (VERIFIED oddity of the original).
  * Afterwards a computer player decides whether to launch.
  */
@@ -279,12 +285,19 @@ export function buildPart(
   kind: number,
   ctx: SpaceshipContext,
   events: SpaceshipEvent[],
+  chosen?: number,
 ): number {
   const ship = shipOf(civ);
   if (hasLaunched(civ) || kindComplete(ship, kind)) return -1;
   const human = ctx.isHuman(civ.slot);
+  // The original asks a human which part (COMPONENT, MODULE); the question waits for the screen.
+  if (human && kind !== 0 && chosen === undefined && ctx.askHuman === true) {
+    (civ.pendingParts ??= []).push(kind);
+    return PART_ASKED;
+  }
   let part: number;
-  if (kind === 0) part = 0;
+  if (chosen !== undefined) part = chosen;
+  else if (kind === 0) part = 0;
   else if (kind === 1) part = (ship.parts[1] ?? 0) < (ship.parts[2] ?? 0) ? 1 : 2;
   else {
     part = 3;

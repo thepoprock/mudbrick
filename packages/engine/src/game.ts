@@ -1587,7 +1587,8 @@ export class Game {
         const p = advanceIndex(this.rules.improvements[35 + k]?.preq);
         return p === null || this.knows(s, p);
       },
-      rank: (s) => this.world.civs.find((c) => c.slot === s)?.advancesCount ?? 0,
+      rank: (s) => this.powerRank(s),
+      askHuman: this.wantsTalks,
       rechooseProduction: (s) => {
         for (const c of this.citiesOf(s)) this.aiChooseProduction(c);
       },

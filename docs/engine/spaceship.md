@@ -18,8 +18,8 @@ implements it; the research panel shows the ship and a Launch button.
 | life support | 37 (module)     | 4     | 16   |
 | solar        | 37 (module)     | 4     | 16   |
 
-A component goes to the emptier of propulsion and fuel, a module to the lowest of the three (the
-original asks a human; INFERRED: the engine picks the same way). A kind is complete when every
+A computer's component goes to the emptier of propulsion and fuel, its module to the lowest of the
+three. A human is asked (COMPONENT, MODULE), and a full part is refused (NOFURTHER). A kind is complete when every
 part of it stands at its limit (0x0053fbd4); the city then reports BADSPACE. The structure
 supports only so many of the others (0x0053dcd0): propulsion `(s + 1) / 4`, fuel `(s − 1) / 4`,
 habitation `(s + 1) / 8`, life support `(s − 3) / 8`, solar `(s − 7) / 8`, each at most the

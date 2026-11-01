@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildPart,
+  PART_ASKED,
   checkArrivals,
   evaluateShip,
   kindComplete,
@@ -93,6 +94,12 @@ describe('the spaceship', () => {
     expect(kindComplete(shipOf(ai), 0)).toBe(true);
     for (let i = 0; i < 16; i++) expect([1, 2]).toContain(buildPart(w, ai, 1, cx, events));
     // Modules: habitation, then life support, then solar.
+    // A human with a screen to answer is asked instead, and the part goes where it says.
+    const asked = { ...cx, isHuman: () => true, askHuman: true };
+    const parts = [...(ai.spaceship?.parts ?? [])];
+    expect(buildPart(w, ai, 2, asked, events)).toBe(PART_ASKED);
+    expect(ai.pendingParts).toEqual([2]);
+    expect([...(ai.spaceship?.parts ?? [])]).toEqual(parts);
     expect(buildPart(w, ai, 2, cx, events)).toBe(3);
     expect(buildPart(w, ai, 2, cx, events)).toBe(4);
     expect(buildPart(w, ai, 2, cx, events)).toBe(5);

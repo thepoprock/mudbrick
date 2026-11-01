@@ -196,7 +196,7 @@ export function processProduction(
         }
       }
       const added = ctx.buildShipPart ? ctx.buildShipPart(city.owner, kind) : -1;
-      if (added < 0) {
+      if (added === -1) {
         events.push({ kind: 'bad-space', production: city.production });
         return events;
       }

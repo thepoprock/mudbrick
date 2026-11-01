@@ -54,6 +54,7 @@ import {
   parseCouncil,
   scienceReport,
   researchChoices,
+  researchPaths,
   spaceshipRows,
   topCities,
   tradeReport,
@@ -97,6 +98,9 @@ import {
   hasLaunched,
   hasStarted,
   launchShip,
+  buildPart,
+  PART_LIMITS,
+  shipOf,
   PART_NAMES,
   type SpaceshipEvent,
   yearOf,
@@ -1205,10 +1209,89 @@ export class PlaySession {
       const name = this.rules.advances[a]?.name ?? `advance ${a}`;
       this.talkButton(box, a === advised ? `${name} (advised)` : name, () => close(a));
     }
+    this.talkButton(box, 'Goal', () => {
+      this.showResearchGoal(0);
+    });
     this.talkButton(box, 'Civilopedia', () => {
       this.researchOpen = false;
       this.showPedia();
     });
+  }
+
+  /** The Goal button (0x00495281): pick anything unknown and hear which choices lead there. */
+  private showResearchGoal(tab: number): void {
+    const civ = this.civ;
+    const known = (a: number) => civ.knownAdvances[a] === true;
+    const entries: { name: string; advance: number }[] = [];
+    if (tab === 0) {
+      this.rules.advances.forEach((a, i) => {
+        if (a && a.preq1.kind !== 'never' && !known(i)) entries.push({ name: a.name, advance: i });
+      });
+    } else {
+      const items = tab === 1 ? this.rules.units : this.rules.improvements;
+      for (const item of items) {
+        const advance = advanceIndex(item?.preq);
+        if (!item || advance === null || known(advance)) continue;
+        const via = this.rules.advances[advance]?.name ?? '';
+        entries.push({ name: `${item.name} (${via})`, advance });
+      }
+    }
+    const box = this.talkBox();
+    box.replaceChildren();
+    const heading = document.createElement('h3');
+    heading.textContent = 'Research goal';
+    box.append(heading);
+    const list = document.createElement('div');
+    list.style.cssText = 'max-height:50vh;overflow:auto';
+    box.append(list);
+    for (const e of entries) {
+      this.talkButton(list, e.name, () => {
+        const paths = researchPaths(this.rules, civ, this.game.state.difficulty, e.advance);
+        const names = paths.map((a) => this.rules.advances[a]?.name ?? `${a}`);
+        box.replaceChildren();
+        const text = document.createElement('p');
+        text.textContent = names.length
+          ? `The way to ${e.name} lies through ${names.join(', ')}.`
+          : `Nothing we can study now leads to ${e.name}.`;
+        box.append(text);
+        this.talkButton(box, 'Back', () => {
+          this.researchOpen = false;
+          this.showResearch();
+        });
+      });
+    }
+    ['Advances', 'Units', 'Improvements'].forEach((label, t) => {
+      if (t !== tab) this.talkButton(box, label, () => this.showResearchGoal(t));
+    });
+    this.talkButton(box, 'Back', () => {
+      this.researchOpen = false;
+      this.showResearch();
+    });
+  }
+
+  /** Which part a finished component or module becomes (COMPONENT, MODULE, 0x0053f36b). */
+  private showPartChoice(kind: number): void {
+    const civ = this.civ;
+    const ship = shipOf(civ);
+    const parts = kind === 1 ? [1, 2] : [3, 4, 5];
+    const box = this.talkBox();
+    box.replaceChildren();
+    const heading = document.createElement('h3');
+    heading.textContent = kind === 1 ? 'Spaceship component' : 'Spaceship module';
+    box.append(heading);
+    for (const part of parts) {
+      const have = ship.parts[part] ?? 0;
+      const full = have >= (PART_LIMITS[part] ?? 0);
+      const label = `${PART_NAMES[part] ?? part}: ${have}${full ? ' (no room for more)' : ''}`;
+      const button = this.talkButton(box, label, () => {
+        const events: SpaceshipEvent[] = [];
+        civ.pendingParts?.shift();
+        buildPart(this.world, civ, kind, this.game.shipContext(), events, part);
+        for (const e of events) this.log(`${e.text}.`);
+        this.closeTalk();
+      });
+      button.disabled = full;
+    }
   }
 
   /** The Casualty Timeline: units of ours lost, newest first. */
@@ -1833,12 +1916,13 @@ export class PlaySession {
     return box;
   }
 
-  private talkButton(box: HTMLElement, label: string, run: () => void): void {
+  private talkButton(box: HTMLElement, label: string, run: () => void): HTMLButtonElement {
     const b = document.createElement('button');
     b.textContent = label;
     b.style.cssText = 'display:block;width:100%;margin-top:6px;text-align:left';
     b.addEventListener('click', run);
     box.appendChild(b);
+    return b;
   }
 
   private closeTalk(): void {
@@ -1856,7 +1940,9 @@ export class PlaySession {
     if (this.talk || this.seatPending) return;
     const talk = this.game.nextPendingTalk(this.humanSlot);
     if (!talk) {
-      if (this.civ.researching === null && this.game.state.turn > 0) this.showResearch();
+      const part = this.civ.pendingParts?.[0];
+      if (part !== undefined) this.showPartChoice(part);
+      else if (this.civ.researching === null && this.game.state.turn > 0) this.showResearch();
       return;
     }
     this.talk = talk;

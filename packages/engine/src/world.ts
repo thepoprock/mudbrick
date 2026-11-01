@@ -154,6 +154,8 @@ export interface Civ {
   incidents?: number;
   /** The spaceship (civilization record +0x400; spaceship.ts). */
   spaceship?: import('./spaceship.js').Spaceship;
+  /** Part kinds built and waiting for a human's choice of part (0x0053f36b). */
+  pendingParts?: number[];
 }
 
 export type Production = { kind: 'unit'; index: number } | { kind: 'improvement'; index: number };

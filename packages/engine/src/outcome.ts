@@ -14,6 +14,7 @@ import {
   type CityContext,
   gridDistance,
 } from './city.js';
+import { leadsTo } from './aiResearch.js';
 import { FUTURE_TECHNOLOGY } from './research.js';
 import { advanceIndex, GOVERNMENT, type EngineRules, DOMAIN_GROUND } from './rules.js';
 import { SquareFlag, type City, type Civ, type Unit, type World } from './world.js';
@@ -206,6 +207,16 @@ export function researchChoices(rules: EngineRules, civ: Civ, difficulty: number
   const all = researchableAdvances(rules, civ);
   if (difficulty === 0) return all;
   return all.filter((a, i) => i === 0 || (a - civ.advancesCount) % 3 !== 0);
+}
+
+/** Which of the choices lead toward a goal (0x00495281, the Goal button; it stores nothing). */
+export function researchPaths(
+  rules: EngineRules,
+  civ: Civ,
+  difficulty: number,
+  goal: number,
+): number[] {
+  return researchChoices(rules, civ, difficulty).filter((a) => leadsTo(rules, goal, a));
 }
 
 export function researchableAdvances(rules: EngineRules, civ: Civ): number[] {

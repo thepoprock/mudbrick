@@ -157,3 +157,9 @@ Program exists.
 
 The research-target chooser (0x00495ee8), the add-advance routine with its obsolescence and
 Future Technology handling (0x004935e5), and the AI attitude arithmetic.
+
+## The Goal button (VERIFIED, 0x00495281)
+
+In the human's research dialog, Goal lists every unknown advance, then units and improvements by
+their advance. Picking one stores nothing: it names the current choices that lead there
+(RESEARCHTHESE) or says none do (RESEARCHNONE). `researchPaths` in outcome.ts.
