@@ -88,6 +88,7 @@ export function saveFromGame(original: Uint8Array, parsed: SaveFile, game: Game)
       civilDisorder: c.inDisorder,
       weLoveTheKingDay: c.celebrating,
       ...(c.objective ? { objective: true } : {}),
+      ...(c.wonderCity ? { wonderCity: true } : {}),
       routes: c.tradeRoutes.map((r) => ({
         partner: cityIndex.get(r.partner) ?? r.partner,
         commodity: r.commodity ?? (r.food ? -1 : 0),

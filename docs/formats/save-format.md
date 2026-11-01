@@ -176,7 +176,7 @@ VERIFIED; the rest INFERRED.
 | 0   | u16     | x                                                                                                                                                                            |
 | 2   | u16     | y                                                                                                                                                                            |
 | 4   | 1       | bits: 0 civil disorder, 1 "we love the king" day, 2 improvement sold this turn, 3 stolen tech, 4 auto-build military rule, 7 can build coastal                               |
-| 5   | 1       | bit 3: can build hydro                                                                                                                                                       |
+| 5   | 1       | bit 0: has completed a wonder — set when a wonder completes here (0x004b7e74; the AI's wonder valuation then triples) — VERIFIED; bit 3: can build hydro                     |
 | 6   | 1       | bit 5: can build ships                                                                                                                                                       |
 | 7   | 1       | bits: 0 auto-build military advisor, 1 auto-build domestic advisor, 2 objective ×1, 4 objective ×3                                                                           |
 | 8   | 1       | owner slot                                                                                                                                                                   |

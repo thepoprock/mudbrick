@@ -716,8 +716,8 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
       // on the land mass building a wonder, −2 with none (or a wonder under way here) and no
       // wonder of this era owned; the threat (+1 under plan 1, else half); the same-work terms;
       // the in-progress adjustments of the favoured flag; the production rank; the common
-      // scaling; the Palace; the progress discount. The "wonder city" flag (city flag bit 8)
-      // is INFERRED clear: the engine never sets it.
+      // scaling; the Palace; then the progress discount — or ×3 for a city that has completed
+      // a wonder before (city flag bit 8, set by the production routine).
       const obsolete = env.wonderExpired?.(w) ?? false;
       if (obsolete) n = n * 3 + f.difficulty * 50;
       n += othersBuildingWonders * 5;
@@ -764,7 +764,8 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
         v -= Math.trunc(v / 3);
         if (wondersHere === 0 || (eraOwned[era] ?? 0) === 0) v = Math.trunc(v / 2);
       }
-      if (wonderInProgress && !obsolete)
+      if (city.wonderCity) v *= 3;
+      else if (wonderInProgress && !obsolete)
         v = Math.trunc(
           (Math.trunc(((cost - city.shieldsStored) * Math.trunc((v * 3) / 4)) / cost) +
             Math.trunc(v / 4)) /

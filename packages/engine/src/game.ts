@@ -407,6 +407,17 @@ export class Game {
       wonderCity: (i) => this.wonderCity(i),
       canBuildSpaceship: this.wonderCity(IMPROVEMENT.apolloProgram) !== null && !hasLaunched(civ),
       nextShipKind: (s, kind) => aiNextPartKind(this.world, this.civ(s), kind, this.shipContext()),
+      humanReadyForWonder: (w) =>
+        this.world.cities.some((c) => {
+          if (!this.civ(c.owner).isHuman) return false;
+          if (c.production.kind !== 'improvement' || c.production.index !== w) return false;
+          const rows = boxRows(
+            this.rules,
+            { isHuman: true, difficulty: this.state.difficulty },
+            true,
+          );
+          return c.shieldsStored >= (this.rules.improvements[w]?.costRows ?? 0) * rows;
+        }),
       buildShipPart: (s, kind) => {
         const events: SpaceshipEvent[] = [];
         const part = buildPart(this.world, this.civ(s), kind, this.shipContext(), events);

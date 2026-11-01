@@ -128,6 +128,7 @@ export function worldFromSave(save: SaveFile, rules: Rules): World {
       celebrating: c.weLoveTheKingDay,
       ...(typeof c.founder === 'number' ? { previousOwner: c.founder } : {}),
       ...(c.objectiveX1 ? { objective: true } : {}),
+      ...(c.wonderCity ? { wonderCity: true } : {}),
       tradeRoutes: c.routePartners.slice(0, c.activeTradeRoutes).map((partner, i) => {
         const raw = c.routeCommodities[i] ?? 0;
         return { partner, food: raw >= 0x80, commodity: raw >= 0x80 ? -1 : raw };

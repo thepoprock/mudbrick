@@ -258,8 +258,21 @@ describe('production (verified)', () => {
     c.shieldsStored = 100;
     ev = processProduction(w, rules, new Rng(1), c, ctx({ wonderCity: () => 7 }), inputs(0));
     expect(ev.map((e) => e.kind)).toContain('bad-build');
+    // A computer city yields while a human is about to finish the same wonder.
+    ev = processProduction(
+      w,
+      rules,
+      new Rng(1),
+      c,
+      ctx({ isHuman: false, humanReadyForWonder: () => true }),
+      inputs(0),
+    );
+    expect(ev.map((e) => e.kind)).toContain('wonder-yielded');
+    expect(c.improvements[IMPROVEMENT.darwins]).toBe(false);
+    expect(c.wonderCity).toBeUndefined();
     ev = processProduction(w, rules, new Rng(1), c, ctx(), inputs(0));
     expect(ev.map((e) => e.kind)).toEqual(['shields', 'built-wonder', 'wonder-effect']);
+    expect(c.wonderCity).toBe(true);
     c.production = { kind: 'improvement', index: 35 };
     c.shieldsStored = 100;
     expect(

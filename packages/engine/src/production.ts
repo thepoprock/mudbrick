@@ -43,6 +43,8 @@ export interface ProductionContext {
   buildShipPart?: (slot: number, kind: number) => number;
   /** The computer's choice of kind when a part completes (spaceship.ts aiNextPartKind). */
   nextShipKind?: (slot: number, kind: number) => number;
+  /** Is a human city building this wonder with shields enough to complete it? (the AI yields) */
+  humanReadyForWonder?: (improvement: number) => boolean;
   /** Shield-box rows for this owner; `boxRows(rules, ctx, true)` normally. */
   shieldRows: number;
 }
@@ -61,6 +63,8 @@ export type ProductionEvent =
   | { kind: 'bad-space'; production: Production }
   | { kind: 'built-improvement'; improvement: number }
   | { kind: 'built-wonder'; improvement: number }
+  /** A computer city holds its completed wonder back while a human is about to finish it. */
+  | { kind: 'wonder-yielded'; improvement: number }
   | { kind: 'palace-moved' }
   | {
       kind: 'wonder-effect';
@@ -161,6 +165,17 @@ export function processProduction(
     }
     const c = cost(rules, p, ctx.shieldRows);
     if (city.shieldsStored < c) return events;
+    // VERIFIED 0x004b7e74: a computer city completing a wonder nobody has built yet does nothing
+    // this turn when a human city is building the same wonder with shields enough for it.
+    if (
+      isWonder &&
+      !ctx.isHuman &&
+      ctx.wonderCity(idx) === null &&
+      ctx.humanReadyForWonder?.(idx) === true
+    ) {
+      events.push({ kind: 'wonder-yielded', improvement: idx });
+      return events;
+    }
     if (SPACESHIP_PARTS.includes(idx as 35 | 36 | 37)) {
       // A part joins the civilization's ship rather than the city (spaceship.ts).
       let kind = idx - 35;
@@ -199,6 +214,7 @@ export function processProduction(
           other.improvements[IMPROVEMENT.palace] = false;
       events.push({ kind: 'palace-moved' });
     }
+    if (isWonder) city.wonderCity = true; // VERIFIED 0x004b7e74: city flag bit 8
     events.push(
       isWonder
         ? { kind: 'built-wonder', improvement: idx }

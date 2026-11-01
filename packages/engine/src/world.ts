@@ -192,6 +192,8 @@ export interface City {
   workerNearby?: boolean;
   /** Scenario objective city (the record's byte 7 bit 2), for objective victory. */
   objective?: boolean;
+  /** Has completed a wonder (city flag bit 8; the AI then values wonders ×3). */
+  wonderCity?: boolean;
 }
 
 export interface Unit {

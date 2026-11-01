@@ -74,6 +74,8 @@ export interface CityWrite {
   weLoveTheKingDay: boolean;
   /** Scenario objective city (byte 7 bit 2). */
   objective?: boolean;
+  /** Has completed a wonder (byte 5 bit 0). */
+  wonderCity?: boolean;
   /** Routes (up to three): partner city id and commodity (−1 food). */
   routes?: { partner: number; commodity: number }[];
   /** Three signed commodity bytes each (+59, +62). */
@@ -246,6 +248,7 @@ export function cityWrite(c: CityRecord): CityWrite {
     production: c.production,
     civilDisorder: c.civilDisorder,
     weLoveTheKingDay: c.weLoveTheKingDay,
+    wonderCity: c.wonderCity,
     totals: {
       science: c.science,
       tax: c.tax,
@@ -416,6 +419,7 @@ export function writeSave(original: Uint8Array, save: SaveFile, patch: SavePatch
     w.bit(b + 4, 0, c.civilDisorder);
     w.bit(b + 4, 1, c.weLoveTheKingDay);
     if (c.objective) w.bit(b + 7, 2, true);
+    if (c.wonderCity !== undefined) w.bit(b + 5, 0, c.wonderCity);
     if (c.routes) {
       w.u8(b + 58, Math.min(3, c.routes.length));
       for (let i = 0; i < 3; i++) {

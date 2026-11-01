@@ -650,6 +650,8 @@ export class PlaySession {
       case 'built-improvement':
       case 'built-wonder':
         return `${cityName} completes ${this.rules.improvements[ev.improvement]?.name ?? 'a building'}.`;
+      case 'wonder-yielded':
+        return `${cityName} holds ${this.rules.improvements[ev.improvement]?.name ?? 'a wonder'} back.`;
       case 'discovered':
         return `Discovery: ${this.rules.advances[ev.advance]?.name ?? ev.advance}.`;
       case 'choose-research':

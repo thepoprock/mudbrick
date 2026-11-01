@@ -277,6 +277,10 @@ penalty for production type change" (50) of the stored shields; within a categor
 - On completion the improvement is added, the shield box loses the cost, and **for human players
   the box is then reset to 0** (overflow is lost; the AI keeps its carry-over for improvements).
 - Building the **Palace** removes it from the owner's other cities and moves the capital.
+- A computer city whose shields cover a wonder nobody has built yet completes nothing this turn
+  while a human city is building the same wonder with shields enough for it (VERIFIED
+  0x004b7e74; the shields and the production stay). Completing a wonder sets the city's
+  "has built a wonder" flag (city flag bit 8), which the AI's wonder valuation reads.
 - Wonder effects on completion: Manhattan Project halves every civilization's reputation
   counter and announces itself; Darwin's Voyage grants two advances; Leonardo's Workshop runs
   the unit upgrade; the Eiffel Tower adjusts attitudes; the Apollo Program reveals the map. Other

@@ -118,7 +118,7 @@ is not the best too); −1/3 when it is the best; the 10-or-20 scaling (10 when 
 flag starts as "the land mass plan is not 0 or 1"); +n / 3 … Barracks; −n / 3 with a Palace
 (halved again with no wonder here or none of the era); ×3 when the city is flagged "wonder city"
 (city flag bit 8 — the engine never sets it, INFERRED clear), else when a wonder is under way
-and not obsolete, progress discounts it: `n = ((cost − stored) × 3n / 4 / cost + n / 4) / 3`.
+and not obsolete, progress discounts it: `n = ((cost − stored) × 3n / 4 / cost + n / 4) / 3`. A city that has completed a wonder before (city flag bit 8, set by the production routine) skips the discount and triples the value instead — VERIFIED.
 All in `aiBuild.ts`; `cost` is the wonder's rows × the city's shield box rows + 1.
 
 ## Units
