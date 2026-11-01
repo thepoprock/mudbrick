@@ -205,6 +205,12 @@ class Builder {
   }
 }
 
+/** Number the land masses and seas of a world built by hand, and rate its squares. */
+export function prepareWorld(w: World, rules: EngineRules): void {
+  landmassIds(w);
+  computeFertility(w, rules);
+}
+
 function landmassIds(w: World): number {
   // Flood-fill land masses (ids 1…) and water bodies (ids 1… in the same numbering the
   // original shares between both: it labels land first). INFERRED: the original's labelling

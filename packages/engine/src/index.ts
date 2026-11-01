@@ -50,3 +50,5 @@ export * from './diplomacy.js';
 export * from './government.js';
 export * from './fertility.js';
 export * from './aiPurchase.js';
+export * from './parley.js';
+export * from './cheats.js';

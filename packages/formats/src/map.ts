@@ -177,3 +177,62 @@ export function decodeSquareBytes(v: DataView, o: number): Square {
 export function squareAt(map: MapFile, c: number, y: number): Square {
   return decodeSquare(map, squareIndex(map, c, y));
 }
+
+/** A map of open ocean, ready to paint (the editor's blank world). */
+export function blankMap(columns: number, rows: number, flatEarth: boolean, seed: number): MapFile {
+  const area = columns * rows;
+  const squares = new Uint8Array(area * SQUARE_BYTES);
+  for (let i = 0; i < area; i++) squares[i * SQUARE_BYTES] = 10;
+  return {
+    header: {
+      widthX2: columns * 2,
+      height: rows,
+      area,
+      flatEarth,
+      resourceSeed: seed,
+      locatorWidth: Math.ceil((columns * 2) / 4),
+      locatorHeight: Math.ceil(rows / 4),
+    },
+    columns,
+    rows,
+    startPositions: Array.from({ length: START_POSITIONS }, () => null),
+    squares,
+  };
+}
+
+/** Paint one square (byte 0: terrain in the low bits, river in bit 7). */
+export function paintSquare(
+  map: MapFile,
+  index: number,
+  change: { terrain?: number; river?: boolean },
+): void {
+  const o = index * SQUARE_BYTES;
+  let b = map.squares[o] ?? 0;
+  if (change.terrain !== undefined) b = (b & 0xf0) | (change.terrain & 0x0f);
+  if (change.river !== undefined) b = change.river ? b | 0x80 : b & 0x7f;
+  map.squares[o] = b;
+}
+
+/** The `.MP` file for a map; `parseMap` reads it back unchanged. */
+export function serializeMap(map: MapFile): Uint8Array {
+  const out = new Uint8Array(
+    MAP_HEADER_BYTES + START_POSITIONS * 4 + map.header.area * SQUARE_BYTES,
+  );
+  const v = new DataView(out.buffer);
+  const h = map.header;
+  [
+    h.widthX2,
+    h.height,
+    h.area,
+    h.flatEarth ? 1 : 0,
+    h.resourceSeed,
+    h.locatorWidth,
+    h.locatorHeight,
+  ].forEach((n, i) => v.setUint16(i * 2, n, true));
+  map.startPositions.forEach((p, i) => {
+    v.setUint16(MAP_HEADER_BYTES + 2 * i, p?.x ?? 0xffff, true);
+    v.setUint16(MAP_HEADER_BYTES + 2 * START_POSITIONS + 2 * i, p?.y ?? 0xffff, true);
+  });
+  out.set(map.squares, MAP_HEADER_BYTES + START_POSITIONS * 4);
+  return out;
+}

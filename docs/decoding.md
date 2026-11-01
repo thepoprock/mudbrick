@@ -80,7 +80,7 @@ Compare only at the same difficulty; `docs/engine/difficulty.md` lists what diff
 
 ## Known gaps
 
-Simultaneous moves are ported (0x0054d335, `Game.simultaneousRound`). The square locks of 0x0053d7b1 become one writer at a time on the relay (`apps/relay/src/lock.ts`), and each burst of orders sends the whole state, so a slow link will feel it. Open games, where a new player joins mid-game, are not ported.
+Simultaneous moves are ported (0x0054d335, `Game.simultaneousRound`). The square locks of 0x0053d7b1 become one writer at a time on the relay (`apps/relay/src/lock.ts`), and each burst of orders sends the whole state, so a slow link will feel it. Treaties between humans (Parley, 0x004ab8d5) are in `packages/engine/src/parley.ts`; an offer waits in the game state, so it works in hot seat, by file and over the relay. Open games, where a new player joins mid-game, are not ported.
 
 ## How to help
 

@@ -76,7 +76,18 @@ import {
   type Production,
   type Civ,
   type Game,
+  cheatChangeTerrain,
+  cheatCreateUnit,
+  cheatDestroyUnits,
+  cheatEditCity,
+  cheatEditUnit,
+  cheatKillCivilization,
+  cheatRevealMap,
+  cheatSetHuman,
+  cheatSetMoney,
+  grantAdvance,
   type MovementContext,
+  type ParleyItem,
   type Point,
   type TurnEvent,
   type Unit,
@@ -212,6 +223,8 @@ export class PlaySession {
   onRelease: (() => void) | null = null;
   private lockHeld = false;
   private lockAsked = false;
+  private tracks: string[] | null = null;
+  private lastTrack: string | null = null;
   private replaying = false;
   private pendingOrder: (() => void) | null = null;
   private releaseTimer: number | null = null;
@@ -239,6 +252,7 @@ export class PlaySession {
       panel.addEventListener('change', (e) => this.guardPanel(e, () => this.rechange(e)), true);
     }
     this.startTimer();
+    void this.playMusic();
     void this.buildMenuBar();
     this.log(`You lead the ${this.civ.name}. Arrow keys or the number pad move the selected unit.`);
     if (game.state.nextSlot === 0) {
@@ -438,6 +452,7 @@ export class PlaySession {
       else if (e.key === 'r') this.retire();
       else if (e.key === 'd') this.showCasualties();
       else if (e.key === 't') this.showTimer();
+      else if (e.key === 'p') this.showParley();
       else return false;
       return true;
     }
@@ -1113,6 +1128,57 @@ export class PlaySession {
     this.refresh();
   }
 
+  /**
+   * The soundtrack: the player's own CD tracks, named track02.wav and so on, in the game folder.
+   * VERIFIED 0x00453110: a random track, never the same one twice in a row.
+   */
+  private async playMusic(): Promise<void> {
+    if (this.tracks === null) {
+      this.tracks = [];
+      for (let n = 2; n < 25; n++) {
+        const name = `track${String(n).padStart(2, '0')}.wav`;
+        if (await this.folder.file(name)) this.tracks.push(name);
+      }
+    }
+    if (this.tracks.length === 0 || this.muted) return;
+    const options = this.tracks.filter((t) => t !== this.lastTrack);
+    const name = options[Math.floor(Math.random() * options.length)] ?? this.tracks[0];
+    if (!name) return;
+    this.lastTrack = name;
+    const blob = await this.folder.file(name);
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = new Audio(url);
+    a.volume = 0.5;
+    a.addEventListener('ended', () => {
+      URL.revokeObjectURL(url);
+      void this.playMusic();
+    });
+    void a.play().catch(() => undefined);
+  }
+
+  /**
+   * A film from the player's copy, converted to MP4 by scripts/convert-videos.ts, since browsers
+   * cannot play the original Indeo files. Without the converted file nothing shows.
+   */
+  private async playVideo(name: string): Promise<void> {
+    if (this.muted) return;
+    const blob = await this.folder.file(`${name}.mp4`);
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const v = document.createElement('video');
+    v.src = url;
+    v.autoplay = true;
+    v.style.cssText = 'position:fixed;left:50%;top:15%;transform:translateX(-50%);z-index:60';
+    const done = () => {
+      v.remove();
+      URL.revokeObjectURL(url);
+    };
+    v.addEventListener('ended', done);
+    v.addEventListener('click', done);
+    document.body.append(v);
+  }
+
   /** Play SOUND/NAME.WAV from the game folder, if it is there. */
   private sound(name: string | null): void {
     if (!name || this.muted) return;
@@ -1131,6 +1197,7 @@ export class PlaySession {
       case 'built-improvement':
       case 'built-wonder':
         this.sound(improvementSound(ev.improvement));
+        void this.playVideo(`WONDER${String(ev.improvement - 39).padStart(2, '0')}`);
         break;
       case 'disorder':
         this.sound('CIVDISOR');
@@ -1267,6 +1334,7 @@ export class PlaySession {
   }
 
   refresh(): void {
+    this.showParleyOffer();
     const opts = this.renderOptions();
     drawWorld(this.el.canvas, this.world, this.folder, opts);
     const ctx = this.el.canvas.getContext('2d');
@@ -1356,7 +1424,7 @@ export class PlaySession {
     const bar = document.createElement('div');
     bar.id = 'menuBar';
     bar.style.cssText = 'font:13px sans-serif;background:#ddd;padding:2px;user-select:none';
-    const skip = new Set(['CHEAT', 'EDITOR']);
+    const skip = new Set(['EDITOR']);
     let menu: HTMLSelectElement | null = null;
     let section = '';
     let first = false;
@@ -1385,6 +1453,8 @@ export class PlaySession {
           else if (value === 'RETIRE') this.retire();
           else if (value === 'TIMER') this.showTimer();
           else if (value === 'CHAT') this.chat();
+          else if (value === 'PARLEY') this.showParley();
+          else if (value.startsWith('CHEAT:')) this.runCheat(value.slice(6));
           else if (value) this.handleKey({ key: value, target: null } as unknown as KeyboardEvent);
           this.refresh();
         });
@@ -1406,9 +1476,23 @@ export class PlaySession {
       if (label === 'View Throne Room') code = 'THRONE';
       if (label === 'Retire') code = 'RETIRE';
       if (label === 'Chat with Kings') code = 'CHAT';
+      if (label.startsWith('Parley')) code = 'PARLEY';
+      if (section === 'CHEAT') code = `CHEAT:${label}`;
       const bound =
         /^F\d+$/.test(code) ||
-        ['Enter', ' ', '?', 'CASUALTY', 'RETIRE', 'CHAT', 'O', 'THRONE', 'TIMER'].includes(code) ||
+        [
+          'Enter',
+          ' ',
+          '?',
+          'CASUALTY',
+          'RETIRE',
+          'CHAT',
+          'PARLEY',
+          'O',
+          'THRONE',
+          'TIMER',
+        ].includes(code) ||
+        code.startsWith('CHEAT:') ||
         (code.length === 1 && 'brimopgfshwkauljFEPDHCMTR'.includes(code));
       opt.value = bound ? code : '';
       opt.disabled = !bound;
@@ -1419,6 +1503,256 @@ export class PlaySession {
     bar.style.left = '0';
     bar.style.zIndex = '20';
     this.el.canvas.parentElement?.prepend(bar);
+  }
+
+  /** The Cheat menu (cheats.ts). Each item asks what the original's dialog asks. */
+  private runCheat(item: string): void {
+    const state = this.game.state;
+    if (item.startsWith('Toggle')) {
+      if (!state.cheatMode && !window.confirm('Cheat mode changes the game. Turn it on?')) return;
+      state.cheatMode = !state.cheatMode;
+      this.log(`Cheat mode ${state.cheatMode ? 'on' : 'off'}.`);
+      return;
+    }
+    if (!state.cheatMode) {
+      this.log('Turn cheat mode on first.');
+      return;
+    }
+    const ask = (q: string, d: number) => {
+      const a = window.prompt(q, String(d));
+      return a === null || a === '' || Number.isNaN(Number(a)) ? null : Number(a);
+    };
+    const slot = () => ask('Which civilization, by slot?', this.humanSlot);
+    const unit = this.selected;
+    const at = unit?.position ?? this.openCity?.position;
+    const name = item.replace(/&/g, '');
+    if (name.startsWith('Create Unit') && at) {
+      const t = ask(`Unit type, 0 to ${this.rules.units.length - 1}`, 0);
+      if (t !== null) cheatCreateUnit(this.game, t, this.humanSlot, at.x, at.y);
+    } else if (name.startsWith('Reveal Map')) {
+      const s = slot();
+      if (s !== null) cheatRevealMap(this.game, s);
+    } else if (name.startsWith('Set Human')) {
+      const s = slot();
+      if (s !== null) {
+        cheatSetHuman(this.game, this.humanSlot, s);
+        this.humanSlot = s;
+        this.selected = null;
+        this.selectNext();
+      }
+    } else if (name.startsWith('Set Game Year')) {
+      const t = ask('Turn number', state.turn);
+      if (t !== null) state.turn = t;
+    } else if (name.startsWith('Kill')) {
+      const s = slot();
+      if (s !== null) cheatKillCivilization(this.game, s);
+    } else if (name.startsWith('Technology') || name.startsWith('Edit Technologies')) {
+      const s = slot();
+      const a = ask(`Advance, 0 to ${this.rules.advances.length - 1}`, 0);
+      if (s !== null && a !== null) {
+        const c = this.game.civ(s);
+        grantAdvance(c, a, 'other');
+        this.game.advanceGained(c, a);
+      }
+    } else if (name.startsWith('Force Government')) {
+      const s = slot();
+      const g = ask('Government, 0 to 6', 1);
+      if (s !== null && g !== null) changeGovernment(this.world, this.game.civ(s), g, false);
+    } else if (name.startsWith('Change Terrain') && at) {
+      const t = ask('Terrain, 0 to 10', 2);
+      if (t !== null) cheatChangeTerrain(this.game, at.x, at.y, t);
+    } else if (name.startsWith('Destroy') && at) {
+      cheatDestroyUnits(this.game, at.x, at.y);
+      this.selected = null;
+    } else if (name.startsWith('Change Money')) {
+      const s = slot();
+      const m = s === null ? null : ask('Gold', this.game.civ(s).treasury);
+      if (s !== null && m !== null) cheatSetMoney(this.game, s, m);
+    } else if (name.startsWith('Edit Unit') && unit) {
+      const h = ask('Hit points lost', unit.hitPointsLost);
+      if (h !== null) cheatEditUnit(unit, { hitPointsLost: h, veteran: !unit.veteran });
+    } else if (name.startsWith('Edit City') && this.openCity) {
+      const n = ask('City size', this.openCity.size);
+      const sh = ask('Shields stored', this.openCity.shieldsStored);
+      cheatEditCity(this.openCity, {
+        ...(n !== null ? { size: n } : {}),
+        ...(sh !== null ? { shields: sh } : {}),
+      });
+    } else {
+      this.log('That needs the scenario tools, which are parked, or something selected first.');
+    }
+    this.refresh();
+  }
+
+  /** Offer another human a treaty (the original's parley dialogs, 0x004ec15a). */
+  showParley(): void {
+    const others = this.world.civs.filter(
+      (c) => c.isHuman && c.inPlay && c.slot !== 0 && c.slot !== this.humanSlot,
+    );
+    if (others.length === 0) {
+      this.log('There is no other human player to talk to.');
+      return;
+    }
+    const box = this.talkBox();
+    box.replaceChildren();
+    const row = (label: string, field: HTMLElement) => {
+      const l = document.createElement('label');
+      l.style.display = 'block';
+      l.textContent = `${label} `;
+      l.append(field);
+      box.append(l);
+    };
+    const select = (options: [string, string][]) => {
+      const s = document.createElement('select');
+      for (const [value, text] of options) {
+        const o = document.createElement('option');
+        o.value = value;
+        o.textContent = text;
+        s.append(o);
+      }
+      return s;
+    };
+    const number = () => {
+      const i = document.createElement('input');
+      i.type = 'number';
+      i.min = '0';
+      i.value = '0';
+      i.style.width = '6em';
+      return i;
+    };
+    const who = select(others.map((c) => [String(c.slot), c.name]));
+    const treaty = select([
+      ['', 'no treaty'],
+      ['ceaseFire', 'cease fire'],
+      ['peace', 'peace'],
+      ['alliance', 'alliance'],
+      ['cancel', 'cancel our treaties'],
+    ]);
+    const giveGold = number();
+    const askGold = number();
+    const advanceChoices = (a: Civ, b: Civ): [string, string][] => [
+      ['', 'none'],
+      ...this.rules.advances.flatMap((adv, i): [string, string][] =>
+        a.knownAdvances[i] && !b.knownAdvances[i] ? [[String(i), adv.name]] : [],
+      ),
+    ];
+    const other = () => this.game.civ(Number(who.value));
+    let giveAdvance = select(advanceChoices(this.civ, other()));
+    let askAdvance = select(advanceChoices(other(), this.civ));
+    const cityChoices = (slot: number): [string, string][] => [
+      ['', 'none'],
+      ...this.world.cities
+        .filter((c) => c.owner === slot)
+        .map((c): [string, string] => [String(c.id), c.name]),
+    ];
+    const giveCity = select(cityChoices(this.humanSlot));
+    let askCity = select(cityChoices(other().slot));
+    const check = () => {
+      const c = document.createElement('input');
+      c.type = 'checkbox';
+      return c;
+    };
+    const giveMap = check();
+    const askMap = check();
+    const giveUnit = check();
+    who.addEventListener('change', () => {
+      const a = select(advanceChoices(this.civ, other()));
+      const b = select(advanceChoices(other(), this.civ));
+      const c = select(cityChoices(other().slot));
+      askAdvance.replaceWith(b);
+      giveAdvance.replaceWith(a);
+      askCity.replaceWith(c);
+      giveAdvance = a;
+      askAdvance = b;
+      askCity = c;
+    });
+    row('To', who);
+    row('Treaty', treaty);
+    row('We give gold', giveGold);
+    row('We ask gold', askGold);
+    row('We give advance', giveAdvance);
+    row('We ask advance', askAdvance);
+    row('We give city', giveCity);
+    row('We ask city', askCity);
+    row('We give our map', giveMap);
+    row('We ask their map', askMap);
+    if (this.selected?.owner === this.humanSlot) row('We give the selected unit', giveUnit);
+    const unit = this.selected;
+    this.talkButton(box, 'Send offer', () => {
+      const give: ParleyItem[] = [];
+      const take: ParleyItem[] = [];
+      const t = treaty.value;
+      if (t === 'ceaseFire' || t === 'peace' || t === 'alliance' || t === 'cancel')
+        give.push({ kind: 'treaty', level: t });
+      if (Number(giveGold.value) > 0) give.push({ kind: 'gold', amount: Number(giveGold.value) });
+      if (Number(askGold.value) > 0) take.push({ kind: 'gold', amount: Number(askGold.value) });
+      if (giveAdvance.value) give.push({ kind: 'advances', list: [Number(giveAdvance.value)] });
+      if (askAdvance.value) take.push({ kind: 'advances', list: [Number(askAdvance.value)] });
+      if (giveCity.value) give.push({ kind: 'cities', ids: [Number(giveCity.value)] });
+      if (askCity.value) take.push({ kind: 'cities', ids: [Number(askCity.value)] });
+      if (giveMap.checked) give.push({ kind: 'map' });
+      if (askMap.checked) take.push({ kind: 'map' });
+      if (giveUnit.checked && unit) give.push({ kind: 'units', ids: [unit.id] });
+      this.closeTalk();
+      if (give.length + take.length === 0) return;
+      this.game.offerParley(this.humanSlot, Number(who.value), give, take);
+      this.log(`Offer sent to the ${this.game.civ(Number(who.value)).name}.`);
+      this.refresh();
+    });
+    this.talkButton(box, 'Cancel', () => this.closeTalk());
+  }
+
+  private parleyText(items: ParleyItem[]): string {
+    return items
+      .map((i) => {
+        switch (i.kind) {
+          case 'treaty':
+            return i.level === 'cancel' ? 'an end to our treaties' : i.level;
+          case 'gold':
+            return `${i.amount} gold`;
+          case 'advances':
+            return i.list.map((a) => this.rules.advances[a]?.name ?? '?').join(', ');
+          case 'map':
+            return 'a map';
+          case 'units':
+            return `${i.ids.length} unit(s)`;
+          case 'cities':
+            return i.ids.map((c) => this.world.cities.find((x) => x.id === c)?.name).join(', ');
+          case 'war':
+            return 'war';
+        }
+      })
+      .join(', ');
+  }
+
+  /** An offer from another human, when this seat is free to answer. */
+  private showParleyOffer(): void {
+    if (
+      this.talk ||
+      this.seatPending ||
+      document.getElementById('talkBox')?.style.display === 'block'
+    )
+      return;
+    const offer = this.game.state.parleyOffers?.find((o) => o.to === this.humanSlot);
+    if (!offer) return;
+    const box = this.talkBox();
+    box.replaceChildren();
+    const text = document.createElement('div');
+    text.textContent = `The ${this.game.civ(offer.from).name} offer ${this.parleyText(offer.give) || 'nothing'} and ask ${this.parleyText(offer.take) || 'nothing'}.`;
+    box.append(text);
+    const answer = (yes: boolean) => () => {
+      const run = () => {
+        for (const e of this.game.answerParley(offer.id, yes)) {
+          const line = this.eventText(e);
+          if (line) this.log(line);
+        }
+        this.log(yes ? 'The offer is accepted.' : 'The offer is refused.');
+        this.closeTalk();
+      };
+      if (this.writable(run)) run();
+    };
+    this.talkButton(box, 'Accept', answer(true));
+    this.talkButton(box, 'Refuse', answer(false));
   }
 
   /** An ally asks for help (ALLYUNDERATTACK, DEMANDHELP, HELPBONUS, DIDNTHELP; 0x00444c22). */

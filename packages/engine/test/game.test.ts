@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { rawYields, shieldTotals, tradeSplit, unitSupport } from '../src/city.js';
 import { removeCity } from '../src/fertility.js';
 import { adjustAttitude, hasTreaty, setTreaty, TREATY } from '../src/diplomacy.js';
+import {
+  cheatCreateUnit,
+  cheatDestroyUnits,
+  cheatEditCity,
+  cheatKillCivilization,
+  cheatSetMoney,
+} from '../src/cheats.js';
 import { Game } from '../src/game.js';
 import { tryMove } from '../src/movement.js';
 import { longMoveCount } from '../src/turnStart.js';
@@ -601,5 +608,74 @@ describe('multiplayer options', () => {
     game.introduceHumans();
     expect(world.isSeen(4, 4, 3)).toBe(true);
     expect(hasTreaty(world, civ.slot, 3, TREATY.contact)).toBe(true);
+  });
+});
+
+describe('parley between humans', () => {
+  it('moves gold, gives advances and maps, and makes the treaty', () => {
+    const { world, game, civ } = setup();
+    civ.isHuman = true;
+    civ.treasury = 100;
+    const other: Civ = { ...civ, slot: 3, treasury: 50, knownAdvances: Array(100).fill(false) };
+    world.civs.push(other);
+    civ.knownAdvances[7] = true;
+    world.revealSquare(4, 4, civ.slot);
+    const offer = game.offerParley(
+      civ.slot,
+      3,
+      [{ kind: 'treaty', level: 'peace' }, { kind: 'advances', list: [7] }, { kind: 'map' }],
+      [{ kind: 'gold', amount: 30 }],
+    );
+    expect(game.state.parleyOffers).toHaveLength(1);
+    game.answerParley(offer.id, true);
+    expect(game.state.parleyOffers).toEqual([]);
+    expect(civ.treasury).toBe(130);
+    expect(other.treasury).toBe(20);
+    expect(other.knownAdvances[7]).toBe(true);
+    expect(world.isSeen(4, 4, 3)).toBe(true);
+    expect(hasTreaty(world, civ.slot, 3, TREATY.peace)).toBe(true);
+  });
+
+  it('hands a city over whole, and a refused offer does nothing', () => {
+    const { world, game, city, civ } = setup();
+    civ.isHuman = true;
+    const other: Civ = { ...civ, slot: 3, knownAdvances: [...civ.knownAdvances] };
+    world.civs.push(other);
+    const refused = game.offerParley(civ.slot, 3, [{ kind: 'cities', ids: [city.id] }], []);
+    game.answerParley(refused.id, false);
+    expect(city.owner).toBe(civ.slot);
+    const size = city.size;
+    const gold = civ.treasury;
+    const taken = game.offerParley(civ.slot, 3, [{ kind: 'cities', ids: [city.id] }], []);
+    game.answerParley(taken.id, true);
+    expect(city.owner).toBe(3);
+    expect(city.size).toBe(size);
+    expect(civ.treasury).toBe(gold);
+  });
+});
+
+describe('open games and cheats', () => {
+  it('lets a new player take over a computer civilization only in an open game', () => {
+    const { game, civ } = setup();
+    civ.isHuman = false;
+    expect(game.joinHuman(civ.slot)).toBe(false);
+    game.state.openGame = true;
+    expect(game.joinHuman(civ.slot)).toBe(true);
+    expect(civ.isHuman).toBe(true);
+    expect(game.joinHuman(civ.slot)).toBe(false);
+  });
+
+  it('applies the cheat menu to the records', () => {
+    const { world, game, civ, city } = setup();
+    const u = cheatCreateUnit(game, 0, civ.slot, 6, 6);
+    expect(world.unitsAt(6, 6)).toContain(u);
+    cheatDestroyUnits(game, 6, 6);
+    expect(world.unitsAt(6, 6)).toHaveLength(0);
+    cheatSetMoney(game, civ.slot, 99999);
+    expect(civ.treasury).toBe(30000);
+    cheatEditCity(city, { size: 12 });
+    expect(city.size).toBe(12);
+    cheatKillCivilization(game, civ.slot);
+    expect(civ.inPlay).toBe(false);
   });
 });

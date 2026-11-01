@@ -5,8 +5,28 @@
  * model (`@mudbrick/engine`), so the engine stays free of file-format knowledge. Field meanings
  * follow docs/formats/save-format.md; anything marked INFERRED there is INFERRED here too.
  */
-import { SquareFlag, World, type EngineRules } from '@mudbrick/engine';
-import { decodeSquare, type Rules, type SaveFile } from '@mudbrick/formats';
+import { prepareWorld, SquareFlag, World, type EngineRules } from '@mudbrick/engine';
+import { decodeSquare, type MapFile, type Rules, type SaveFile } from '@mudbrick/formats';
+
+/** A bare world from a `.MP` file, to start a new game on. */
+export function worldFromMap(map: MapFile, rules: Rules): World {
+  const world = new World({
+    columns: map.columns,
+    rows: map.rows,
+    flatEarth: map.header.flatEarth,
+    resourceSeed: Math.max(1, map.header.resourceSeed),
+  });
+  for (let i = 0; i < map.header.area; i++) {
+    const s = decodeSquare(map, i);
+    world.terrain[i] = s.terrain;
+    let f = 0;
+    if (s.river) f |= SquareFlag.River;
+    if (s.resourceFlag) f |= SquareFlag.NoSpecial;
+    world.flags[i] = f;
+  }
+  prepareWorld(world, rules);
+  return world;
+}
 
 /**
  * The parsed rules already have the shape the engine needs; this function is the compile-time

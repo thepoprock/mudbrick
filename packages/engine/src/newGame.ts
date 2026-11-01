@@ -56,6 +56,12 @@ export interface NewGameOptions {
   bloodlust?: boolean;
   /** Options byte 1 bit 0: "don't restart if eliminated". */
   noRestart?: boolean;
+  /** A world made beforehand, for a game on a premade map; `map` is then not used. */
+  premade?: World;
+  /** The map's start positions, by tribe (the `.MP` file's table). */
+  startSites?: ({ x: number; y: number } | null)[];
+  /** Select Computer Opponents (dialog OPPONENT, 0x004e37ea): a tribe for a slot, or null for random. */
+  chooseOpponent?: (slot: number, tribes: NewGameLeader[]) => number | null;
   /** Overrides the leader's gender flip (INFERRED: the original asks the human). */
   humanFemale?: boolean;
 }
@@ -186,17 +192,16 @@ export function findStartSite(
 /** Make a world and its civilizations, ready for turn 0. */
 export function newGame(rules: EngineRules, rng: Rng, opts: NewGameOptions): NewGameResult {
   const notes: string[] = [];
-  const world = generateMap(opts.map, rules, rng);
+  const world = opts.premade ?? generateMap(opts.map, rules, rng);
   const advances = rules.advances.length;
   for (let slot = 0; slot < 8; slot++) world.civs.push(blankCiv(slot, advances));
 
-  // Which colour slots play: the human's and the lowest others (INFERRED: the original's
-  // dialog decides; only the count is read from it here).
+  // VERIFIED 0x004e37ea: the human's slot, then slots drawn at random until the count is met.
   const humanLeader = opts.leaders[opts.humanTribe];
   if (!humanLeader) throw new Error(`no leader ${opts.humanTribe}`);
   const humanSlot = clamp(humanLeader.color, 1, 7);
   const inPlay = new Set<number>([humanSlot]);
-  for (let slot = 1; slot < 8 && inPlay.size < clamp(opts.civCount, 2, 7); slot++) inPlay.add(slot);
+  while (inPlay.size < clamp(opts.civCount, 2, 7)) inPlay.add(1 + rng.nextInt(7));
   const used = new Map<number, number>();
 
   // Birth (0x00480fc9), in slot order.
@@ -213,7 +218,14 @@ export function newGame(rules: EngineRules, rng: Rng, opts: NewGameOptions): New
         (l) => l.color === slot && l.index !== opts.humanTribe && !used.has(l.index),
       );
       if (pool.length === 0) pool = opts.leaders.filter((l) => l.color === slot);
-      const pick = pool[rng.nextInt(Math.max(1, pool.length))] ?? pool[0];
+      const chosen = opts.chooseOpponent?.(
+        slot,
+        opts.leaders.filter((l) => l.color === slot),
+      );
+      const pick =
+        opts.leaders.find((l) => l.index === chosen) ??
+        pool[rng.nextInt(Math.max(1, pool.length))] ??
+        pool[0];
       if (!pick) {
         civ.inPlay = false;
         notes.push(`no tribe for slot ${slot}`);
@@ -270,7 +282,12 @@ export function newGame(rules: EngineRules, rng: Rng, opts: NewGameOptions): New
   for (let slot = 1; slot < 8; slot++) {
     const civ = world.civs[slot];
     if (!civ?.inPlay) continue;
-    const site = findStartSite(world, rules, rng, civ.isHuman);
+    // VERIFIED 0x00480fc9: on turn 0 a tribe's place on the map, if it has one, comes first.
+    const fixed = opts.startSites?.[civ.tribe ?? -1];
+    const site =
+      fixed && !world.unitsAt(fixed.x, fixed.y).length
+        ? fixed
+        : findStartSite(world, rules, rng, civ.isHuman);
     if (!site) {
       civ.inPlay = false;
       notes.push(`${civ.name}: no start site; they sit this game out`);

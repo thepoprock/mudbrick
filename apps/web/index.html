@@ -156,6 +156,24 @@
         <button id="netJoin">Join</button>
         <span id="netStatus" class="hint"></span>
       </details>
+      <details id="editPanel">
+        <summary title="Paint a world and save it as a .MP file">Map editor</summary>
+        <label
+          >Size
+          <select id="edSize">
+            <option value="40x50">small</option>
+            <option value="50x80" selected>normal</option>
+            <option value="75x120">large</option>
+          </select></label
+        >
+        <button id="edNew">Blank map</button>
+        <label
+          >Brush
+          <select id="edBrush"></select>
+        </label>
+        <button id="edSave">Save .MP</button>
+        <span class="hint">Click the map to paint. Then use New game, ticking the box there.</span>
+      </details>
       <details id="newGamePanel">
         <summary title="Make a random world and start at 4000 BC">New game</summary>
         <div>
@@ -268,6 +286,10 @@
           <label><input id="ngBloodlust" type="checkbox" /> Bloodlust</label>
           <label><input id="ngNoRestart" type="checkbox" /> Don't restart eliminated players</label>
           <label><input id="ngByFile" type="checkbox" /> Play by file</label>
+          <label><input id="ngRandomWorld" type="checkbox" /> Random world</label>
+          <label><input id="ngOnMap" type="checkbox" /> Start on the map loaded now</label>
+          <label><input id="ngOpponents" type="checkbox" /> Select computer opponents</label>
+          <label><input id="ngOpenGame" type="checkbox" /> Open game: players can join later</label>
           <label><input id="ngSimultaneous" type="checkbox" /> Humans move simultaneously</label>
           <label><input id="ngDoubleProduction" type="checkbox" /> Double terrain production</label>
           <label><input id="ngDoubleMoves" type="checkbox" /> Double ground unit moves</label>

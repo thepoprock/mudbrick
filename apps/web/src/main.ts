@@ -9,7 +9,10 @@
 import { Game, isSnapshot, newGame, restoreGame, Rng, snapshotGame, World } from '@mudbrick/engine';
 import {
   decodeSquare,
+  blankMap,
+  paintSquare,
   parseMap,
+  serializeMap,
   parseSave,
   toGameCoords,
   type MapFile,
@@ -24,7 +27,7 @@ import { drawMap, hitTest } from './mapRenderer.js';
 import { NetLink } from './net.js';
 import { PlaySession } from './play.js';
 import { downloadBytes, saveFromGame } from './saveFromGame.js';
-import { engineRules, worldFromSave } from './worldFromSave.js';
+import { engineRules, worldFromMap, worldFromSave } from './worldFromSave.js';
 import { drawWorld, WORLD_TOP_PAD } from './worldRenderer.js';
 
 function byId<T extends HTMLElement>(id: string): T {
@@ -228,14 +231,14 @@ function startNewGame(): void {
       columns: columns ?? 50,
       rows: rows ?? 80,
       flatEarth: byId<HTMLInputElement>('ngFlat').checked,
-      landMass: selectValue('ngLand'),
-      landForm: selectValue('ngForm'),
-      climate: selectValue('ngClimate'),
-      temperature: selectValue('ngTemp'),
-      age: selectValue('ngAge'),
+      ...worldChoices(rng),
     },
     difficulty: selectValue('ngDifficulty'),
     civCount: selectValue('ngCivs') || 3 + rng.nextInt(5),
+    ...(byId<HTMLInputElement>('ngOpponents').checked ? { chooseOpponent: askOpponent } : {}),
+    ...(map && byId<HTMLInputElement>('ngOnMap').checked
+      ? { premade: worldFromMap(map, folder.rules), startSites: map.startPositions }
+      : {}),
     ...(byId<HTMLSelectElement>('ngGender').value
       ? { humanFemale: byId<HTMLSelectElement>('ngGender').value === 'f' }
       : {}),
@@ -415,9 +418,57 @@ window.addEventListener('keydown', (e) => {
 });
 
 canvas.addEventListener('click', (e) => {
-  if (!session) return;
+  if (!session) {
+    paintAt(e.clientX, e.clientY);
+    return;
+  }
   session.handleClick(e.clientX, e.clientY);
 });
+
+// ---- the map editor (Civ2Map.exe's job): paints a `.MP` file directly
+function fillBrushes(): void {
+  const brush = byId<HTMLSelectElement>('edBrush');
+  if (!folder || brush.options.length > 0) return;
+  const add = (value: string, text: string) => {
+    const o = document.createElement('option');
+    o.value = value;
+    o.textContent = text;
+    brush.append(o);
+  };
+  folder.rules.terrain.slice(0, 11).forEach((t, i) => add(`t${i}`, t.name));
+  add('river', 'River on or off');
+  folder.rules.leaders.forEach((l, i) => add(`s${i}`, `Start: ${l.plural}`));
+}
+
+function paintAt(clientX: number, clientY: number): void {
+  if (!map || !byId<HTMLDetailsElement>('editPanel').open) return;
+  const rect = canvas.getBoundingClientRect();
+  const zoom = renderOptions().zoom;
+  const hit = hitTest(map, zoom, clientX - rect.left, clientY - rect.top);
+  if (!hit) return;
+  const brush = byId<HTMLSelectElement>('edBrush').value;
+  const index = hit.index;
+  if (brush.startsWith('t')) paintSquare(map, index, { terrain: Number(brush.slice(1)) });
+  else if (brush === 'river') paintSquare(map, index, { river: !decodeSquare(map, index).river });
+  else if (brush.startsWith('s'))
+    map.startPositions[Number(brush.slice(1))] = toGameCoords(hit.c, hit.y);
+  redraw();
+}
+
+byId<HTMLButtonElement>('edNew').addEventListener('click', () => {
+  const [columns, rows] = byId<HTMLSelectElement>('edSize').value.split('x').map(Number);
+  map = blankMap(columns ?? 50, rows ?? 80, false, 1 + Math.floor(Math.random() * 0x7fff));
+  save = undefined;
+  world = undefined;
+  fillBrushes();
+  redraw();
+});
+
+byId<HTMLButtonElement>('edSave').addEventListener('click', () => {
+  if (map) downloadBytes(serializeMap(map), 'MAP.MP');
+});
+
+byId<HTMLDetailsElement>('editPanel').addEventListener('toggle', fillBrushes);
 
 /** Play by file: the end of a turn saves the game for the next player to open. */
 function attachByFile(s: PlaySession): void {
@@ -431,6 +482,39 @@ function attachByFile(s: PlaySession): void {
   };
 }
 
+/**
+ * The world's character. VERIFIED 0x004140ae and 0x00550970: each of the four rolls one of three,
+ * and the land form stays varied unless a one in three makes it follow the land mass.
+ */
+function worldChoices(rng: Rng) {
+  if (!byId<HTMLInputElement>('ngRandomWorld').checked)
+    return {
+      landMass: selectValue('ngLand'),
+      landForm: selectValue('ngForm'),
+      climate: selectValue('ngClimate'),
+      temperature: selectValue('ngTemp'),
+      age: selectValue('ngAge'),
+    };
+  const roll = () => rng.nextInt(3) - 1;
+  const land = roll();
+  const form = rng.nextInt(3) === 0 ? land : 0;
+  return {
+    landMass: land + 1,
+    landForm: form,
+    temperature: roll(),
+    climate: roll(),
+    age: roll() + 1,
+  };
+}
+
+/** Select Computer Opponents (dialog OPPONENT): the tribe for each slot, or Random. */
+function askOpponent(slot: number, tribes: { index: number; plural: string }[]): number | null {
+  const list = tribes.map((t, i) => `${i + 1} ${t.plural}`).join(', ');
+  const answer = window.prompt(`Opponent for colour ${slot}: ${list}, or blank for random`, '');
+  const pick = tribes[Number(answer) - 1];
+  return pick ? pick.index : null;
+}
+
 /** The Select Multiplayer Features choices (dialog ADVANCEDMP) from the new game panel. */
 function multiplayerOptions() {
   const on = (id: string) => byId<HTMLInputElement>(id).checked;
@@ -441,6 +525,7 @@ function multiplayerOptions() {
     ...(on('ngDoubleMoves') ? { doubleMoves: true } : {}),
     ...(on('ngShowStarts') ? { showHumanStarts: true } : {}),
     ...(on('ngKillRetire') ? { killOnRetirement: true } : {}),
+    ...(on('ngOpenGame') ? { openGame: true } : {}),
   };
 }
 
@@ -467,6 +552,10 @@ function restoreFrom(text: string, seat: number): void {
     renderOptions,
   );
   attachNet(session, seat);
+  if (restored.game.joinHuman(seat)) {
+    session.log(`You take over the ${restored.game.civ(seat).name}.`);
+    net?.sendState(snapshotGame(restored.game, moving), moving);
+  }
   if (moving === seat) session.log('Your move.');
   else session.log(`Waiting for the ${restored.game.civ(moving).name}.`);
   saveButton.disabled = false;

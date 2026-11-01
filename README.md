@@ -16,7 +16,9 @@ data.** What works today:
 
 - Hot seat, and network play through a small relay, with players moving in turn.
 
-Not yet: the map and scenario editors, wonder and council videos, music.
+Not yet: the scenario editors.
+
+Music plays from your own CD tracks (`track02.wav` and so on) in the game folder. Films need `scripts/convert-videos.ts`, because browsers cannot play the original format.
 
 **The decode is not finished.** [docs/decoding.md](docs/decoding.md) says how far it has got and how
 to help.

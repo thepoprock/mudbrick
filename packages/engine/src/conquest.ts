@@ -26,6 +26,8 @@ export const CONQUEST_ADVANCES = {
 export const GOVERNMENT_ADVANCES = [31, 54, 15, 71, 21] as const;
 
 export interface CaptureContext {
+  /** A city handed over by treaty (0x004ac4d1): no plunder, no damage, no lost citizen. */
+  gift?: boolean;
   /** Run the consequences of an advance just granted (Game.advanceGained). */
   advanceGained?: (civ: Civ, advance: number) => void;
   /** Scenario events: CITYTAKEN, after the city has changed hands. */
@@ -88,7 +90,7 @@ export function captureCity(
   const population = world.cities
     .filter((c) => c.owner === loser.slot)
     .reduce((s, c) => s + c.size, 0);
-  const gold = plunder(loser, city, population);
+  const gold = ctx.gift ? 0 : plunder(loser, city, population);
   loser.treasury -= gold;
   if (captor.slot !== 0) captor.treasury += gold;
 
@@ -98,7 +100,7 @@ export function captureCity(
   city.disorderRepeated = false;
 
   const destroyed: number[] = [];
-  if (!liberated) {
+  if (!liberated && !ctx.gift) {
     for (const i of [
       IMPROVEMENT.palace,
       IMPROVEMENT.temple,
@@ -136,7 +138,7 @@ export function captureCity(
 
   let lostCitizen = false;
   let cityDestroyed = false;
-  if ((ctx.conquest && !liberated) || city.size > 1) {
+  if (!ctx.gift && ((ctx.conquest && !liberated) || city.size > 1)) {
     city.size -= 1;
     lostCitizen = true;
     if (city.size <= 0) {

@@ -145,7 +145,9 @@ import {
   type ScenarioEffect,
   type ScenarioEvent,
 } from './events.js';
+import { captureCity, type CaptureContext } from './conquest.js';
 import { fullMoves, inEnemyZoc } from './movement.js';
+import { executeParley, type ParleyItem, type ParleyOffer } from './parley.js';
 import { payUpkeep, type UpkeepEvent } from './upkeep.js';
 import { citySquareClick } from './humanOrders.js';
 import { history, type HistoryEvent } from './reports.js';
@@ -214,6 +216,12 @@ export interface GameState {
   showHumanStarts?: boolean;
   /** Multiplayer: a human who retires takes the civilization with them (0x004aeab6). */
   killOnRetirement?: boolean;
+  /** Cheat mode has been turned on (option bit 0x8000). */
+  cheatMode?: boolean;
+  /** A new player may take over a computer civilization (Open Game, 0x004e3386). */
+  openGame?: boolean;
+  /** Treaties offered between humans and not yet answered (parley.ts). */
+  parleyOffers?: ParleyOffer[];
   /** Humans move at once after the computers (0x0054d335). */
   simultaneous?: boolean;
   /** Simultaneous play: the humans still moving this round. */
@@ -2215,6 +2223,51 @@ export class Game {
     this.state.awaitingMoves = humans.filter((s) => this.civ(s).inPlay);
     if (this.state.awaitingMoves.length === 0) out.push(...this.endRound());
     return out;
+  }
+
+  /**
+   * A new player takes over a computer civilization (VERIFIED 0x004e3386, with the seven-human
+   * limit of JOINGAME1). Returns false when the game is closed or the slot cannot be taken.
+   */
+  joinHuman(slot: number): boolean {
+    const civ = this.world.civs.find((c) => c.slot === slot);
+    if (!this.state.openGame || !civ?.inPlay || civ.isHuman || slot === 0) return false;
+    civ.isHuman = true;
+    if (this.state.simultaneous) (this.state.awaitingMoves ??= []).push(slot);
+    return true;
+  }
+
+  /** One human offers another a treaty (parley.ts). */
+  offerParley(from: number, to: number, give: ParleyItem[], take: ParleyItem[]): ParleyOffer {
+    const list = (this.state.parleyOffers ??= []);
+    const offer = { id: 1 + list.reduce((m, o) => Math.max(m, o.id), 0), from, to, give, take };
+    list.push(offer);
+    return offer;
+  }
+
+  /** The other human answers: accepted offers take effect at once (0x004ab8d5). */
+  answerParley(id: number, accept: boolean): TurnEvent[] {
+    const list = this.state.parleyOffers ?? [];
+    const offer = list.find((o) => o.id === id);
+    if (!offer) return [];
+    this.state.parleyOffers = list.filter((o) => o !== offer);
+    if (!accept) return [];
+    executeParley(this.world, this.rules, offer, {
+      grantAdvance: (r, a) => {
+        const c = this.civ(r);
+        grantAdvance(c, a, 'other');
+        this.advanceGained(c, a);
+      },
+      giveCity: (city, r) => {
+        captureCity(this.world, this.rules, this.rng, city, this.civ(r), this.civ(city.owner), {
+          gift: true,
+          conquest: false,
+          turn: this.state.turn,
+          difficulty: this.state.difficulty,
+        } as CaptureContext);
+      },
+    });
+    return this.eliminateCityless();
   }
 
   /** A human has finished moving; the last to finish closes the round. Simultaneous play only. */
