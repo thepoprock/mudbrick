@@ -5,6 +5,7 @@ import {
   conversation,
   goldGoodwill,
   powerRanks,
+  relationsTurn,
   type NegotiationEnv,
 } from '../src/negotiation.js';
 import { Rng } from '../src/rng.js';
@@ -47,6 +48,7 @@ function env(world: World): NegotiationEnv {
     power: () => 10,
     leaderAttack: () => 0,
     leaderCivilize: () => 0,
+    leaderExpand: () => 0,
   };
 }
 function setup() {
@@ -116,5 +118,20 @@ describe('a conversation', () => {
     if (!first.done) expect(first.value.key).toBe('OUTAHERE');
     expect(talk.next(0).done).toBe(true);
     expect(c.talks).toBe(9);
+  });
+});
+
+describe("a computer player's turn toward a human", () => {
+  it('warmer feelings make the attitude figure fall, and no contact leaves it alone', () => {
+    const { w, c } = setup();
+    c.attitudes = new Uint8Array(8);
+    c.attitudes[1] = 50;
+    const talk = relationsTurn(env(w), 1, 2, false);
+    expect(talk.next().done).toBe(true);
+    expect(c.attitudes[1]).toBe(50);
+    setTreaty(w, 1, 2, TREATY.contact | TREATY.peace);
+    const talk2 = relationsTurn(env(w), 1, 2, false);
+    expect(talk2.next().done).toBe(true);
+    expect(c.attitudes[1]).toBe(48); // peace −2, not at war −1, first in advances +1
   });
 });

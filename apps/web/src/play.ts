@@ -1330,8 +1330,10 @@ export class PlaySession {
 
   private nextTalk(): void {
     if (this.talk) return;
-    const next = this.game.pendingTalks.shift();
-    if (next) this.startTalk(next.computer, false);
+    const talk = this.game.nextPendingTalk();
+    if (!talk) return;
+    this.talk = talk;
+    this.showDialog(talk.next());
   }
 
   private startTalk(computer: number, byHuman: boolean): void {

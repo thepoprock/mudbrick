@@ -22,7 +22,7 @@ import {
 } from './diplomacy.js';
 import type { Rng } from './rng.js';
 import { gridDistance } from './city.js';
-import type { Civ, World } from './world.js';
+import { SquareFlag, type City, type Civ, type Unit, type World } from './world.js';
 
 /** Unit type 45, Nuclear Missile: the count the original keeps at civilization +0x105. */
 const NUCLEAR_MISSILE = 45;
@@ -59,6 +59,7 @@ export interface NegotiationEnv {
   power: (slot: number) => number;
   leaderAttack: (slot: number) => number;
   leaderCivilize: (slot: number) => number;
+  leaderExpand: (slot: number) => number;
 }
 
 export interface Dialog {
@@ -153,7 +154,7 @@ export interface Assessment {
 }
 
 /** Everything both sides of the conversation read. */
-class Talk {
+export class Talk {
   readonly h: Civ;
   readonly c: Civ;
   a: Assessment;
@@ -1865,4 +1866,206 @@ function* gifts(t: Talk): Generator<Dialog, void, number> {
     yield { key: 'MILITARYNONE' };
     t.talks -= 1;
   }
+}
+
+export interface Intrusion {
+  /** Cities with the human's units in their radius. */
+  cities: number;
+  /** The units, counted once each. */
+  units: number;
+  /** Weighted by what they stand on (0x0050edb0). */
+  severity: number;
+  /** Repeat offences, and more than three units at one city. */
+  strikes: number;
+  city: City | null;
+}
+
+/** The human's units inside a computer city's radius, off roads to nowhere (0x0050edb0). */
+export function scanIntrusions(env: NegotiationEnv, computer: number, human: number): Intrusion {
+  const out: Intrusion = { cities: 0, units: 0, severity: 0, strikes: 0, city: null };
+  const c = civOf(env.world, computer);
+  if (!c || ((treatiesOf(c)[human] ?? 0) & TREATY.alliance) !== 0) return out;
+  const counted = new Set<Unit>();
+  for (const city of env.world.cities) {
+    if (city.owner !== computer) continue;
+    let here = 0;
+    for (let i = 0; i < 20; i++) {
+      const p = env.world.radiusSquare(city.position.x, city.position.y, i);
+      if (!p || !env.world.isLand(p.x, p.y) || env.world.cityAt(p.x, p.y)) continue;
+      const units = env.world.unitsAt(p.x, p.y);
+      if (units[0]?.owner !== human) continue;
+      for (const u of units) {
+        if ((env.rules.units[u.type]?.role ?? 9) >= 6 || counted.has(u)) continue;
+        counted.add(u);
+        if (out.city !== city) out.cities += 1;
+        out.city = city;
+        if (u.warned) out.strikes += 1;
+        u.warned = true;
+        here += 1;
+        out.units += 1;
+        out.severity += 1;
+        if (env.world.hasFlag(p.x, p.y, SquareFlag.Road)) out.severity += 2;
+        if (env.world.hasFlag(p.x, p.y, SquareFlag.Railroad)) out.severity += 1;
+        if (env.world.hasFlag(p.x, p.y, SquareFlag.Mine)) out.severity += 1;
+        if (env.world.hasFlag(p.x, p.y, SquareFlag.Irrigation)) out.severity += 1;
+        if (env.world.hasFlag(p.x, p.y, SquareFlag.Fortress)) out.severity += 2;
+      }
+    }
+    if (here > 3) out.strikes += 1;
+  }
+  return out;
+}
+
+/** The attitude a computer player's feeling about a human moves by (the rest of 0x00513f7e). */
+export function attitudeDrift(t: Talk, start: number, raceOn: boolean): number {
+  const { env, h, c, hs, cs } = t;
+  const advC = c.advancesCount;
+  const advH = h.advancesCount;
+  const pC = env.power(cs);
+  const pH = env.power(hs);
+  let ahead = 0;
+  let wars = 0;
+  let enemiesOfH = 0;
+  for (let s = 1; s < 8; s++) {
+    const o = civOf(env.world, s);
+    if (!o) continue;
+    if (advH < o.advancesCount) ahead += 1;
+    if ((t.word(c, s) & TREATY.war) !== 0 && s !== cs) wars += 1;
+    if ((t.word(o, hs) & TREATY.war) !== 0) enemiesOfH += pH < env.power(s) ? 2 : 1;
+  }
+  const attack = env.leaderAttack(cs);
+  let d = start;
+  if (t.allied) {
+    if (wars === 0) {
+      if (c.treasury < h.treasury) d += 1;
+      if (advC < advH && env.difficulty !== 0) d += 1;
+      if (advH < advC) d -= 1;
+      if (pC < pH) d += 1;
+      if (pH < pC) d -= 1;
+    } else if (attack < 1 || wars > 1) {
+      d -= Math.max(1, wars - attack - 1);
+    }
+    if (advC + 8 < advH) d += 1;
+  }
+  if (t.atPeace) d -= 2;
+  if (!t.atWar) d -= 1;
+  const rankH = t.rankOf(hs);
+  if (rankH < 7 && env.turn > 200) {
+    let x = 7 - rankH;
+    if (raceOn) x = 1;
+    if (env.turn < 400) x = (x + 1) >> 1;
+    d -= x;
+  }
+  const lenient = t.gap <= enemiesOfH && !t.vendetta;
+  if (rankH === 7 && t.citiesOf(hs) > 3 && env.turn > 200 && env.difficulty !== 0) {
+    let x = Math.trunc(env.difficulty / 3) + 1;
+    if (lenient) x >>= 1;
+    d += x;
+  }
+  if (t.nukes(h) !== 0) {
+    d -= 1;
+    if (t.nukes(c) === 0 && d > 0) d -= 1;
+  }
+  let temperament = attack * 3 + env.leaderExpand(cs) * 2;
+  if (temperament < -1) temperament = -2;
+  let gap = t.rankOf(hs) - t.rankOf(cs);
+  if (gap < 0 || !t.allied) gap = Math.trunc(gap / 2);
+  d += temperament + gap;
+  if (lenient) {
+    if (pC * 4 < pH) d -= 1;
+    if (pC * 2 < pH) d -= 1;
+    if (Math.trunc((pC * 3) / 2) < pH) d -= 1;
+  }
+  if (!t.allied) {
+    if (pH < pC) d += 1;
+    if (pH * 2 < pC) d += 1;
+  }
+  if (t.shielded(hs)) d = d < 1 ? d - 1 : d >> 1;
+  if (ahead === 0) d += 1;
+  if (advC < advH) d += 1 - env.leaderCivilize(cs);
+  if (t.atWar && d < 1) d = 0;
+  if (env.ownsWonder(cs, IMPROVEMENT.eiffelTower)) d += 1;
+  if (env.ownsWonder(hs, IMPROVEMENT.eiffelTower)) {
+    if (d > 0) d = Math.trunc(d / 2);
+    d = d - 1 >= 0 ? d - 2 : d - 1;
+  }
+  if ((t.cw & TREATY.contact) === 0) d = 0;
+  return d;
+}
+
+/** One computer player's turn toward a human (0x00513f7e): borders, then the attitude drift. */
+export function* relationsTurn(
+  env: NegotiationEnv,
+  human: number,
+  computer: number,
+  raceOn: boolean,
+): Conversation {
+  const t = new Talk(env, human, computer, false);
+  t.assess();
+  t.firstPass = false;
+  const { h, c } = t;
+  const seen = scanIntrusions(env, computer, human);
+  let drift = seen.severity;
+  if (seen.cities !== 0 && (t.cw & (TREATY.war | TREATY.alliance)) === 0 && seen.city) {
+    const name = seen.city.name;
+    if (!t.atPeace) {
+      let strikes = seen.strikes;
+      let friendly = env.rng.nextInt(2);
+      if (t.vendetta) strikes += 1;
+      const rep = (h.reputation ?? 0) + strikes;
+      if (rep > 2 && (rep - 1 < 1 ? 0 : env.rng.nextInt(rep)) > 1) {
+        friendly = 0;
+        setTreaty(env.world, computer, human, TREATY.strain);
+      }
+      if (((env.turn + computer) & 3) === 0 && (yield* t.meet())) {
+        yield { key: friendly === 0 ? 'NEARCITY' : 'ADMIRECITY', strings: { 1: name } };
+      }
+    } else {
+      const talked = t.lastWar()[computer] ?? 0;
+      if (!(talked < env.turn && env.turn - talked < 3)) {
+        t.assess();
+        if (seen.strikes === 0) {
+          drift = seen.severity - 1;
+          yield { key: seen.cities < 2 ? 'INTRUDER' : 'INTRUDERS', strings: { 1: name } };
+        } else {
+          const answer = yield {
+            key: seen.cities < 2 ? 'VIOLATOR' : 'VIOLATORS',
+            strings: { 1: name },
+          };
+          if (answer === 0) {
+            for (const u of env.world.units) {
+              if (u.owner !== human || !u.warned) continue;
+              const home = env.world.cities
+                .filter((x) => x.owner === human)
+                .sort(
+                  (a, b) =>
+                    gridDistance(env.world, u.position, a.position) -
+                    gridDistance(env.world, u.position, b.position),
+                )[0];
+              if (home) {
+                u.position = { x: home.position.x, y: home.position.y };
+                u.order = null;
+              }
+            }
+            yield {
+              key: seen.units === 1 ? 'WITHDRAWN1' : 'WITHDRAWN',
+              numbers: { 0: seen.units },
+            };
+          } else {
+            const senate = h.government === 6 || (h.government === 5 && env.rng.nextInt(2) === 1);
+            if (senate) {
+              yield { key: 'SENATESCANDAL', strings: { 0: h.name } };
+              h.government = 0;
+            }
+            adjustAttitude(env.world, computer, human, 50);
+            t.breakWith(h, computer, -1);
+            yield { key: 'VIOLATE', strings: { 1: c.name } };
+          }
+        }
+      }
+    }
+  }
+  for (const u of env.world.units) if (u.owner === human) u.warned = false;
+  const change = attitudeDrift(t, drift, raceOn);
+  adjustAttitude(env.world, computer, human, change);
 }

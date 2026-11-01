@@ -222,6 +222,8 @@ export interface Unit {
   veteran: boolean;
   hitPointsLost: number;
   movesSpent: number;
+  /** Warned off a computer player's territory (unit flag 0x20). */
+  warned?: boolean;
   /** True while the order is Fortified (kept in step with `order`). */
   fortified: boolean;
   homeCity: number | null;

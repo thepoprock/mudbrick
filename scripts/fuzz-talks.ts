@@ -5,7 +5,7 @@
  *   npx vite-node scripts/fuzz-talks.ts <rules.txt> <GAME.TXT> <file.SAV>... [rounds]
  */
 import { readFileSync } from 'node:fs';
-import { Rng } from '@mudbrick/engine';
+import { relationsTurn, Rng } from '@mudbrick/engine';
 import { decodeText, parsePopups, parseRules, parseSave } from '@mudbrick/formats';
 import { gameFromSave } from '../apps/web/src/gameFromSave.js';
 import { worldFromSave } from '../apps/web/src/worldFromSave.js';
@@ -30,7 +30,10 @@ for (const file of rest) {
     const human = world.civs.find((c) => c.isHuman && c.slot !== 0)?.slot ?? 1;
     for (const c of world.civs) {
       if (c.slot === 0 || c.slot === human || !c.inPlay) continue;
-      const talk = game.talkTo(human, c.slot, round % 2 === 0);
+      const talk =
+        round % 3 === 2
+          ? relationsTurn(game.negotiationEnv(), human, c.slot, false)
+          : game.talkTo(human, c.slot, round % 3 === 0);
       let step = talk.next();
       let n = 0;
       while (!step.done) {

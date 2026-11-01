@@ -115,7 +115,13 @@ import { inEnemyZoc } from './movement.js';
 import { payUpkeep, type UpkeepEvent } from './upkeep.js';
 import { history, type HistoryEvent } from './reports.js';
 import { advanceEffects, leonardoUpgrades, type AdvanceEvent } from './advances.js';
-import { conversation, powerRanks, type Conversation, type NegotiationEnv } from './negotiation.js';
+import {
+  conversation,
+  powerRanks,
+  relationsTurn,
+  type Conversation,
+  type NegotiationEnv,
+} from './negotiation.js';
 import { CITY_CENTRE_INDEX, type City, type Civ, type World, type Production } from './world.js';
 
 export interface GameState {
@@ -245,7 +251,7 @@ export class Game {
   private pendingEvents: TurnEvent[] = [];
   /** Set by a UI that can hold a conversation: reviews then queue here instead of deciding. */
   wantsTalks = false;
-  pendingTalks: { human: number; computer: number }[] = [];
+  pendingTalks: { human: number; computer: number; relations?: boolean }[] = [];
 
   /** Debug hook: the build advisor's candidates for a city (score, production). */
   buildTrace?: (city: City, score: number, p: Production) => void;
@@ -330,12 +336,34 @@ export class Game {
       power: (s) => strategy(s)?.strengthSum ?? 0,
       leaderAttack: (s) => leader(s)?.attack ?? 0,
       leaderCivilize: (s) => leader(s)?.civilize ?? 0,
+      leaderExpand: (s) => leader(s)?.expand ?? 0,
     };
   }
 
   /** A conversation; answer each yielded dialog with the chosen entry. */
   talkTo(human: number, computer: number, calledByHuman: boolean): Conversation {
     return conversation(this.negotiationEnv(), human, computer, calledByHuman);
+  }
+
+  /** The next queued conversation, if any. */
+  nextPendingTalk(): Conversation | null {
+    const next = this.pendingTalks.shift();
+    if (!next) return null;
+    const civ = this.world.civs.find((c) => c.slot === next.computer);
+    if (next.relations && civ)
+      return relationsTurn(
+        this.negotiationEnv(),
+        next.human,
+        next.computer,
+        this.spaceRace(civ).on,
+      );
+    return this.talkTo(next.human, next.computer, false);
+  }
+
+  /** With nobody to ask, every question is answered with its first entry. */
+  private settleQuietly(talk: Conversation): void {
+    let step = talk.next();
+    while (!step.done) step = talk.next(0);
   }
 
   /** Leonardo's Workshop's sweep over a civilization's units (0x00492c44). */
@@ -1121,6 +1149,19 @@ export class Game {
       for (const e of govEvents) out.push({ slot, event: e });
       const dipEvents: DiplomacyEvent[] = [];
       diplomacyTurn(this.world, slot, this.diplomacyContext(), dipEvents);
+      // Toward each human it has met (0x0051326d, 0x00513f7e): borders and the attitude drift.
+      if (!civ.isHuman) {
+        for (const h of this.world.civs) {
+          if (!h.isHuman || h.slot === 0 || !hasTreaty(this.world, slot, h.slot, TREATY.contact))
+            continue;
+          if (this.wantsTalks)
+            this.pendingTalks.push({ human: h.slot, computer: slot, relations: true });
+          else
+            this.settleQuietly(
+              relationsTurn(this.negotiationEnv(), h.slot, slot, this.spaceRace(civ).on),
+            );
+        }
+      }
       for (const e of dipEvents) out.push({ slot, event: e });
     }
     // The strategic layer runs for every civilization (tallies, plans; orders for computer players).

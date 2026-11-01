@@ -109,3 +109,24 @@ second; gold counts 1.5 × `goldGoodwill` (0x00444fba).
 
 Not ported: the gift of a military unit, which needs a garrison picker in the UI (MILITARYNONE
 stands in), and the BREAKTHROUGH chance that goes with it.
+
+## A computer player's turn toward a human (0x00513f7e, 0x0050edb0)
+
+Run from 0x0051326d for each human C has met.
+
+Borders: the human's units on land inside a C city's radius are counted. Each adds 1 to a severity
+figure, with more for the road, railroad, mine, irrigation or fortress under it. A unit already
+warned, or more than three at a city, is a strike. With no treaty C may strain relations and
+every fourth turn sends NEARCITY or ADMIRECITY. Under peace it sends INTRUDER, then VIOLATOR on a
+repeat: agreeing teleports the units home, refusing breaks the treaty with war, a senate scandal
+under Democracy (half the time under the Republic) bringing the government down, and +50 attitude.
+
+Drift: then C's attitude toward H moves by the severity plus these terms. Lower is friendlier.
+Allied: C's relative gold, advances and power, or the wars C is in. Peace −2. Not at war −1.
+H ranked below 7 past turn 200: `−(7 − rank)`, halved up before turn 400, −1 in a space race.
+H ranked 7 with over 3 cities past turn 200: `+(difficulty / 3 + 1)`, halved if H has enemies to
+match its reputation gap. Missiles, C's leader's `attack × 3 + expand × 2`, the rank gap, the
+power gap, the Great Wall or UN, leading in advances, C's leader's `civilize`, and the Eiffel Tower
+on either side. No contact means no change.
+
+Not ported: the TERMS message (0x006200e8) and the header flag 0x005da710 bit 0, read as clear.
