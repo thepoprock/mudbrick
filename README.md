@@ -5,7 +5,8 @@ from scratch in TypeScript. Mudbrick can load the data files of _Sid Meier's Civ
 (Multiplayer Gold Edition), a trademark of Take-Two Interactive, which is not affiliated with
 this project. See [LEGAL.md](LEGAL.md) for the full picture.
 
-**Status: playable, single player, with your own copy of the game's data.** What works today:
+**Status: playable, alone, hot seat, by file or over a relay, with your own copy of the game's
+data.** What works today:
 
 - A full turn: cities, production, research, combat, terrain work, trade, diplomacy, espionage,
   barbarians, the computer players, spaceships, nuclear weapons and the end of the game.
