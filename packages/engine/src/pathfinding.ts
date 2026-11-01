@@ -9,9 +9,10 @@
  * × 4` for units with more than one movement point and `road multiplier × 4` for the rest.
  * Squares holding another civilization's units are impassable; a crowded square of own units
  * outside a city or fortress adds 16 per unit of the same role; a square beside an enemy unit
- * adds a movement point for combat roles. Air units pay 1 a step. INFERRED details: the river
- * test is "both squares have a river", and the search is a plain shortest-path search rather
- * than the original's ring buffer.
+ * adds a movement point for combat roles. Air units pay 1 a step. VERIFIED: the river rule needs
+ * a river on both squares and a step of one column and one row, the map's edge neighbours. The
+ * search is a plain shortest-path search rather than the original's ring buffer, which finds the
+ * same costs.
  */
 import { gridDistance } from './city.js';
 import { DOMAIN_AIR, DOMAIN_GROUND, DOMAIN_SEA, type EngineRules } from './rules.js';
@@ -84,6 +85,16 @@ function manhattan(world: World, a: Point, b: Point): number {
   return dx + Math.abs(a.y - b.y);
 }
 
+/** One column and one row apart (0x0055062e and the row test): the squares share an edge. */
+function diagonalStep(world: World, from: number, to: number): boolean {
+  const rowOf = (i: number) => Math.trunc(i / world.columns);
+  const xOf = (i: number) => (i % world.columns) * 2 + (rowOf(i) & 1);
+  if (Math.abs(rowOf(from) - rowOf(to)) !== 1) return false;
+  let dx = Math.abs(xOf(from) - xOf(to));
+  if (!world.flatEarth) dx = Math.min(dx, world.widthX2 - dx);
+  return dx === 1;
+}
+
 /** Cost of stepping from square `from` onto square `to` (indices) for `unit`. */
 function stepCost(
   world: World,
@@ -109,7 +120,12 @@ function stepCost(
   if (railFrom && railTo) cost = 1;
   else if (type.flags.alpine) cost = 4;
   else if (roadFrom && roadTo) cost = 4;
-  else if ((flagsFrom & SquareFlag.River) !== 0 && (flagsTo & SquareFlag.River) !== 0) cost = 4;
+  else if (
+    (flagsFrom & SquareFlag.River) !== 0 &&
+    (flagsTo & SquareFlag.River) !== 0 &&
+    diagonalStep(world, from, to)
+  )
+    cost = 4;
   else if (type.move * 3 > roadMult)
     cost = (rules.terrain[world.terrain[to] ?? OCEAN]?.moveCost ?? 1) * roadMult * 4;
   else cost = roadMult * 4;

@@ -133,7 +133,7 @@ export function evaluateShip(
     speed >>= 1;
     doublings <<= 1;
   }
-  // INFERRED: the decompiler shows the fuel's thrust capping the engines' thrust.
+  // VERIFIED 0x0053e0bd: the clamp's upper bound is the fuel's thrust.
   const units = Math.min(thrust(prop), thrust(fuel));
   let flightTenths = Math.trunc((mass * speed) / (units * 10 + 1));
   let travel = Math.trunc((speed * massFull) / (units * 10 + 1));
@@ -324,7 +324,7 @@ export function buildPart(
   return part;
 }
 
-/** The computer's launch rule after a part (VERIFIED order; the deepest branch INFERRED). */
+/** The computer's launch rule after a part (VERIFIED 0x0053f36b). */
 function aiLaunchDecision(
   world: World,
   civ: Civ,
@@ -348,7 +348,10 @@ function aiLaunchDecision(
   if (!humanLaunched && ctx.difficulty > 3) {
     for (const o of world.civs) {
       if (o.slot === 0 || o.slot === civ.slot || ctx.isHuman(o.slot) || !hasLaunched(o)) continue;
-      if ((o.spaceship?.arrival ?? 0) < ship.arrival) return;
+      // The original compares with slot 0's record here, not this civilization's, so the test
+      // only holds if the barbarians somehow have a ship.
+      const barbarians = world.civs.find((c) => c.slot === 0);
+      if ((o.spaceship?.arrival ?? 0) < (barbarians?.spaceship?.arrival ?? 0)) return;
     }
   }
   if (!humanLaunched) {

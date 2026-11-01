@@ -340,6 +340,8 @@ export class Game {
   pendingTalks: { human: number; computer: number; relations?: boolean }[] = [];
 
   /** Debug hook: the build advisor's candidates for a city (score, production). */
+  /** A human's answer when another's agent gives them a pretext (0x00498a90); unset: decline. */
+  askPretext?: (victim: number, agentOwner: number, allied: boolean) => boolean;
   /** The player's CITYPREF.TXT (0x00474d90), when the folder has one. */
   cityPreferences: { noDefend: boolean; autoBuild: readonly number[] } = {
     noDefend: false,
@@ -619,6 +621,7 @@ export class Game {
   espionageContext(): EspionageContext {
     return {
       advanceGained: (c, a) => this.advanceGained(c, a),
+      ...(this.askPretext ? { askPretext: this.askPretext } : {}),
       turn: this.state.turn,
       difficulty: this.state.difficulty,
       rng: this.rng,
@@ -658,7 +661,6 @@ export class Game {
   }
 
   diplomacyContext(): DiplomacyContext {
-    const humans = this.world.civs.filter((c) => c.isHuman).map((c) => c.slot);
     const civ = (s: number) => this.world.civs.find((c) => c.slot === s);
     return {
       rules: this.rules,
@@ -691,7 +693,7 @@ export class Game {
         }
       },
       spaceshipLaunched: () => false,
-      mainHuman: humans[0] ?? null,
+      mainHuman: this.leadingHumanRecord(),
       negotiationAllowed: (a, b) => this.negotiationAllowed(a, b),
       advanceValue: (slot, adv) => {
         const c = this.world.civs.find((x) => x.slot === slot);
@@ -1206,7 +1208,7 @@ export class Game {
       if (land(c) === land(city)) this.aiChooseProduction(c);
   }
 
-  /** Mark what a civilization's units and cities can see (unit sight VERIFIED, city radius INFERRED). */
+  /** Mark what a civilization's units and cities can see. The original marks a city's radius once, on founding and capture; repeating it each turn changes nothing. */
   revealFor(slot: number): void {
     for (const u of this.world.units) if (u.owner === slot) lookAround(this.world, this.rules, u);
     for (const c of this.world.cities)
@@ -1802,6 +1804,18 @@ export class Game {
     });
   }
 
+  /**
+   * VERIFIED 0x00465607: the original keeps the leading human's rank, 1 to 7, and every rule reads
+   * the civilization record at that number. So the rules weigh the civilization in the slot equal
+   * to the rank, and not always the human. Kept as it is, since it shapes how the computers play.
+   */
+  private leadingHumanRecord(): number | null {
+    let rank = 0;
+    for (const c of this.world.civs)
+      if (c.isHuman && c.slot !== 0 && c.inPlay) rank = Math.max(rank, this.powerRank(c.slot));
+    return rank === 0 ? null : rank;
+  }
+
   /** The civilization's turn: cities last-to-first, then the AI's rates. */
   processCivilization(slot: number): TurnEvent[] {
     const out: TurnEvent[] = [];
@@ -1855,7 +1869,8 @@ export class Game {
     // Diplomacy and government (0x0051326d) run after the cities and before the strategic layer.
     {
       const leader = this.rules.leaders?.[civ.tribe ?? -1];
-      const human = this.world.civs.find((c) => c.isHuman);
+      const led = this.leadingHumanRecord();
+      const human = this.world.civs.find((c) => c.slot === led);
       civGovernmentScores(civ, {
         isHuman: civ.isHuman,
         knows: (a) => this.knows(slot, a),
@@ -1869,6 +1884,7 @@ export class Game {
               diplomatsAndSpies: this.world.units.filter(
                 (u) => u.owner === human.slot && (u.type === 46 || u.type === 47),
               ).length,
+              subversion: human.incidents ?? 0,
               advances: human.advancesCount,
               treasury: human.treasury,
               government: human.government,
@@ -1926,7 +1942,6 @@ export class Game {
     }
     this.populationNews(civ);
     // The strategic layer runs for every civilization (tallies, plans; orders for computer players).
-    const humans = this.world.civs.filter((c) => c.isHuman).map((c) => c.slot);
     for (const e of runStrategy(this.world, this.rules, slot, {
       turn: this.state.turn,
       difficulty: this.state.difficulty,
@@ -1938,7 +1953,7 @@ export class Game {
         return this.rules.leaders?.[tribe]?.expand ?? 0;
       },
       strategyOf: (s) => this.world.civs.find((c) => c.slot === s)?.strategy,
-      mainHuman: humans[0] ?? null,
+      mainHuman: this.leadingHumanRecord(),
       realisticCombat: this.state.realisticCombat,
     })) {
       out.push({ slot, event: e });
@@ -2045,7 +2060,7 @@ export class Game {
     }
   }
 
-  /** End the turn: every civilization in play, in slot order (INFERRED), then the counter. */
+  /** End the turn: every civilization in play, in slot order (VERIFIED 0x0046b55e), then the counter. */
   /** The opening of a round (0x00467591): events, the historian, barbarian landings. */
   private beginRound(): TurnEvent[] {
     const out: TurnEvent[] = [];
@@ -2425,7 +2440,6 @@ export class Game {
   }
 
   private barbarianContext(): BarbarianContext {
-    const humans = this.world.civs.filter((c) => c.isHuman).map((c) => c.slot);
     return {
       rng: this.rng,
       turn: this.state.turn,
@@ -2440,7 +2454,7 @@ export class Game {
       anyoneKnows: (a) => this.world.civs.some((c) => c.slot !== 0 && c.knownAdvances[a] === true),
       humanKnows: (a) => this.world.civs.some((c) => c.isHuman && c.knownAdvances[a] === true),
       isHuman: (s) => this.world.civs.find((c) => c.slot === s)?.isHuman ?? false,
-      mainHuman: humans[0] ?? null,
+      mainHuman: this.leadingHumanRecord(),
       cityCount: (s) => this.citiesOf(s).length,
       wondersOf: (s) => this.wondersOf(s),
       guerillaWarfareDiscovered: (this.state.firstDiscoveredBy[34] ?? 0) !== 0,
@@ -2698,6 +2712,8 @@ export class Game {
         civilize: leader?.civilize ?? 0,
         difficulty: this.state.difficulty,
         turn: this.state.turn,
+        humanSubversion:
+          this.world.civs.find((c) => c.slot === this.leadingHumanRecord())?.incidents ?? 0,
         noDefend: this.cityPreferences.noDefend,
         preferredImprovements: this.cityPreferences.autoBuild,
         simplifiedCombat: !this.state.realisticCombat,
@@ -2768,7 +2784,7 @@ export class Game {
       wonderTally: (era) => this.wonderTally(civ.slot, era),
       nextShipKind: (kind) => aiNextPartKind(this.world, civ, kind, this.shipContext()),
       foreign: {
-        mainHuman: this.world.civs.find((c) => c.isHuman && c.slot !== 0)?.slot ?? null,
+        mainHuman: this.leadingHumanRecord(),
         isHumanSlot: (s) => this.world.civs.find((c) => c.slot === s)?.isHuman ?? false,
         rankOf: (s) => this.powerRank(s),
         unitCount: (s, type) =>

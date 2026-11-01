@@ -154,7 +154,7 @@ export interface Civ {
   bestProduction?: number;
   /** The record's leading flag word (+0): bit 0 revolution pending, bit 2 a per-turn toggle. */
   civFlags?: number;
-  /** Diplomatic incidents suffered or caused (civilization record +28; bribes +1, incitements +2). */
+  /** Subversion carried out: 1 for a bribe, 2 for an incited city (civilization record +28; bribes +1, incitements +2). */
   incidents?: number;
   /** The spaceship (civilization record +0x400; spaceship.ts). */
   spaceship?: import('./spaceship.js').Spaceship;

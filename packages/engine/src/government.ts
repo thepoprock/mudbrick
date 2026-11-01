@@ -130,6 +130,8 @@ export interface CivGovernmentContext {
   /** The leading human: diplomats and spies fielded, advances, treasury, government, control. */
   mainHuman: {
     diplomatsAndSpies: number;
+    /** Units bribed and cities incited (civilization record +28). */
+    subversion: number;
     advances: number;
     treasury: number;
     government: number;
@@ -152,12 +154,13 @@ export function civGovernmentScores(civ: Civ, ctx: CivGovernmentContext): void {
   s[0] = (s[0] ?? 0) + (s[1] ?? 0) * 2;
   if (ctx.isHuman) return;
   const h = ctx.mainHuman;
-  // Democracy's immunity to incited revolt: the more diplomats and spies the leading human
-  // fields, the more a computer player values it (the original's +0x1c count is INFERRED 0).
+  // VERIFIED 0x00467c61: Democracy's immunity to incited revolt. The leading human's diplomats,
+  // spies and past subversion raise its value, more when that human is Fundamentalist.
   let c = 0;
-  if ((ctx.knows(21) || ctx.ownsWonder(WONDER.statueOfLiberty)) && h?.government === 4) c = 1;
+  if ((ctx.knows(21) || ctx.ownsWonder(WONDER.statueOfLiberty)) && h?.government === 4)
+    c = h.subversion + 1;
   if (h) {
-    s[6] = (s[6] ?? 0) + h.diplomatsAndSpies * c;
+    s[6] = (s[6] ?? 0) + (h.diplomatsAndSpies + h.subversion) * (h.subversion + c);
     if (ctx.treasury < h.treasury) s[6] = (s[6] ?? 0) + 10;
   }
   if (

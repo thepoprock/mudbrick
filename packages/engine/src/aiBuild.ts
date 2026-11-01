@@ -81,6 +81,8 @@ export interface AiBuildFacts {
   caravansOnContinent?: number;
   /** Slots the civilization has met (contact), for the diplomat rule. */
   metSlots?: number[];
+  /** The leading human's bribes and incited cities, against which Courthouses guard. */
+  humanSubversion?: number;
   /** Choosing for a human's Auto button (city flag bit 4): no Diplomats, no Caravans. */
   autoProduction?: boolean;
   /** CITYPREF.TXT @NODEFEND: a human's cities ignore their defence need. */
@@ -162,7 +164,9 @@ export function improvementPriority(
       break;
     case im.courthouse:
       n = 14 - (f.unhappy * 2 + f.corruption);
-      if (env.government === GOVERNMENT.democracy && disorder) n = -1;
+      if (env.government === GOVERNMENT.democracy) {
+        if (disorder) n = -1;
+      } else if (!env.isHuman) n -= (f.humanSubversion ?? 0) >> 1;
       break;
     case im.cityWalls:
       if (!env.ownsWonder(im.greatWall)) {

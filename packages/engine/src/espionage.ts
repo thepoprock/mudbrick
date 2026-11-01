@@ -37,6 +37,8 @@ export interface EspionageEvent {
 }
 
 export interface EspionageContext {
+  /** Will a human victim make the incident a pretext? Asked as dialogs PRETEXT, PRETEXTALLIED. */
+  askPretext?: (victim: number, agentOwner: number, allied: boolean) => boolean;
   /** Run the consequences of an advance just granted (Game.advanceGained). */
   advanceGained?: (civ: Civ, advance: number) => void;
   turn: number;
@@ -129,8 +131,8 @@ export function resolveAgent(
 
 /**
  * A diplomatic incident (0x00498a90) between the agent's owner and the victim: without a treaty
- * the victim's attitude worsens by 20; with one, a human victim is asked for a pretext (the
- * engine lets it pass — INFERRED), a human agent against a computer victim brings a vendetta
+ * the victim's attitude worsens by 20; with one, a human victim is asked for a pretext, a human
+ * agent against a computer victim brings a vendetta
  * (Fundamentalism) or war, an ally's grudge, and a human Republic (half the time) or Democracy
  * suffers a Senate scandal.
  */
@@ -149,6 +151,16 @@ export function incident(
     return;
   }
   const meCiv = civOf(world, me);
+  // VERIFIED 0x00498a90: a human victim may take the incident as a pretext, for war or, between
+  // allies, for ending the alliance. A Fundamentalist agent gives none and nothing follows.
+  if (ctx.isHuman(them)) {
+    if (meCiv?.government === GOVERNMENT.fundamentalism) return;
+    const allied = hasTreaty(world, them, me, TREATY.alliance);
+    if (ctx.askPretext?.(them, me, allied)) {
+      if (allied) clearTreaty(world, me, them, TREATY.alliance);
+      else setTreaty(world, me, them, TREATY.war);
+    }
+  }
   if (ctx.isHuman(me) && !ctx.isHuman(them) && meCiv) {
     if (!hasTreaty(world, me, them, TREATY.alliance)) {
       if (meCiv.government === GOVERNMENT.fundamentalism) {
@@ -285,7 +297,7 @@ function inciteTransfer(
   });
 }
 
-/** A random advance the victim knows and the thief does not (VERIFIED scan; INFERRED: the first found). */
+/** A random advance the victim knows and the thief does not (VERIFIED scan from a random start). */
 function stealable(
   world: World,
   rules: EngineRules,
@@ -572,8 +584,7 @@ export function bribeUnit(
     return events;
   }
   meCiv.treasury -= cost;
-  const victim = civOf(world, target.owner);
-  if (victim) victim.incidents = (victim.incidents ?? 0) + 1;
+  meCiv.incidents = (meCiv.incidents ?? 0) + 1; // VERIFIED 0x0049c5c6: charged to the briber
   target.owner = me;
   target.homeCity = null;
   target.movesSpent = 999;

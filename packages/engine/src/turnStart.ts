@@ -2,7 +2,7 @@
  * What happens to a civilization's units when its turn begins: healing (VERIFIED, pre-turn
  * routine 0x00468f0f), fuel for air units (thresholds VERIFIED from the move handler, timing
  * INFERRED: counted at turn start instead of at the last move), and the continuation of standing
- * orders (VERIFIED dispatch 0x004984a8; the go-to step is an INFERRED greedy simplification).
+ * orders (VERIFIED dispatch 0x004984a8; the go-to step uses the pathfinder of pathfinding.ts).
  */
 import { gridDistance } from './city.js';
 import { maxHitPoints } from './combat.js';

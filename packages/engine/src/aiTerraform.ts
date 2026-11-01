@@ -121,11 +121,19 @@ export function roadLinkTask(
       });
       const found = hit.p;
       if (found) {
+        // VERIFIED 0x004bbe2e: nobody else stands on the square (0x005592c4: a unit, else a
+        // city), and it is not the land of a civilization at peace with us (0x0055930c).
+        const standing =
+          world.unitsAt(found.x, found.y)[0]?.owner ?? world.cityAt(found.x, found.y)?.owner;
         const owner = world.territory[world.index(found.x, found.y)] ?? 0;
-        const foreign = world.unitsAt(found.x, found.y).some((u) => u.owner !== city.owner);
-        // INFERRED: the two owner tests (0x005592c4, 0x0055930c) read as the territory owner and
-        // a unit's owner on the square.
-        if ((owner === 0 || owner === city.owner) && !foreign) return found;
+        const ocean = world.terrainAt(found.x, found.y) === OCEAN;
+        const peaceful =
+          !ocean &&
+          owner > 0 &&
+          owner !== city.owner &&
+          !hasTreaty(world, city.owner, owner, TREATY.alliance) &&
+          hasTreaty(world, city.owner, owner, TREATY.peace);
+        if ((standing === undefined || standing === city.owner) && !peaceful) return found;
       }
     }
   }

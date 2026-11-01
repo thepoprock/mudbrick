@@ -10,7 +10,15 @@
  */
 import { distance } from './city.js';
 import { IMPROVEMENT, type EngineRules } from './rules.js';
-import { OCEAN, SquareFlag, type Civ, type Unit, type World } from './world.js';
+import {
+  OCEAN,
+  SquareFlag,
+  type City,
+  type Civ,
+  type Point,
+  type Unit,
+  type World,
+} from './world.js';
 
 /** Bits of the 32-bit treaty word a civilization keeps about each other slot. */
 export const TREATY = {
@@ -499,10 +507,8 @@ export function alliesJoinWar(
 }
 
 /**
- * Cancelling an alliance (VERIFIED 0x0044e525 for the treaty; the unit relocation 0x0044e1e2 is
- * read only as far as its targets): the alliance bit goes, and each side's units standing in
- * the other's cities move to the nearest own city (INFERRED: a coastal one for sea units; the
- * original's further conditions were not read).
+ * Cancelling an alliance (VERIFIED 0x0044e525): the alliance bit goes and each side's units near
+ * the other's cities go home.
  */
 export function cancelAlliance(world: World, a: number, b: number, events: DiplomacyEvent[]): void {
   clearTreaty(world, a, b, TREATY.alliance);
@@ -512,26 +518,55 @@ export function cancelAlliance(world: World, a: number, b: number, events: Diplo
     a,
     b,
   });
-  for (const [owner, host] of [
-    [a, b],
-    [b, a],
-  ] as const) {
-    for (const u of world.units) {
-      if (u.owner !== owner) continue;
-      const city = world.cityAt(u.position.x, u.position.y);
-      if (!city || city.owner !== host) continue;
-      let best: { x: number; y: number } | null = null;
-      let bestD = 9999;
-      for (const c of world.cities) {
-        if (c.owner !== owner) continue;
-        const dd = distance(world, u.position, c.position);
-        if (dd < bestD) {
-          bestD = dd;
-          best = c.position;
-        }
+  sendUnitsHome(world, a, b);
+  sendUnitsHome(world, b, a);
+}
+
+/**
+ * VERIFIED 0x0044e1e2: every unit of `owner` whose nearest city, among the two civilizations',
+ * is the former ally's goes home. A ship goes to the nearest own port on its sea. A land unit
+ * goes to the nearest own city, if the ally has a city on its land mass; Caravans stay.
+ */
+function sendUnitsHome(world: World, owner: number, host: number): void {
+  const nearest = (from: Point, cities: City[]): City | null => {
+    let best: City | null = null;
+    let bestD = 9999;
+    for (const c of cities) {
+      const d = distance(world, from, c.position);
+      if (d <= bestD) {
+        best = c;
+        bestD = d;
       }
-      if (best) u.position = { x: best.x, y: best.y };
     }
+    return best;
+  };
+  const mine = world.cities.filter((c) => c.owner === owner);
+  const either = world.cities.filter((c) => c.owner === owner || c.owner === host);
+  const onSea = (c: City, sea: number) => {
+    for (const n of world.neighbours(c.position.x, c.position.y)) {
+      if (!n || world.terrainAt(n.x, n.y) !== OCEAN) continue;
+      if (((world.landmass[world.index(n.x, n.y)] ?? 0) & 63) === sea) return true;
+    }
+    return false;
+  };
+  const massOf = (p: Point) => (world.landmass[world.index(p.x, p.y)] ?? 0) & 63;
+  for (const u of world.units) {
+    if (u.owner !== owner || nearest(u.position, either)?.owner !== host) continue;
+    const mass = massOf(u.position);
+    const atSea = world.terrainAt(u.position.x, u.position.y) === OCEAN;
+    let dest: City | null = null;
+    if (atSea) {
+      dest = nearest(
+        u.position,
+        mine.filter((c) => onSea(c, mass)),
+      );
+    } else {
+      const hostHere = world.cities.some((c) => c.owner === host && massOf(c.position) === mass);
+      if (hostHere && u.commodity === undefined) dest = nearest(u.position, mine);
+    }
+    if (!dest) continue;
+    u.position = { x: dest.position.x, y: dest.position.y };
+    u.order = null;
   }
 }
 

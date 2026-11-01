@@ -265,6 +265,13 @@ export class PlaySession {
         (i) => game.rules.improvements[i]?.name,
       );
     }
+    game.askPretext = (victim, agent, allied) =>
+      victim === this.humanSlot &&
+      window.confirm(
+        allied
+          ? `The ${game.civ(agent).name} spied on us. End our alliance?`
+          : `The ${game.civ(agent).name} spied on us. Use it as a reason for war?`,
+      );
     game.askEscape = (c) =>
       window.confirm(`Pay 1000 gold to move the government to ${c.name} and save the spaceship?`);
   }
