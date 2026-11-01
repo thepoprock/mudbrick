@@ -1426,6 +1426,7 @@ export class Game {
           this.world.units.reduce((n, u) => (u.owner === s && u.type === type ? n + 1 : n), 0),
         atWar: (x, y) => hasTreaty(this.world, x, y, TREATY.war),
         vendettaAgainst: (x, y) => hasTreaty(this.world, x, y, TREATY.vendetta),
+        atPeace: (x, y) => hasTreaty(this.world, x, y, TREATY.peace),
         reputationOf: (s) => this.world.civs.find((c) => c.slot === s)?.reputation ?? 0,
       },
     });

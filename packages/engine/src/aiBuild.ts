@@ -345,7 +345,40 @@ export interface ForeignStrengthEnv {
   atWar?: (a: number, b: number) => boolean;
   /** `a` holds a vendetta against `b`. */
   vendettaAgainst?: (a: number, b: number) => boolean;
+  atPeace?: (a: number, b: number) => boolean;
   reputationOf?: (slot: number) => number;
+}
+
+/**
+ * May a nuclear unit (attack 99) be considered (VERIFIED 0x00474edb)? Fewer than four active and
+ * fewer than two in production.
+ */
+export function nuclearAllowed(active: number, inProduction: number): boolean {
+  return active < 4 && inProduction < 2;
+}
+
+/**
+ * May an air-superiority unit (role 3) be considered (VERIFIED 0x00474edb)? Our Fighters and
+ * Stealth Fighters (RULES indices 27 and 30), active and in production, must number fewer than
+ * the main human's Bombers, Helicopters and Stealth Bombers (28, 29, 31) plus two; and at peace
+ * with that human only while none of this type exist or are being built. The original reads the
+ * main human's slot as it stands (slot 0 without one).
+ */
+export function fighterAllowed(
+  foreign: Omit<ForeignStrengthEnv, 'slot'> | undefined,
+  slot: number,
+  type: number,
+  active: (type: number) => number,
+  inProduction: (type: number) => number,
+): boolean {
+  const count = foreign?.unitCount;
+  if (!count) return false;
+  const h = foreign?.mainHuman ?? 0;
+  const mine = active(27) + inProduction(27) + active(30) + inProduction(30);
+  const theirs = count(h, 28) + count(h, 29) + count(h, 31) + 2;
+  if (mine >= theirs) return false;
+  if (foreign?.atPeace?.(slot, h) && active(type) + inProduction(type) !== 0) return false;
+  return true;
 }
 
 /**
@@ -765,8 +798,12 @@ export function aiChooseProduction(env: AiBuildEnv): Production {
         if (city.size < 2 || building >= 2) continue;
       }
       if (t === 2 && civ.government >= GOVERNMENT.monarchy) continue; // Warriors only early
-      if (u.attack >= 99) continue; // INFERRED: nuclear units need the AI's war state
-      if (u.role === 3) continue; // INFERRED: air superiority needs the human's air count
+      if (t === 42) continue; // VERIFIED: the Carrier (by index) is never chosen
+      const activeOf = (ty: number) => myUnits.filter((x) => x.type === ty).length;
+      const producing = (ty: number) =>
+        myCities.filter((c) => c.production.kind === 'unit' && c.production.index === ty).length;
+      if (u.attack >= 99 && !nuclearAllowed(activeOf(t), producing(t))) continue;
+      if (u.role === 3 && !fighterAllowed(env.foreign, civ.slot, t, activeOf, producing)) continue;
       if (u.domain === DOMAIN_SEA && !coastal) continue;
       let n = building * 2 + onContinent;
       // VERIFIED: with an urgent defence need nothing but a defender is considered.

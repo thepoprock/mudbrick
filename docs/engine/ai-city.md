@@ -133,8 +133,7 @@ A city whose civilization has fewer than 512 units considers every buildable uni
 - **Combat and settlers (roles 0–5):** start from `2 × cities building it + units of it on the
 continent` (humans: halved, +2 for siege types). Settlers only with a food surplus covering
   them (or none supported and settlers under way), size above 1, and fewer than 2 settlers being
-  built; Warriors only under Anarchy/Despotism; nuclear units capped at 4 existing + 2 building;
-  air-superiority fighters only while the human has more air units. Sea units need a sea route of
+  built; Warriors only under Anarchy/Despotism; nuclear units (attack 99) only with fewer than four active and fewer than two in production; air-superiority units (role 3) only while our Fighters and Stealth Fighters (RULES indices 27, 30; active and in production) are fewer than the main human's Bombers, Helicopters and Stealth Bombers (28, 29, 31) plus two, and at peace with that human only while none of the type exist or are being built; the Carrier (index 42) never — VERIFIED 0x00474edb. Sea units need a sea route of
   value (continent plan) and a port square. Settlers get `(6, or 4 with a Granary or the Pyramids)
 − (civilize or expand) − expansion room`, plus `8 or 16 per settler already supported`, ×2 below
   size 2, halved with no settlers anywhere and a surplus equal to their food, halved again when the

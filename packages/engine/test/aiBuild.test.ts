@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { aiChooseProduction, improvementPriority, type AiBuildFacts } from '../src/aiBuild.js';
+import {
+  aiChooseProduction,
+  fighterAllowed,
+  improvementPriority,
+  nuclearAllowed,
+  type AiBuildFacts,
+} from '../src/aiBuild.js';
 import { GOVERNMENT, IMPROVEMENT, type EngineRules } from '../src/rules.js';
 import { CITY_CENTRE_INDEX, World, type City, type Civ } from '../src/world.js';
 
@@ -335,5 +341,36 @@ describe('defence valuations (0x00474edb)', () => {
         government: GOVERNMENT.democracy,
       })?.n,
     ).toBe(4);
+  });
+});
+
+describe('unit candidates the chooser skips (0x00474edb)', () => {
+  it("caps nuclear units and ties fighters to the main human's bombers", () => {
+    expect(nuclearAllowed(3, 1)).toBe(true);
+    expect(nuclearAllowed(4, 0)).toBe(false);
+    expect(nuclearAllowed(0, 2)).toBe(false);
+    const counts: Record<string, number> = { '2:28': 1, '2:29': 1 };
+    const foreign = {
+      mainHuman: 2,
+      unitCount: (s: number, ty: number) => counts[`${s}:${ty}`] ?? 0,
+      atPeace: () => false,
+    };
+    const none = () => 0;
+    // Their 2 + 2 = 4: three of ours still pass, four do not.
+    expect(fighterAllowed(foreign, 1, 27, (ty) => (ty === 27 ? 3 : 0), none)).toBe(true);
+    expect(
+      fighterAllowed(
+        foreign,
+        1,
+        27,
+        (ty) => (ty === 27 ? 2 : 0),
+        (ty) => (ty === 30 ? 2 : 0),
+      ),
+    ).toBe(false);
+    // At peace with the human: only while none of the type exist or are being built.
+    const peace = { ...foreign, atPeace: () => true };
+    expect(fighterAllowed(peace, 1, 27, none, none)).toBe(true);
+    expect(fighterAllowed(peace, 1, 27, (ty) => (ty === 27 ? 1 : 0), none)).toBe(false);
+    expect(fighterAllowed(undefined, 1, 27, none, none)).toBe(false);
   });
 });
