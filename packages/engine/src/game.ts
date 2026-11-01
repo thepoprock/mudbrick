@@ -1428,8 +1428,8 @@ export class Game {
    * out of play, the destruction recorded. The engine checks after every civilization's turn
    * and at the end of the turn, which can lag the original by part of a turn. A civilization
    * that never founded a city is not touched (the original only asks on those events); one with
-   * neither city nor unit is dropped as well (INFERRED). The original may then start a new
-   * civilization in the slot (0x00480fc9) — not modelled.
+   * neither city nor unit is dropped as well (INFERRED). A computer player's slot then restarts
+   * (0x00480fc9, `restart`).
    */
   eliminateCityless(): TurnEvent[] {
     const out: TurnEvent[] = [];

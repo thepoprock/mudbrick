@@ -10,22 +10,19 @@ For the civilization whose turn begins:
 
 1. The treasury is clamped: above 30000 becomes 30000, a wrapped negative below −16384 becomes
    30000, any other negative becomes 0. The value is remembered for the warning in step 5.
-2. Pre-turn bookkeeping (0x00468f0f, not yet read in detail).
+2. Pre-turn bookkeeping (0x00468f0f, `healUnit` in turnStart.ts): unit moved flags clear, and units heal.
 3. **The civilization turn** (0x00467c61): every city from the **last** slot to the first goes
    through the city turn ([rules-city.md](rules-city.md)); then the AI sets its rates
    ([rules-research.md](rules-research.md)); then the AI's attitude counters toward the human are
    updated; allied civilizations (and everyone once the Apollo Program exists) learn the sizes of
    the cities.
-4. Two more per-civilization routines (0x0051326d, 0x004ed2dd — diplomacy and spaceship era
-   handling, not yet read).
+4. Diplomacy (0x0051326d, diplomacy.md) and the unit routine (0x004ed2dd, ai-units.md).
 5. Post-turn (0x004694b2): a population-milestone message, and for a human with more than one
    city, under 100 gold and losing it fast enough to be broke within ten turns
    (`(treasury − before) × 10 + treasury < 0`), the TAXES warning offering the rate dialog.
 6. Autosave when the option is on (options byte 3 bit 5).
 
-Unit movement, orders and the AI's unit moves happen between these driver calls in the game's
-main loop, which is not yet read. The order in which civilizations take their turns is slot
-order (INFERRED).
+The round's order is at the end of this file.
 
 One civilization's turn (0x00469773, VERIFIED): its treasury is clamped first. Above 30000 it
 becomes 30000, below −16384 it also becomes 30000 (read as an overflow), and any other negative
