@@ -218,6 +218,11 @@ nearest city`, or the best is here and the land mass has no own city yet, or the
 Any unit that reaches the end without a decision scores its eight neighbours and steps to the
 best one (tag `9`), or stays when nothing scores above the floor of −999.
 
+Before any scoring, a square is skipped when the unit stands in a foreign zone of control and
+the square lies in one too (0x005564c0 on both), unless the unit ignores zones of control or a
+unit of the first five roles already stands there (VERIFIED: the loop's candidate gate; the
+move rules would refuse such a step, and a unit that kept choosing one never moved).
+
 1. **Base.** A random 0–4. A unit that no other civilization can see (unit byte 9, the
    visible-to mask, is zero) explores instead: random 0–2 minus twice the move cost (attackers)
    or minus the defence factor (others). Air units use random 0–2 only.

@@ -47,9 +47,15 @@ What the comparison found and fixed (all VERIFIED against the executable afterwa
    computer players adopt Monarchy between turns 69 and 187 and some the Republic, as in the
    original (Egyptians Monarchy by turn 101, Germans the Republic by 183).
 
-Open: irrigation runs lower than the original's; one civilization per seed stays at a single
-city all game (an island start to check); the advisor's `+0x3d2` production field (the best
-`2 × shields − support` over the cities) is not ported.
+5. **A unit in a foreign zone of control could choose a square it may not enter.** The
+   original's direction loop skips a zone-of-control square when the unit already stands in one
+   (unless it ignores zones of control or a unit stands there); the port scored such squares
+   and the move rules then refused them, so a settler beside a foreign horseman stood still
+   for two hundred turns and its civilization stayed at one city. With the gate the Sioux of
+   seed 1 reach four cities by turn 101 and six by 225.
+
+Open: irrigation runs lower than the original's; the advisor's `+0x3d2` production field (the
+best `2 × shields − support` over the cities) is not ported.
 
 The rig: `/mnt/t7/civ2-wine` on bm3 — a 32-bit Wine prefix, the operator's disc image mounted
 as D:, Xvfb :98, `civ2-autoplay.sh` pressing Enter (Escape and `f` in turn) and clicking the

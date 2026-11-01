@@ -255,6 +255,24 @@ describe('computer-player units', () => {
     expect(pick === null || !(pick.to.x === 11 && pick.to.y === 11)).toBe(true);
   });
 
+  it('a unit in a foreign zone of control never picks another square in one', () => {
+    const w = world();
+    const c = civ();
+    const legion = unit(w, 4, 10, 10);
+    unit(w, 2, 9, 9, 3); // a neighbour at peace: its zone of control covers four of our squares
+    const inZoc = [
+      [11, 9],
+      [9, 11],
+      [8, 10],
+      [10, 8],
+    ];
+    for (let i = 0; i < 6; i++) {
+      const pick = chooseDirection(w, rules, legion, ctx(w, c));
+      expect(pick).not.toBeNull();
+      expect(inZoc.some(([x, y]) => pick?.to.x === x && pick?.to.y === y)).toBe(false);
+    }
+  });
+
   it('an unseen world draws a lone unit outward and the step is remembered', () => {
     const w = world();
     const c = civ();

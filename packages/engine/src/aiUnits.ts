@@ -205,6 +205,7 @@ export function chooseDirection(
   const ownStack = world.unitsAt(here.x, here.y).filter((u) => u.owner === me);
   const canAttack = ctx.canAttack ?? ctx.atWar;
   const atPeace = ctx.atPeace ?? (() => false);
+  const hereZoc = inEnemyZoc(world, here.x, here.y, me);
 
   let best: Candidate | null = null;
   let bestRaw = FLOOR;
@@ -222,6 +223,18 @@ export function chooseDirection(
     if (type.domain === DOMAIN_GROUND && ocean) continue;
     if (type.domain !== DOMAIN_GROUND && !ocean && !world.cityAt(to.x, to.y)) continue;
     const occupants = world.unitsAt(to.x, to.y);
+    // VERIFIED (the handler's candidate gate, 0x005564c0 on both squares): a ground unit in a
+    // foreign zone of control does not consider another square in one unless it ignores zones
+    // of control or a unit of the first five roles already stands there. Without this the
+    // chooser keeps picking a square the move rules then refuse, and the unit never moves.
+    if (
+      hereZoc &&
+      type.domain === DOMAIN_GROUND &&
+      !type.flags.ignoreZonesOfControl &&
+      !occupants.some((u) => (rules.units[u.type]?.role ?? 9) <= 4) &&
+      inEnemyZoc(world, to.x, to.y, me)
+    )
+      continue;
     const city = world.cityAt(to.x, to.y);
     const occupantOwner = occupants[0]?.owner ?? city?.owner ?? null;
     const ownThere = occupants.length > 0 && occupantOwner === me;
