@@ -162,6 +162,8 @@ export interface GameState {
   nextSlot?: number;
   /** The power graph's table, by quarter of the turn. */
   powerHistory?: number[][];
+  /** Play by file: each human's turn ends with a saved game passed to the next (PBEM1). */
+  byFile?: boolean;
   /** The human whose move it is. */
   movingHuman?: number;
   /** Past this turn the historian reports (header +0x142). */

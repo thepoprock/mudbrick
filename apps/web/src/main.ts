@@ -187,6 +187,7 @@ async function applyGame(name: string, bytes: Uint8Array): Promise<void> {
       },
       renderOptions,
     );
+    attachByFile(session);
     session.log(`Loaded ${name} at turn ${restored.game.state.turn}.`);
     redraw();
     if (session.selected) session.centreOn(session.selected.position);
@@ -251,7 +252,12 @@ function startNewGame(): void {
     c.isHuman = true;
     extra -= 1;
   }
-  const game = new Game(result.world, rules, rng, { ...result.state, nextSlot: 0 });
+  const byFile = byId<HTMLInputElement>('ngByFile').checked;
+  const game = new Game(result.world, rules, rng, {
+    ...result.state,
+    nextSlot: 0,
+    ...(byFile ? { byFile } : {}),
+  });
   session = new PlaySession(
     game,
     folder,
@@ -266,6 +272,7 @@ function startNewGame(): void {
     },
     renderOptions,
   );
+  attachByFile(session);
   for (const n of result.notes) session.log(`${n}.`);
   byId<HTMLDetailsElement>('newGamePanel').open = false;
   redraw();
@@ -402,6 +409,18 @@ canvas.addEventListener('click', (e) => {
   if (!session) return;
   session.handleClick(e.clientX, e.clientY);
 });
+
+/** Play by file: the end of a turn saves the game for the next player to open. */
+function attachByFile(s: PlaySession): void {
+  if (!s.game.state.byFile) return;
+  s.seat = s.game.state.movingHuman ?? s.humanSlot;
+  s.onTurnPassed = (moving) => {
+    const text = snapshotGame(s.game, moving);
+    const who = s.game.civ(moving).name;
+    downloadBytes(new TextEncoder().encode(text), `${who}-turn-${s.game.state.turn}.json`);
+    s.log(`Saved for the ${who}. Send them the file.`);
+  };
+}
 
 // ---- network play: a room on a relay, one seat per browser (apps/relay, net.ts)
 let net: NetLink | undefined;

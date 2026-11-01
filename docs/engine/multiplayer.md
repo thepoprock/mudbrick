@@ -3,6 +3,9 @@
 **Hot seat** is the round itself (rules-turn.md): several humans take their slots in one browser,
 and `HOTSEATTURN` hands over. Each sees its own map.
 
+**Play by file** is the original's play-by-email. A human's turn ends by saving the game, named for
+the next player, who opens it in their own browser. Sending the file is up to them.
+
 **Network play** is `apps/relay` and `apps/web/src/net.ts`. A room holds seats. The moving player's
 browser runs the round up to the next human and sends the whole game on. Others wait. The relay
 never reads the game, so the rules run only in browsers.
