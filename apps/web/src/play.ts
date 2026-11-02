@@ -1645,7 +1645,7 @@ export class PlaySession {
     const slot = ask('Which civilization, by slot?', this.humanSlot);
     if (slot === null) return;
     const item = ask(
-      '1 treaties, 2 attitude, 3 reputation, 4 research progress, 5 clear research, 6 names, 7 copy advances, 8 clear patience, 9 research goal',
+      '1 treaties, 2 attitude, 3 reputation, 4 research progress, 5 clear research, 6 names, 7 copy advances, 8 clear patience, 9 research goal, 10 last contact, 11 clear all last contact, 12 toggle female',
       1,
     );
     const other = () => ask('Toward which civilization, by slot?', this.humanSlot);
@@ -1686,6 +1686,15 @@ export class PlaySession {
     } else if (item === 7) {
       const o = other();
       if (o !== null) cheatEditKing(this.game, slot, { copyAdvancesFrom: o });
+    } else if (item === 10) {
+      const o = other();
+      const v = ask('Turn of last contact', this.game.state.turn);
+      if (o !== null && v !== null)
+        cheatEditKing(this.game, slot, { lastContact: { other: o, turn: v } });
+    } else if (item === 11) {
+      cheatEditKing(this.game, slot, { clearLastContact: true });
+    } else if (item === 12) {
+      cheatEditKing(this.game, slot, { toggleFemale: true });
     }
   }
 
@@ -1695,7 +1704,7 @@ export class PlaySession {
     if (own) return own;
     const row = this.folder.rules.leaders[civ.tribe ?? 0]?.titles;
     const t = row?.find((x: { governmentIndex: number }) => x.governmentIndex === civ.government);
-    return t?.male ?? '';
+    return (civ.female ? t?.female : t?.male) ?? '';
   }
 
   /** Offer another human a treaty (the original's parley dialogs, 0x004ec15a). */
@@ -2985,7 +2994,8 @@ export class PlaySession {
       void this.folder.art('MK.DLL', 200 + civ.government, true).then((url) => {
         if (url) stage.style.backgroundImage = `url(${url})`;
       });
-      const index = civ.portrait ?? civ.tribe ?? 0;
+      // VERIFIED on the original's saves: a female leader's portrait is the tribe's plus 21.
+      const index = (civ.tribe ?? civ.portrait ?? 0) + (civ.female ? 21 : 0);
       void this.folder.art('MK.DLL', 220 + index).then((url) => {
         if (url) img.src = url;
         else img.remove();

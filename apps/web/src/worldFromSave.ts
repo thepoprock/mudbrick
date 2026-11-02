@@ -75,7 +75,11 @@ export function worldFromSave(save: SaveFile, rules: Rules): World {
       tribe: slot === 0 ? null : (rec?.tribeId ?? null),
       name: names?.plural || leader?.plural || (slot === 0 ? 'Barbarians' : `Civilization ${slot}`),
       adjective: names?.adjective || leader?.adjective || (slot === 0 ? 'Barbarian' : ''),
-      leader: names?.leader || leader?.name || '',
+      leader:
+        names?.leader ||
+        (((rec?.gender ?? 0) & 2) !== 0 ? leader?.femaleName : undefined) ||
+        leader?.name ||
+        '',
       cityStyle: names?.cityStyle ?? leader?.cityStyle ?? 0,
       epoch: Math.max(
         0,
@@ -112,6 +116,7 @@ export function worldFromSave(save: SaveFile, rules: Rules): World {
             senateActive: (rec.stateFlags & 4) !== 0,
             everExchanged: (rec.stateFlags & 0x80) !== 0,
             everAllied: (rec.gender & 1) !== 0,
+            female: (rec.gender & 2) !== 0,
             lastWarTurns: Int16Array.from(rec.lastContact),
             governmentScores: Int16Array.from(rec.governmentScores),
             spaceship: {

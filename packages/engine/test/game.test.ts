@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { rawYields, shieldTotals, tradeSplit, unitSupport } from '../src/city.js';
 import { removeCity } from '../src/fertility.js';
-import { adjustAttitude, hasTreaty, setTreaty, TREATY } from '../src/diplomacy.js';
+import { adjustAttitude, hasTreaty, lastWarTurnsOf, setTreaty, TREATY } from '../src/diplomacy.js';
 import {
   cheatCreateUnit,
   cheatDestroyUnits,
@@ -700,6 +700,20 @@ describe('open games and cheats', () => {
     expect(civ.knownAdvances[5]).toBe(true);
     expect(civ.advancesCount).toBe(1);
     expect(hasTreaty(world, civ.slot, 3, TREATY.peace)).toBe(true);
+  });
+
+  it('Edit King sets last contact, stamps it everywhere and toggles the leader', () => {
+    const { world, game, civ } = setup();
+    world.civs.push({ ...civ, slot: 3, lastWarTurns: new Int16Array(8).fill(-1) });
+    cheatEditKing(game, civ.slot, { lastContact: { other: 3, turn: 7 } });
+    expect(lastWarTurnsOf(civ)[3]).toBe(7);
+    cheatEditKing(game, civ.slot, { clearLastContact: true });
+    for (const c of world.civs)
+      expect([...lastWarTurnsOf(c)]).toEqual(Array(8).fill(game.state.turn));
+    cheatEditKing(game, civ.slot, { toggleFemale: true });
+    expect(civ.female).toBe(true);
+    cheatEditKing(game, civ.slot, { toggleFemale: true });
+    expect(civ.female).toBe(false);
   });
 
   it('a lost network player leaves the civilization to the computer and ends the wait', () => {

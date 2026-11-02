@@ -250,6 +250,7 @@ export function newGame(rules: EngineRules, rng: Rng, opts: NewGameOptions): New
     civ.tribe = leader.index;
     civ.name = leader.plural;
     civ.adjective = leader.adjective;
+    civ.female = female;
     civ.leader = female ? leader.femaleName || leader.name : leader.name;
     civ.cityStyle = leader.cityStyle;
     if (civ.isHuman && opts.customTribe) {
@@ -480,6 +481,7 @@ export function restartCivilization(
   civ.tribe = leader.index;
   civ.name = leader.plural;
   civ.adjective = leader.adjective;
+  civ.female = female;
   civ.leader = female ? leader.femaleName || leader.name : leader.name;
   civ.cityStyle = leader.cityStyle;
   civ.colour = slot;

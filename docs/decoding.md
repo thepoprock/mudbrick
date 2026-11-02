@@ -34,15 +34,15 @@ Every function in `docs/engine/function-status.tsv` has a `category`:
 
 | Category    | Functions |     Bytes | Meaning                                                                                  |
 | ----------- | --------- | --------: | ---------------------------------------------------------------------------------------- |
-| `read`      | 1,981     | 1,351,518 | Opened one by one and compared with the rules                                            |
+| `read`      | 2,095     | 1,358,932 | Opened one by one and compared with the rules                                            |
 | `same-code` | 1,937     |    63,086 | Identical in shape to another function: constructors, list handlers, message wrappers    |
-| `framework` | 650       |   186,971 | The window, graphics, sound and file library above 0x0055a000; seen as a one-line digest |
-| `library`   | 377       |    80,722 | The C and MFC runtime, not the game's own                                                |
-| `thunk`     | 195       |     9,384 | One line forwarding to another function                                                  |
+| `framework` | 611       |   183,130 | The window, graphics, sound and file library above 0x0055a000; seen as a one-line digest |
+| `library`   | 353       |    79,619 | The C and MFC runtime, not the game's own                                                |
+| `thunk`     | 144       |     6,914 | One line forwarding to another function                                                  |
 
 Long framework bodies in the `read` group were opened through a filter that drops drawing calls,
 and bodies over 1,800 characters in the last pass show only their first 30 lines. All functions
-below 0x0055a000 that differ in shape were opened. The 650 `framework` functions were sorted by
+below 0x0055a000 that differ in shape were opened. The `framework` functions, 650 at the time, were sorted by
 what they touch and judged from a digest of their strings and calls, with any that looked like
 game code opened in full. They are image decoders, blitters, window, sound and timer code. The
 1,937 `same-code` functions match another function once addresses and numbers are abstracted.
@@ -54,8 +54,9 @@ cancel button and the computer taking over a lost player. All are ported. So the
 of the standard game is known to be missing. It is not that every line of the window library has
 been read.
 
-A call-graph check covers the `framework` group: none of its 650 functions reads game tables, and
-the 41 that call below 0x0055a000 reach only file, rectangle and window-constructor helpers. Every
+A call-graph check covers the `framework` group: none of the 650 it then held reads game tables, and
+the 41 that call below 0x0055a000 reach only file, rectangle and window-constructor helpers. Of
+those 650, 39 have since been opened, which leaves 611. Every
 group of `same-code` functions has at least one member opened.
 
 The locator grid is a case worth knowing. The search at 0x00484325 clears only the first 0x1200

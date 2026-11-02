@@ -3,7 +3,14 @@
  * game's records. Turning cheat mode on sets a flag in the game state, as the original does, and
  * the original has no score penalty for it.
  */
-import { attitudesOf, clearTreaty, setTreaty, treatiesOf, TREATY } from './diplomacy.js';
+import {
+  attitudesOf,
+  clearTreaty,
+  lastWarTurnsOf,
+  setTreaty,
+  treatiesOf,
+  TREATY,
+} from './diplomacy.js';
 import { removeCity } from './fertility.js';
 import { computeFertility } from './fertility.js';
 import type { Game } from './game.js';
@@ -111,6 +118,9 @@ export function cheatEditKing(
     clearPatience?: boolean;
     names?: { leader?: string; name?: string; adjective?: string };
     copyAdvancesFrom?: number;
+    lastContact?: { other: number; turn: number };
+    clearLastContact?: boolean;
+    toggleFemale?: boolean;
   },
 ): void {
   const civ = game.civ(slot);
@@ -152,4 +162,9 @@ export function cheatEditKing(
     civ.knownAdvances = [...game.civ(change.copyAdvancesFrom).knownAdvances];
     civ.advancesCount = civ.knownAdvances.filter(Boolean).length;
   }
+  if (change.lastContact) lastWarTurnsOf(civ)[change.lastContact.other] = change.lastContact.turn;
+  // VERIFIED: "clear" stamps every pair of every civilization with the present turn.
+  if (change.clearLastContact)
+    for (const c of game.world.civs) lastWarTurnsOf(c).fill(game.state.turn);
+  if (change.toggleFemale) civ.female = civ.female !== true;
 }

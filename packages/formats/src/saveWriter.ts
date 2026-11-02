@@ -121,6 +121,7 @@ export interface CivWrite {
   /** Sets or clears byte 0 bit 4. */
   eiffelApplied?: boolean;
   everAllied?: boolean;
+  female?: boolean;
   everExchanged?: boolean;
   patience?: number;
   talks?: number;
@@ -353,6 +354,7 @@ export function writeSave(original: Uint8Array, save: SaveFile, patch: SavePatch
     if (c.reputation !== undefined) w.u8(b + 30, c.reputation);
     if (c.everExchanged !== undefined) w.bit(b, 7, c.everExchanged);
     if (c.everAllied !== undefined) w.bit(b + 1, 0, c.everAllied);
+    if (c.female !== undefined) w.bit(b + 1, 1, c.female);
     if (c.eiffelApplied !== undefined) {
       const old = w.bytes[b] ?? 0;
       w.u8(b, c.eiffelApplied ? old | 0x10 : old & ~0x10);
