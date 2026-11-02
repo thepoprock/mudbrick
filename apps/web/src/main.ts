@@ -269,6 +269,9 @@ function startNewGame(): void {
       leader: byId<HTMLInputElement>('ngLeader').value.trim(),
       name: byId<HTMLInputElement>('ngTribeName').value.trim(),
       adjective: byId<HTMLInputElement>('ngAdjective').value.trim(),
+      titles: byId<HTMLInputElement>('ngTitles')
+        .value.split(',')
+        .map((t) => t.trim()),
       ...(byId<HTMLSelectElement>('ngStyle').value
         ? { cityStyle: Number(byId<HTMLSelectElement>('ngStyle').value) }
         : {}),
@@ -319,6 +322,7 @@ function startNewGame(): void {
   byId<HTMLDetailsElement>('newGamePanel').open = false;
   redraw();
   if (session.selected) session.centreOn(session.selected.position);
+  void session?.playVideo('OPENING');
 }
 
 /**
@@ -596,7 +600,8 @@ function attachNet(s: PlaySession, seat: number): void {
   s.humanSlot = seat;
   s.takeSeat();
   s.onTurnPassed = (moving) => net?.sendState(snapshotGame(s.game, moving), moving);
-  s.onChat = (text) => net?.chat(text);
+  s.onChat = (text, to) => net?.chat(text, to);
+  if (!s.game.state.byFile) s.game.state.networkGame = true;
   s.onLock = () => net?.lock();
   s.onRelease = () => {
     net?.sendState(snapshotGame(s.game, seat), seat);
@@ -625,7 +630,10 @@ byId<HTMLButtonElement>('netJoin').addEventListener('click', () => {
       session?.seatsChanged(m.seats ?? []);
     }
     if (m.type === 'error') byId('netStatus').textContent = m.message ?? 'error';
-    if (m.type === 'chat') session?.log(`Seat ${m.seat}: ${m.text}`);
+    if (m.type === 'chat') {
+      session?.log(`Seat ${m.seat}: ${m.text}`);
+      session?.refresh();
+    }
   });
   if (session) {
     attachNet(session, seat);

@@ -81,7 +81,7 @@ import { computerPurchase, type PurchaseContext, type WonderTally } from './aiPu
 import { runStrategy, type StrategyEvent } from './aiStrategy.js';
 import { gameYear, formatYear, type CalendarOptions } from './calendar.js';
 import { routeIncomeTotal, type TradeContext, routeModifier } from './trade.js';
-import type { EspionageContext } from './espionage.js';
+import { chatSpyTurn, type EspionageContext } from './espionage.js';
 import {
   aiNextPartKind,
   buildPart,
@@ -239,7 +239,13 @@ export interface GameState {
   /** DONTPLAYWONDERS has run. */
   wonderMoviesOff?: boolean;
   /** The game has ended: who won and how; 'retirement' is the year 2020 (the best score wins). */
-  gameOver?: { winner: number; reason: 'spaceship' | 'conquest' | 'retirement' };
+  gameOver?: { winner: number; reason: 'spaceship' | 'conquest' | 'retirement' | 'defeat' };
+  /** The player chose to keep playing: no second ending, no further score (0x005da710 2, 0x20). */
+  keptPlaying?: boolean;
+  /** Played over the relay, not hotseat or by file. */
+  networkGame?: boolean;
+  /** Civilizations destroyed, for the closing history: up to twelve (0x005d9d48). */
+  destroyedLog?: { year: number; name: string }[];
 }
 
 /** Scenario parameters the engine uses (docs/formats/save-format.md, the 100-byte block). */
@@ -477,9 +483,13 @@ export class Game {
   }
 
   /** The next queued conversation, if any. */
+  /** The computer player behind the last talk taken, for its herald's film. */
+  pendingTalkFrom: number | null = null;
+
   nextPendingTalk(human: number): Conversation | null {
     const at = this.pendingTalks.findIndex((t) => t.human === human);
     const next = at >= 0 ? this.pendingTalks.splice(at, 1)[0] : undefined;
+    this.pendingTalkFrom = next?.computer ?? null;
     if (!next) return null;
     const civ = this.world.civs.find((c) => c.slot === next.computer);
     if (next.relations && civ)
@@ -631,6 +641,7 @@ export class Game {
 
   espionageContext(): EspionageContext {
     return {
+      networkGame: this.state.networkGame === true,
       advanceGained: (c, a) => this.advanceGained(c, a),
       ...(this.askPretext ? { askPretext: this.askPretext } : {}),
       turn: this.state.turn,
@@ -1856,6 +1867,10 @@ export class Game {
       contactSweep(this.world, slot, this.diplomacyContext(), events);
       for (const e of events) out.push({ slot, event: e });
     }
+    for (const u of [...this.world.units]) {
+      if (u.owner !== slot || !u.chatSpy) continue;
+      chatSpyTurn(this.world, this.rules, u, this.espionageContext(), []);
+    }
     for (const e of beginUnitsTurn(this.world, this.rules, this.rng, civ, {
       knows: (a) => this.knows(slot, a),
       nuclearPower: this.knows(slot, ADVANCE.nuclearPower),
@@ -2263,6 +2278,12 @@ export class Game {
     return this.state.awaitingMoves?.includes(slot) ? this.finishMoves(slot) : [];
   }
 
+  /** "Yes, keep playing" (VERIFIED 0x0046b383): the game goes on with no ending left to reach. */
+  keepPlaying(): void {
+    delete this.state.gameOver;
+    this.state.keptPlaying = true;
+  }
+
   /** One human offers another a treaty (parley.ts). */
   offerParley(from: number, to: number, give: ParleyItem[], take: ParleyItem[]): ParleyOffer {
     const list = (this.state.parleyOffers ??= []);
@@ -2357,6 +2378,15 @@ export class Game {
       if (!civ.hadCity && units > 0) continue;
       civ.inPlay = false;
       this.state.destroyedCivilizations = (this.state.destroyedCivilizations ?? 0) + 1;
+      if ((this.state.destroyedLog ??= []).length < 12)
+        this.state.destroyedLog.push({ year: yearOf(this.state), name: civ.name });
+      // VERIFIED (0x00483657): the human's own defeat ends the game, with no choice to go on.
+      if (
+        civ.isHuman &&
+        !this.state.keptPlaying &&
+        !this.world.civs.some((c) => c.isHuman && c.inPlay && c.slot !== 0)
+      )
+        this.state.gameOver = { winner: civ.slot, reason: 'defeat' };
       for (const u of [...this.world.units])
         if (u.owner === civ.slot) this.world.units.splice(this.world.units.indexOf(u), 1);
       out.push({
@@ -2433,13 +2463,13 @@ export class Game {
     const shipEvents: SpaceshipEvent[] = [];
     const winner = checkArrivals(this.world, year, shipEvents);
     for (const e of shipEvents) out.push({ slot: e.slot, event: e });
-    if (winner) {
+    if (winner && !this.state.keptPlaying) {
       this.state.gameOver = { winner: winner.slot, reason: 'spaceship' };
       return out;
     }
     out.push(...this.eliminateCityless());
     const alive = this.world.civs.filter((c) => c.slot !== 0 && c.inPlay);
-    if (alive.length === 1 && this.state.turn > 1 && alive[0]) {
+    if (alive.length === 1 && this.state.turn > 1 && alive[0] && !this.state.keptPlaying) {
       this.state.gameOver = { winner: alive[0].slot, reason: 'conquest' };
       out.push({
         slot: alive[0].slot,
@@ -2453,7 +2483,7 @@ export class Game {
     // VERIFIED (0x0046b0fa): in the year 2000 the players are told to plan their retirement;
     // in 2020 the game ends for everyone — here the best civilization score wins. A scenario's
     // end turn (warned five turns before) is not modelled yet.
-    if (!this.state.gameOver) {
+    if (!this.state.gameOver && !this.state.keptPlaying) {
       const scenarioEnd = this.state.scenario?.endTurn ?? 0;
       const stage = retirementStage(yearOf(this.state), this.state.turn, scenarioEnd);
       if (stage === 'warn') {

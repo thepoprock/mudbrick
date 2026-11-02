@@ -3,6 +3,7 @@
  * game's records. Turning cheat mode on sets a flag in the game state, as the original does, and
  * the original has no score penalty for it.
  */
+import { attitudesOf, clearTreaty, setTreaty, TREATY } from './diplomacy.js';
 import { removeCity } from './fertility.js';
 import { computeFertility } from './fertility.js';
 import type { Game } from './game.js';
@@ -92,4 +93,52 @@ export function cheatEditUnit(
 export function cheatEditCity(city: City, change: { size?: number; shields?: number }): void {
   if (change.size !== undefined) city.size = Math.max(1, Math.min(99, change.size));
   if (change.shields !== undefined) city.shieldsStored = Math.max(0, change.shields);
+}
+
+/**
+ * Edit King (VERIFIED 0x0050ba78): the items that change a civilization. Treaties take a bit mask
+ * of the seven the dialog lists; `copyAdvancesFrom` gives it another civilization's knowledge.
+ */
+export function cheatEditKing(
+  game: Game,
+  slot: number,
+  change: {
+    treatiesWith?: { other: number; flags: number };
+    attitudeTo?: { other: number; value: number };
+    reputation?: number;
+    progress?: number;
+    clearResearch?: boolean;
+    names?: { leader?: string; name?: string; adjective?: string };
+    copyAdvancesFrom?: number;
+  },
+): void {
+  const civ = game.civ(slot);
+  if (change.treatiesWith) {
+    const { other, flags } = change.treatiesWith;
+    const bits = [
+      TREATY.contact,
+      TREATY.ceaseFire,
+      TREATY.peace,
+      TREATY.alliance,
+      TREATY.war,
+      TREATY.vendetta,
+      TREATY.embassy,
+    ];
+    bits.forEach((bit, i) => {
+      if ((flags >> i) & 1) setTreaty(game.world, slot, other, bit);
+      else clearTreaty(game.world, slot, other, bit);
+    });
+  }
+  if (change.attitudeTo)
+    attitudesOf(civ)[change.attitudeTo.other] = Math.max(0, Math.min(100, change.attitudeTo.value));
+  if (change.reputation !== undefined) civ.reputation = change.reputation;
+  if (change.progress !== undefined) civ.scienceStored = change.progress;
+  if (change.clearResearch) civ.researching = null;
+  if (change.names?.leader) civ.leader = change.names.leader;
+  if (change.names?.name) civ.name = change.names.name;
+  if (change.names?.adjective) civ.adjective = change.names.adjective;
+  if (change.copyAdvancesFrom !== undefined) {
+    civ.knownAdvances = [...game.civ(change.copyAdvancesFrom).knownAdvances];
+    civ.advancesCount = civ.knownAdvances.filter(Boolean).length;
+  }
 }

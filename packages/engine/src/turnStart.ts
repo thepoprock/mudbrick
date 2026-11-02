@@ -245,7 +245,8 @@ export function beginUnitTurn(
   if (healed) out.push(healed);
   unit.moved = false;
   unit.dropped = false;
-  unit.movesSpent = 0;
+  // VERIFIED (0x0046732a): a listening spy gets no moves back.
+  if (!unit.chatSpy) unit.movesSpent = 0;
   const fuel = checkFuel(world, rules, unit);
   if (fuel) {
     out.push(fuel);

@@ -92,6 +92,8 @@ export interface Civ {
   government: number;
   treasury: number;
   isHuman: boolean;
+  /** The player's own titles for the seven governments (0x004df9af, the second custom box). */
+  titles?: string[];
   inPlay: boolean;
   /** The civilization has held a city (so losing its last one destroys it, 0x00483657). */
   hadCity?: boolean;
@@ -271,6 +273,8 @@ export interface Unit {
   moved?: boolean;
   /** Caravans/freight: RULES @CARAVAN commodity index, or 0xFF for a food caravan. */
   commodity?: number;
+  /** A spy tapping a human's chat from their capital: whose, and for how many more turns. */
+  chatSpy?: { target: number; turns: number };
   /** AI: a settler the strategic layer wants to found a city (unit flag 0x200). */
   wanted?: boolean;
   /** AI: the unit stands on its objective (unit flag 0x80). */
@@ -285,6 +289,13 @@ export interface WorldInit {
   flatEarth: boolean;
   /** Resource seed from the map header; drives the special-resource and hut patterns. */
   resourceSeed?: number;
+}
+
+export interface LocatorGrid {
+  columns: number;
+  rows: number;
+  land: Uint8Array;
+  sea: Uint8Array;
 }
 
 export class World {
@@ -308,6 +319,8 @@ export class World {
   /** Per square: fertility rating 0 or 8–15 (map byte 5, low nibble; fertility.ts). */
   readonly fertility: Uint8Array;
   /** Land and rated squares per land mass, computed on first use (aiStrategy.ts). */
+  /** The locator grid of long routes (pathfinding.ts), fixed when the world starts. */
+  locator?: LocatorGrid;
   landmassStats?: { land: number[]; rated: number[]; oceans: number[]; touching: number[] };
   readonly civs: Civ[] = [];
   /** A battle between two civilizations happened this turn (resets the turns of peace). */

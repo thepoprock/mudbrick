@@ -437,6 +437,8 @@ export interface SaveFile {
   civs: CivRecord[];
   /** Same shape as a parsed `.MP` file, so map tools work on saves unchanged. */
   map: MapFile;
+  /** The locator grid, land then sea, one byte per cell of four columns by four rows. */
+  locator: { land: Uint8Array; sea: Uint8Array };
   /** 7 × area bytes: what each player slot 1–7 has seen on each square. */
   knowledge: Uint8Array;
   units: UnitRecord[];
@@ -894,6 +896,13 @@ export function parseSave(bytes: Uint8Array): SaveFile {
     civNames,
     civs,
     map,
+    locator: {
+      land: bytes.subarray(unknown1Off, unknown1Off + header.locatorWidth * header.locatorHeight),
+      sea: bytes.subarray(
+        unknown1Off + header.locatorWidth * header.locatorHeight,
+        unknown1Off + 2 * header.locatorWidth * header.locatorHeight,
+      ),
+    },
     knowledge,
     units,
     cities,

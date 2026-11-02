@@ -206,5 +206,11 @@ export function worldFromSave(save: SaveFile, rules: Rules): World {
     });
   }
 
+  world.locator = {
+    columns: save.map.header.locatorWidth,
+    rows: save.map.header.locatorHeight,
+    land: Uint8Array.from(save.locator.land),
+    sea: Uint8Array.from(save.locator.sea),
+  };
   return world;
 }

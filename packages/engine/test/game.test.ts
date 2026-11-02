@@ -8,7 +8,9 @@ import {
   cheatEditCity,
   cheatKillCivilization,
   cheatSetMoney,
+  cheatEditKing,
 } from '../src/cheats.js';
+import { chatSpyTurn, espionageOptions, performEspionage } from '../src/espionage.js';
 import { Game } from '../src/game.js';
 import { tryMove } from '../src/movement.js';
 import { longMoveCount } from '../src/turnStart.js';
@@ -655,6 +657,51 @@ describe('parley between humans', () => {
 });
 
 describe('open games and cheats', () => {
+  it('a game can be played on after its end, with no second ending', () => {
+    const { game, civ } = setup();
+    game.state.gameOver = { winner: civ.slot, reason: 'conquest' };
+    game.keepPlaying();
+    expect(game.state.gameOver).toBeUndefined();
+    expect(game.state.keptPlaying).toBe(true);
+  });
+
+  it('a listening spy stays put, then goes when its time is up', () => {
+    const { world, game, civ, city } = setup();
+    const other: Civ = { ...civ, slot: 3, isHuman: true, knownAdvances: [...civ.knownAdvances] };
+    world.civs.push(other);
+    city.owner = 3;
+    city.improvements[1] = true;
+    const ctx = { ...game.espionageContext(), networkGame: true };
+    const spy = {
+      ...world.units[0],
+      id: 99,
+      owner: civ.slot,
+      type: 47,
+      position: city.position,
+    } as Unit;
+    expect(espionageOptions(world, spy, city, ctx)).toContain('intercept');
+    world.units.push(spy);
+    performEspionage(world, game.rules, spy, city, 'intercept', ctx);
+    const turns = spy.chatSpy?.turns ?? 0;
+    expect(turns).toBeGreaterThan(4);
+    expect(hasTreaty(world, civ.slot, 3, TREATY.chatIntercept)).toBe(true);
+    expect(espionageOptions(world, spy, city, ctx)).not.toContain('intercept');
+    for (let t = 0; t < turns; t++) chatSpyTurn(world, game.rules, spy, ctx, []);
+    expect(spy.chatSpy).toBeUndefined();
+    expect(hasTreaty(world, civ.slot, 3, TREATY.chatIntercept)).toBe(false);
+  });
+
+  it('Edit King copies advances and sets treaties', () => {
+    const { world, game, civ } = setup();
+    const other: Civ = { ...civ, slot: 3, knownAdvances: Array<boolean>(100).fill(false) };
+    other.knownAdvances[5] = true;
+    world.civs.push(other);
+    cheatEditKing(game, civ.slot, { copyAdvancesFrom: 3, treatiesWith: { other: 3, flags: 5 } });
+    expect(civ.knownAdvances[5]).toBe(true);
+    expect(civ.advancesCount).toBe(1);
+    expect(hasTreaty(world, civ.slot, 3, TREATY.peace)).toBe(true);
+  });
+
   it('a lost network player leaves the civilization to the computer and ends the wait', () => {
     const { game, civ } = setup();
     civ.isHuman = true;

@@ -6,6 +6,7 @@
  * the start balancing pass (0x00480a34: a second Settlers and free advances for poorer sites).
  * VERIFIED unless marked INFERRED. docs/engine/new-game.md.
  */
+import { locatorGrid } from './pathfinding.js';
 import { emptyStrategy, landmassStats } from './aiStrategy.js';
 import { attitudesOf, lastWarTurnsOf, treatiesOf } from './diplomacy.js';
 import { distance } from './city.js';
@@ -46,7 +47,13 @@ export interface NewGameOptions {
   /** The human's tribe (leader index). */
   humanTribe: number;
   /** A tribe of the player's own (VERIFIED 0x004df9af, the custom tribe and city style boxes). */
-  customTribe?: { leader?: string; name?: string; adjective?: string; cityStyle?: number };
+  customTribe?: {
+    leader?: string;
+    name?: string;
+    adjective?: string;
+    cityStyle?: number;
+    titles?: string[];
+  };
   leaders: NewGameLeader[];
   /** 0 villages only, 1 roving, 2 restless, 3 raging. */
   barbarianActivity: number;
@@ -251,6 +258,7 @@ export function newGame(rules: EngineRules, rng: Rng, opts: NewGameOptions): New
       if (c.name) civ.name = c.name;
       if (c.adjective) civ.adjective = c.adjective;
       if (c.cityStyle !== undefined) civ.cityStyle = c.cityStyle;
+      if (c.titles?.some((t) => t !== '')) civ.titles = c.titles;
     }
     civ.colour = slot;
     civ.government = GOVERNMENT.despotism;
@@ -384,6 +392,7 @@ export function newGame(rules: EngineRules, rng: Rng, opts: NewGameOptions): New
     barbarianActivity: opts.barbarianActivity,
     tribesPlayed,
   };
+  locatorGrid(world); // built once, before anything changes the land (0x00402cd3)
   return { world, state, humanSlot, notes };
 }
 

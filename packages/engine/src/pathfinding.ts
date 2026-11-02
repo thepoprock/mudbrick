@@ -17,6 +17,7 @@
 import { gridDistance } from './city.js';
 import { DOMAIN_AIR, DOMAIN_GROUND, DOMAIN_SEA, type EngineRules } from './rules.js';
 import {
+  type LocatorGrid,
   NEIGHBOUR_OFFSETS,
   OCEAN,
   SquareFlag,
@@ -297,18 +298,11 @@ export function gotoDirection(
  * that neighbouring cell. The original builds it once when a world starts and never again, so
  * terraforming does not touch it. Built here on first use and kept with the world.
  */
-export interface LocatorGrid {
-  columns: number;
-  rows: number;
-  land: Uint8Array;
-  sea: Uint8Array;
-}
+export type { LocatorGrid } from './world.js';
 
 /** Cell steps in bit order (VERIFIED, the tables at 0x005b2e98 and 0x005b2ea8). */
 const CELL_DX = [0, 1, 1, 1, 0, -1, -1, -1];
 const CELL_DY = [-1, -1, 0, 1, 1, 1, 0, -1];
-
-const grids = new WeakMap<World, LocatorGrid>();
 
 /** The first square of a cell on the wanted kind of terrain (0x0050e1c7 and 0x00485ac5). */
 function cellSquare(world: World, x: number, y: number, sea: boolean): Point | null {
@@ -322,33 +316,108 @@ function cellSquare(world: World, x: number, y: number, sea: boolean): Point | n
   return null;
 }
 
-/** Steps between two squares of one kind within `limit` counted squares, the search's plain mode. */
-function plainSteps(world: World, a: Point, b: Point, sea: boolean, limit: number): number {
-  const goal = world.index(b.x, b.y);
-  const start = world.index(a.x, a.y);
-  if (goal === start) return 0;
-  const cost = new Map<number, number>([[goal, 1]]);
-  let frontier = [goal];
-  for (let c = 1; frontier.length > 0 && c <= limit; c++) {
-    const next: number[] = [];
-    for (const i of frontier) {
-      for (let dir = 0; dir < 8; dir++) {
-        const n = neighbourIndex(world, i, dir);
-        if (n < 0 || cost.has(n)) continue;
-        if (n !== start && (world.terrain[n] === OCEAN) !== sea) continue;
-        if (n === start) return c + 1;
-        cost.set(n, c + 1);
-        next.push(n);
-      }
-    }
-    frontier = next;
+/**
+ * The original's search table as the grid build leaves it (VERIFIED 0x00484325): 48 by 48 cells
+ * around the goal, of which each new search clears only the first 0x1200 bytes, half the table.
+ * Costs in the other half survive from earlier searches and steer the result, so the links depend
+ * on the order of the searches. The build replays them in that order to get the same grid.
+ */
+class SearchTable {
+  private readonly cost = new Int32Array(48 * 48);
+  private cachedGoal: number | null = null;
+  private best = 0;
+
+  constructor(private readonly world: World) {}
+
+  private at(x: number, y: number, gx: number, gy: number): number {
+    const dx = x - gx;
+    return 48 * dx - 47 * ((y - gy + dx) >> 1) + 1176;
   }
-  return -1;
+
+  private read(x: number, y: number, gx: number, gy: number): number {
+    return this.cost[this.at(x, y, gx, gy)] ?? 0;
+  }
+
+  /** The cost the search reports from `a` to `b`, or −1 when it finds no first step. */
+  search(a: Point, b: Point, sea: boolean, limit: number): number {
+    const w = this.world;
+    if (a.x === b.x && a.y === b.y) return 0;
+    if (gridDistance(w, a, b) >= 23) return -1;
+    const goalIndex = w.index(b.x, b.y);
+    const startIndex = w.index(a.x, a.y);
+    let sx = a.x - b.x;
+    if (!w.flatEarth) {
+      if (sx < 0) sx += w.widthX2;
+      if (sx >= w.widthX2 >> 1) sx -= w.widthX2;
+    }
+    sx += b.x;
+    const window = (x: number, y: number) => ((Math.abs(x - b.x) + Math.abs(y - b.y)) & ~1) < 48;
+    const open = (x: number, y: number): boolean => {
+      const wx = w.wrapX(x, y);
+      if (wx === null || !w.isSquare(wx, y)) return false;
+      const i = w.index(wx, y);
+      return (w.terrain[i] === OCEAN) === sea || i === startIndex || i === goalIndex;
+    };
+    if (this.cachedGoal !== goalIndex || this.read(sx, a.y, b.x, b.y) === 0) {
+      this.cachedGoal = goalIndex;
+      this.cost.fill(0, 0, 1152);
+      this.cost[this.at(b.x, b.y, b.x, b.y)] = 1;
+      this.best = limit;
+      const qx = new Int32Array(0x900);
+      const qy = new Int32Array(0x900);
+      qx[0] = b.x;
+      qy[0] = b.y;
+      let head = 0;
+      let tail = 1;
+      do {
+        const x = qx[head] ?? 0;
+        const y = qy[head] ?? 0;
+        head = head + 1 > 0x8ff ? 0 : head + 1;
+        const c = this.read(x, y, b.x, b.y);
+        if (c > this.best) continue;
+        const wx = w.wrapX(x, y);
+        if (wx === a.x && y === a.y) {
+          this.best = c;
+          continue;
+        }
+        let full = false;
+        for (let dir = 0; dir < 8 && !full; dir++) {
+          const off = NEIGHBOUR_OFFSETS[dir];
+          const nx = x + (off?.x ?? 0);
+          const ny = y + (off?.y ?? 0);
+          if (!window(nx, ny) || ny < 0 || ny >= w.rows || !open(nx, ny)) continue;
+          const seen = this.read(nx, ny, b.x, b.y);
+          if (seen !== 0 && c + 1 >= seen) continue;
+          this.cost[this.at(nx, ny, b.x, b.y)] = c + 1;
+          qx[tail] = nx;
+          qy[tail] = ny;
+          tail = tail + 1 > 0x8ff ? 0 : tail + 1;
+          full = head === tail;
+        }
+        if (full) break;
+      } while (head !== tail && head !== 0);
+    }
+    if (this.best >= limit) return -1;
+    const here = this.read(sx, a.y, b.x, b.y);
+    for (let dir = 0; dir < 8; dir++) {
+      const off = NEIGHBOUR_OFFSETS[dir];
+      const nx = a.x + (off?.x ?? 0);
+      const ny = a.y + (off?.y ?? 0);
+      if (ny < 0 || ny >= w.rows || !window(nx, ny) || !open(nx, ny)) continue;
+      let rel = nx - b.x;
+      if (!w.flatEarth) {
+        if (rel < 0) rel += w.widthX2;
+        if (rel >= w.widthX2 >> 1) rel -= w.widthX2;
+      }
+      const c = this.read(b.x + rel, ny, b.x, b.y);
+      if (c !== 0 && c < here) return this.best;
+    }
+    return -1;
+  }
 }
 
 export function locatorGrid(world: World): LocatorGrid {
-  const known = grids.get(world);
-  if (known) return known;
+  if (world.locator) return world.locator;
   const columns = (world.widthX2 + 3) >> 2;
   const rows = (world.rows + 3) >> 2;
   const cellX = (x: number) => {
@@ -356,6 +425,7 @@ export function locatorGrid(world: World): LocatorGrid {
     if (x < 0) return columns + x;
     return x >= columns ? x - columns : x;
   };
+  const table = new SearchTable(world);
   const build = (sea: boolean): Uint8Array => {
     const grid = new Uint8Array(columns * rows);
     for (let cx = 0; cx < columns; cx++) {
@@ -372,12 +442,8 @@ export function locatorGrid(world: World): LocatorGrid {
           if (nx === null || !world.isSquare(nx, ny)) continue;
           const there = cellSquare(world, nx, ny, sea);
           if (!there || world.landmass[world.index(there.x, there.y)] !== body) continue;
-          const steps = plainSteps(world, here, there, sea, 5);
-          // INFERRED: the code reads as cost under 5 (three steps), but the saved grids reject the
-          // exact (3,3) diagonal. Measured on one world: 34 of 486 land links and 66 of 1008 sea differ.
-          if (steps <= 0 || steps >= 5) continue;
-          if (steps === 4 && Math.abs(there.x - here.x) === 3 && Math.abs(there.y - here.y) === 3)
-            continue;
+          const cost = table.search(here, there, sea, 5);
+          if (cost <= 0 || cost >= 5) continue;
           const at = cy * columns + cx;
           grid[at] = (grid[at] ?? 0) | (1 << dir);
           const ox = cellX(cx + (CELL_DX[dir] ?? 0));
@@ -392,7 +458,7 @@ export function locatorGrid(world: World): LocatorGrid {
     return grid;
   };
   const made = { columns, rows, land: build(false), sea: build(true) };
-  grids.set(world, made);
+  world.locator = made;
   return made;
 }
 
@@ -409,7 +475,7 @@ function reachCost(
   const goal = world.index(b.x, b.y);
   if (start === goal) return 0;
   if (gridDistance(world, a, b) >= 23) return -1;
-  // VERIFIED (0x00485412): Settlers on land, unit 33 at sea, and nobody's units in the way.
+  // VERIFIED (0x00485412): Warriors (unit 2) on land, unit 33 at sea, and nobody's units in the way.
   const type = sea ? 33 : 2;
   const walker = { type, owner: -1 } as Unit;
   const board: Board = {

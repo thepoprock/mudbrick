@@ -8,7 +8,7 @@
 import { Game, type GameState } from './game.js';
 import { Rng, type RngState } from './rng.js';
 import type { EngineRules } from './rules.js';
-import { World } from './world.js';
+import { World, type LocatorGrid } from './world.js';
 
 export const SNAPSHOT_FORMAT = 'mudbrick-save';
 export const SNAPSHOT_VERSION = 1;
@@ -92,6 +92,7 @@ export function snapshotGame(game: Game, humanSlot: number): string {
       terrain: w.terrain,
       flags: w.flags,
       landmass: w.landmass,
+      locator: w.locator,
       seen: w.seen,
       territory: w.territory,
       visited: w.visited,
@@ -122,6 +123,7 @@ export function restoreGame(text: string, rules: EngineRules): { game: Game; hum
     terrain: Uint8Array;
     flags: Uint16Array;
     landmass: Uint8Array;
+    locator?: LocatorGrid;
     seen: Uint8Array;
     territory: Uint8Array;
     visited?: Uint8Array;
@@ -139,6 +141,7 @@ export function restoreGame(text: string, rules: EngineRules): { game: Game; hum
   world.terrain.set(sw.terrain);
   world.flags.set(sw.flags);
   world.landmass.set(sw.landmass);
+  if (sw.locator) world.locator = sw.locator;
   world.seen.set(sw.seen);
   world.territory.set(sw.territory);
   if (sw.visited) world.visited.set(sw.visited);

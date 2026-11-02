@@ -51,6 +51,8 @@ export const TREATY = {
   grudgeRenewed: 1 << 19,
   /** War declared this turn (cleared next turn). */
   warThisTurn: 1 << 21,
+  /** Our spy listens to this civilization's chat (VERIFIED 0x00499c93, case 7). */
+  chatIntercept: 1 << 24,
 } as const;
 
 /** Wonders the diplomacy rules name, by @IMPROVE index (39 + wonder number). */

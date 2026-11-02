@@ -9,7 +9,14 @@
  */
 import { captureCity } from './conquest.js';
 import { distance } from './city.js';
-import { adjustAttitude, clearTreaty, hasTreaty, setTreaty, TREATY } from './diplomacy.js';
+import {
+  attitudesOf,
+  adjustAttitude,
+  clearTreaty,
+  hasTreaty,
+  setTreaty,
+  TREATY,
+} from './diplomacy.js';
 import { nuclearStrike } from './nuclear.js';
 import { grantAdvance } from './research.js';
 import { advanceIndex, GOVERNMENT, IMPROVEMENT, type EngineRules } from './rules.js';
@@ -26,7 +33,7 @@ const ROLE_TRADE = 7;
 const UNSABOTAGEABLE = new Set([0, IMPROVEMENT.palace, 17]);
 
 export type EspionageAction =
-  'embassy' | 'investigate' | 'steal' | 'sabotage' | 'poison' | 'nuke' | 'incite';
+  'embassy' | 'investigate' | 'steal' | 'sabotage' | 'poison' | 'nuke' | 'incite' | 'intercept';
 
 export interface EspionageEvent {
   kind: 'espionage';
@@ -37,6 +44,8 @@ export interface EspionageEvent {
 }
 
 export interface EspionageContext {
+  /** A game over the network, where a spy can listen to chat. */
+  networkGame?: boolean;
   /** Will a human victim make the incident a pretext? Asked as dialogs PRETEXT, PRETEXTALLIED. */
   askPretext?: (victim: number, agentOwner: number, allied: boolean) => boolean;
   /** Run the consequences of an advance just granted (Game.advanceGained). */
@@ -84,6 +93,27 @@ function spend(world: World, unit: Unit): void {
  * `1 − 1/n`, n = 3 (test) or 2 (act), doubled for a veteran, halved for mode 1, and a lone
  * chance rounded up; a diplomat is always spent. Returns true when the agent is lost.
  */
+/** A listening spy's turn (VERIFIED 0x0046732a and 0x00483657): it stays until time or target ends. */
+export function chatSpyTurn(
+  world: World,
+  rules: EngineRules,
+  unit: Unit,
+  ctx: EspionageContext,
+  events: EspionageEvent[],
+): void {
+  const spy = unit.chatSpy;
+  if (!spy) return;
+  spy.turns -= 1;
+  const alive = civOf(world, spy.target)?.inPlay === true;
+  if (spy.turns > 0 && alive) {
+    unit.movesSpent = 999;
+    return;
+  }
+  clearTreaty(world, unit.owner, spy.target, TREATY.chatIntercept);
+  delete unit.chatSpy;
+  resolveAgent(world, rules, unit, 0, ctx, events);
+}
+
 export function resolveAgent(
   world: World,
   rules: EngineRules,
@@ -211,6 +241,14 @@ export function espionageOptions(
   if (spy && city.size > 1) out.push('poison');
   if (spy && ctx.knows(me, 73) && ctx.knows(me, 58) && ctx.wonderBuilt(39 + 23)) out.push('nuke');
   if (!city.improvements[IMPROVEMENT.palace]) out.push('incite');
+  // Network games only: a human rival's capital, once (VERIFIED 0x00499c93).
+  if (
+    ctx.networkGame &&
+    ctx.isHuman(them) &&
+    city.improvements[IMPROVEMENT.palace] &&
+    !hasTreaty(world, me, them, TREATY.chatIntercept)
+  )
+    out.push('intercept');
   return out;
 }
 
@@ -456,6 +494,24 @@ export function performEspionage(
       }
       done(specific ? 1 : 0);
       incident(world, me, them, 'sabotage', ctx, events);
+      return events;
+    }
+    case 'intercept': {
+      // VERIFIED 0x00499c93 case 7: 5 turns (a spy 10), plus 5 at Chieftain down to 0 at Deity,
+      // plus 2 for a veteran, plus up to 5 by chance, less a table of the target's attitude.
+      // INFERRED: that table has 9 entries and attitudes run to 100; the original reads past it
+      // into the stack, so here anything beyond the table counts as 0.
+      const table = [0, 0, 0, 0, 1, 2, 2, 3, 4];
+      const feeling = attitudesOf(meCiv)[them] ?? 0;
+      const turns =
+        (spy ? 10 : 5) +
+        (5 - Math.min(5, ctx.difficulty)) +
+        (unit.veteran ? 2 : 0) -
+        (table[feeling] ?? 0) +
+        ctx.rng.nextInt(6);
+      unit.chatSpy = { target: them, turns };
+      setTreaty(world, me, them, TREATY.chatIntercept);
+      events.push({ kind: 'espionage', text: 'communications intercept established' });
       return events;
     }
     case 'poison': {

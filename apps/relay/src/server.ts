@@ -5,7 +5,7 @@
  *   PORT=8787 npm start
  *
  * Client to server: `{ type: 'join', room, seat }`, `{ type: 'state', text, moving }`,
- * `{ type: 'chat', text }`, and for simultaneous play `{ type: 'lock' }` and `{ type: 'unlock' }`;
+ * `{ type: 'chat', text, to }`, and for simultaneous play `{ type: 'lock' }` and `{ type: 'unlock' }`;
  * the server answers a lock with `{ type: 'lock' }` when it is that seat's turn to write. Server to client: `{ type: 'state', text, moving }`,
  * `{ type: 'seats', seats }`, `{ type: 'chat', seat, text }`, `{ type: 'error', message }`.
  */
@@ -43,7 +43,14 @@ server.on('connection', (socket) => {
   let room: Room | null = null;
   let seat = -1;
   socket.on('message', (data) => {
-    let m: { type?: string; room?: string; seat?: number; text?: string; moving?: number };
+    let m: {
+      type?: string;
+      room?: string;
+      seat?: number;
+      text?: string;
+      moving?: number;
+      to?: number[];
+    };
     try {
       m = JSON.parse(String(data)) as typeof m;
     } catch {
@@ -79,7 +86,10 @@ server.on('connection', (socket) => {
     }
     if (m.type === 'unlock') grantNext(room, seat);
     if (m.type === 'chat' && typeof m.text === 'string') {
-      for (const other of room.seats.values()) send(other, { type: 'chat', seat, text: m.text });
+      for (const [s, other] of room.seats) {
+        if (s === seat || !m.to || m.to.includes(s))
+          send(other, { type: 'chat', seat, text: m.text });
+      }
     }
   });
   socket.on('close', () => {

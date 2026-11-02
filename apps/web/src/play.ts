@@ -130,6 +130,7 @@ import {
   hasTreaty,
   type DiplomacyEvent,
   commoditySearch,
+  cheatEditKing,
 } from '@mudbrick/engine';
 import { ADVANCE, IMPROVEMENT } from '@mudbrick/engine';
 import { sprites } from '@mudbrick/formats';
@@ -209,6 +210,10 @@ export interface PlayElements {
 /** How long a pause in orders hands the lock back in simultaneous play. */
 const LOCK_HOLD_MS = 400;
 
+/** The herald films by tribe (VERIFIED, the table at 0x005b6820). */
+const HERALDS =
+  'ROM BAB GER EGY AME GRE IND RUS ZUL FRE AZT CHI ENG MON CEL JAP VIK SPA PER CAR SIO'.split(' ');
+
 export class PlaySession {
   /** Anarchy has ended and the engine waits for the player's choice. */
   governmentChoiceDue = false;
@@ -219,7 +224,7 @@ export class PlaySession {
   /** Network play: this browser's seat, and the call that sends the game on. */
   seat: number | null = null;
   onTurnPassed: ((moving: number) => void) | null = null;
-  onChat: ((text: string) => void) | null = null;
+  onChat: ((text: string, to: number[]) => void) | null = null;
   /** Simultaneous play over the network: ask the relay for the lock, and send the state and let go. */
   onLock: (() => void) | null = null;
   onRelease: (() => void) | null = null;
@@ -1168,7 +1173,7 @@ export class PlaySession {
     if (this.game.state.gameOver) {
       const w = this.world.civs[this.game.state.gameOver.winner];
       this.log(`GAME OVER: the ${w?.name ?? '?'} win by ${this.game.state.gameOver.reason}.`);
-      this.enterHallOfFame();
+      this.endOfGame();
     }
     this.selected = null;
     this.selectNext();
@@ -1208,7 +1213,7 @@ export class PlaySession {
    * A film from the player's copy, converted to MP4 by scripts/convert-videos.ts, since browsers
    * cannot play the original Indeo files. Without the converted file nothing shows.
    */
-  private async playVideo(name: string): Promise<void> {
+  async playVideo(name: string): Promise<void> {
     if (this.muted) return;
     const blob = await this.folder.file(`${name}.mp4`);
     if (!blob) return;
@@ -1244,7 +1249,9 @@ export class PlaySession {
       case 'built-improvement':
       case 'built-wonder':
         this.sound(improvementSound(ev.improvement));
-        void this.playVideo(`WONDER${String(ev.improvement - 39).padStart(2, '0')}`);
+        // VERIFIED (0x00490a0b): no wonder film in a scenario, or with the films switched off.
+        if (!this.game.state.wonderMoviesOff && !this.game.state.scenario)
+          void this.playVideo(`WONDER${String(ev.improvement - 39).padStart(2, '0')}`);
         break;
       case 'disorder':
         this.sound('CIVDISOR');
@@ -1618,6 +1625,8 @@ export class PlaySession {
     } else if (name.startsWith('Edit Unit') && unit) {
       const h = ask('Hit points lost', unit.hitPointsLost);
       if (h !== null) cheatEditUnit(unit, { hitPointsLost: h, veteran: !unit.veteran });
+    } else if (name.startsWith('Edit King')) {
+      this.editKing(ask);
     } else if (name.startsWith('Edit City') && this.openCity) {
       const n = ask('City size', this.openCity.size);
       const sh = ask('Shields stored', this.openCity.shieldsStored);
@@ -1629,6 +1638,60 @@ export class PlaySession {
       this.log('That needs the scenario tools, which are parked, or something selected first.');
     }
     this.refresh();
+  }
+
+  /** Edit King (0x0050ba78): the dialog's items, chosen by number. */
+  private editKing(ask: (q: string, d: number) => number | null): void {
+    const slot = ask('Which civilization, by slot?', this.humanSlot);
+    if (slot === null) return;
+    const item = ask(
+      '1 treaties, 2 attitude, 3 reputation, 4 research progress, 5 clear research, 6 names, 7 copy advances',
+      1,
+    );
+    const other = () => ask('Toward which civilization, by slot?', this.humanSlot);
+    if (item === 1) {
+      const o = other();
+      const f = ask(
+        'Treaties as a sum: 1 contact, 2 cease-fire, 4 peace, 8 alliance, 16 war, 32 vendetta, 64 embassy',
+        1,
+      );
+      if (o !== null && f !== null)
+        cheatEditKing(this.game, slot, { treatiesWith: { other: o, flags: f } });
+    } else if (item === 2) {
+      const o = other();
+      const v = ask('Attitude', 50);
+      if (o !== null && v !== null)
+        cheatEditKing(this.game, slot, { attitudeTo: { other: o, value: v } });
+    } else if (item === 3) {
+      const v = ask('Reputation', this.game.civ(slot).reputation ?? 0);
+      if (v !== null) cheatEditKing(this.game, slot, { reputation: v });
+    } else if (item === 4) {
+      const v = ask('Research progress', this.game.civ(slot).scienceStored);
+      if (v !== null) cheatEditKing(this.game, slot, { progress: v });
+    } else if (item === 5) {
+      cheatEditKing(this.game, slot, { clearResearch: true });
+    } else if (item === 6) {
+      const c = this.game.civ(slot);
+      cheatEditKing(this.game, slot, {
+        names: {
+          leader: window.prompt('Leader', c.leader) ?? '',
+          name: window.prompt('Tribe', c.name) ?? '',
+          adjective: window.prompt('Adjective', c.adjective) ?? '',
+        },
+      });
+    } else if (item === 7) {
+      const o = other();
+      if (o !== null) cheatEditKing(this.game, slot, { copyAdvancesFrom: o });
+    }
+  }
+
+  /** The player's title under the present government (their own, or the rules' for the tribe). */
+  private titleOf(civ: Civ): string {
+    const own = civ.titles?.[civ.government];
+    if (own) return own;
+    const row = this.folder.rules.leaders[civ.tribe ?? 0]?.titles;
+    const t = row?.find((x: { governmentIndex: number }) => x.governmentIndex === civ.government);
+    return t?.male ?? '';
   }
 
   /** Offer another human a treaty (the original's parley dialogs, 0x004ec15a). */
@@ -2084,7 +2147,8 @@ export class PlaySession {
     const box = this.talkBox();
     box.replaceChildren();
     const text = document.createElement('div');
-    text.textContent = `${this.civ.leader} of the ${this.civ.name}: your turn.`;
+    text.textContent =
+      `${this.titleOf(this.civ)} ${this.civ.leader} of the ${this.civ.name}: your turn.`.trim();
     box.appendChild(text);
     this.talkButton(box, 'OK', () => {
       this.seatPending = false;
@@ -2287,6 +2351,8 @@ export class PlaySession {
     body.style.cssText =
       'margin:8px 0;max-height:60vh;overflow:auto;font:12px monospace;white-space:pre-wrap';
     const { era, ratings } = councilRatings(this.game, this.humanSlot);
+    // VERIFIED (0x004d8857): the council's film for the era, a different one under Anarchy.
+    void this.playVideo(`${this.civ.government === 0 ? 'ANARCHY' : 'COUNCIL'}${era}`);
     const sections = parseCouncil(this.folder.council[era] ?? '');
     const lines: string[] = [];
     if (this.civ.government === 0) lines.push('Anarchy: the council cannot meet.');
@@ -2401,8 +2467,24 @@ export class PlaySession {
       this.log('Chat needs a network game.');
       return;
     }
-    const text = window.prompt('Message to the other players:');
-    if (text) this.onChat(text);
+    const humans = this.world.civs.filter(
+      (c) => c.isHuman && c.inPlay && c.slot !== this.humanSlot,
+    );
+    const who = window.prompt(
+      `Send to which players? ${humans.map((c) => `${c.slot} ${c.name}`).join(', ')} (empty for all)`,
+    );
+    if (who === null) return;
+    const text = window.prompt('Message:');
+    if (!text) return;
+    const to = who.trim() === '' ? humans.map((c) => c.slot) : who.split(/[ ,]+/).map(Number);
+    // VERIFIED (0x0048fb53): a spy listening to the sender gets a copy of everything.
+    for (const c of humans)
+      if (
+        !to.includes(c.slot) &&
+        hasTreaty(this.world, c.slot, this.humanSlot, TREATY.chatIntercept)
+      )
+        to.push(c.slot);
+    this.onChat(text, to);
   }
 
   /** Retire (0x004af61c): the power graph, then the score, and the game ends. */
@@ -2419,9 +2501,33 @@ export class PlaySession {
     if (window.confirm('Really retire?')) this.showPowerGraph(true);
   }
 
+  /**
+   * The close of a game (VERIFIED 0x0046b383): the ending's film, the destroyed civilizations on
+   * a conquest, the score, and alone against the computer the choice to play on. A defeated
+   * player has no such choice.
+   */
+  private endOfGame(): void {
+    const over = this.game.state.gameOver;
+    if (!over) return;
+    if (over.reason === 'defeat') void this.playVideo('LOSER');
+    else if (over.winner === this.humanSlot && over.reason !== 'retirement')
+      void this.playVideo('WINWIN');
+    if (over.reason === 'conquest')
+      for (const d of this.game.state.destroyedLog ?? [])
+        this.log(`${d.year < 0 ? `${-d.year} BC` : `${d.year} AD`}: the ${d.name} fell.`);
+    this.enterHallOfFame();
+    const alone = this.seat === null && this.world.civs.filter((c) => c.isHuman).length === 1;
+    if (!alone || over.reason === 'defeat') return;
+    if (window.confirm('Your final score is in. Keep playing? No further score is recorded.')) {
+      this.game.keepPlaying();
+      this.fameEntered = false;
+      this.log('The game goes on.');
+    }
+  }
+
   /** The score goes in the Hall of Fame once (0x00429bb6, from 0x0046b383 and 0x004af61c). */
   private enterHallOfFame(): void {
-    if (this.fameEntered) return;
+    if (this.fameEntered || this.game.state.keptPlaying) return;
     this.fameEntered = true;
     const list = addFameEntry({
       name: this.civ.leader,
@@ -2791,6 +2897,9 @@ export class PlaySession {
   private nextTalk(): void {
     if (this.talk || this.seatPending) return;
     const talk = this.game.nextPendingTalk(this.humanSlot);
+    const herald = talk ? this.game.pendingTalkFrom : null;
+    if (herald !== null)
+      void this.playVideo(`HRLD${HERALDS[this.game.civ(herald).tribe ?? 0] ?? ''}`);
     if (!talk) {
       if (this.pendingRevolution !== null) {
         const advance = this.pendingRevolution;
@@ -2967,6 +3076,7 @@ export class PlaySession {
           poison: 'Poison the water supply',
           nuke: 'Plant a nuclear device',
           incite: 'Incite a revolt',
+          intercept: 'Intercept communications',
         };
         button(labels[action], () =>
           performEspionage(this.world, this.rules, unit, city, action, ctx),
@@ -3238,6 +3348,7 @@ export class PlaySession {
         launch.addEventListener('click', () => {
           const events: SpaceshipEvent[] = [];
           launchShip(this.world, civ, this.game.shipContext(), events);
+          void this.playVideo('LAUNCH');
           for (const e of events) this.log(`${e.text}.`);
           this.refresh();
         });

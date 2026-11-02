@@ -54,6 +54,13 @@ cancel button and the computer taking over a lost player. All are ported. So the
 of the standard game is known to be missing. It is not that every line of the window library has
 been read.
 
+The locator grid is a case worth knowing. The search at 0x00484325 clears only the first 0x1200
+bytes of its 48 by 48 table of ints, half of it, so costs from earlier searches steer later ones.
+Replaying the build in the original's order with that half-cleared table matches a generated
+world's saved grid on all 1,494 links, VERIFIED on one world. A game loaded from a save keeps the saved
+grid. The same stale table affects the original's ordinary go-to; the port's go-to does not copy
+that, since it depends on process memory that no save holds.
+
 ## Checking against the original
 
 Reading alone misses things. The computer's treasury spending sat in a routine marked read for
