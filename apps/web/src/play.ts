@@ -1,5 +1,5 @@
 import { PART_SHEETS, PARTS_OVER, PARTS_UNDER, SHIP_FRAMES, type PartRow } from './shipParts.js';
-import { decodeText, descriptionFor, parseCityPreferences } from '@mudbrick/formats';
+import { descriptionFor, parseCityPreferences } from '@mudbrick/formats';
 /**
  * The interactive layer: a human plays one civilization from a loaded save.
  *
@@ -12,7 +12,6 @@ import {
   canFoundCity,
   canOrder,
   captureCity,
-  changeProduction,
   disbandUnit,
   doWork,
   DOMAIN_GROUND,
@@ -24,19 +23,14 @@ import {
   hutAt,
   joinCity,
   lookAround,
-  mood,
   movesLeft,
   GOVERNMENT,
   ORDER,
   orderGoTo,
   cityRows,
-  cycleSpecialist,
   airlift,
   airliftTargets,
   airliftThreat,
-  buyCost,
-  buyProduction,
-  CITY_CENTRE_INDEX,
   councilRatings,
   councilSpeech,
   defenseRows,
@@ -44,10 +38,8 @@ import {
   foreignRows,
   maxRate,
   paradropCheck,
-  sellImprovement,
   setHomeCity,
   setRates,
-  squareYield,
   attackSound,
   HISTORY_KINDS,
   improvementSound,
@@ -64,16 +56,11 @@ import {
   type Dialog,
   pillage,
   pillageOptions,
-  rawYields,
   resolveAttack,
   sentry,
-  shieldTotals,
-  tradeSplit,
   tryMove,
-  unitSupport,
   wake,
   type City,
-  type Production,
   type Civ,
   type Game,
   cheatChangeTerrain,
@@ -136,15 +123,24 @@ import {
   commoditySearch,
   cheatEditKing,
 } from '@mudbrick/engine';
-import { ADVANCE, IMPROVEMENT } from '@mudbrick/engine';
-import { sprites } from '@mudbrick/formats';
+import { ADVANCE, IMPROVEMENT, SquareFlag } from '@mudbrick/engine';
 import { drawCityView } from './cityView.js';
 import { addFameEntry, fameLines, readFame } from './hallOfFame.js';
 import type { GameFolder } from './gameFiles.js';
-import { hitTest, squareOrigin } from './mapRenderer.js';
-import { drawWorld, WORLD_TOP_PAD, type WorldRenderOptions } from './worldRenderer.js';
-
-const { TILE_W, TILE_H } = sprites;
+import { CityWindow, type CityHost } from './ui/cityWindow.js';
+import { drawMinimap, MapView } from './ui/mapView.js';
+import { buildMenuBar, parseMenu, type MenuEntry } from './ui/menuBar.js';
+import { unitIcon } from './ui/spriteIcon.js';
+import {
+  addButton,
+  askList,
+  askNumber,
+  askText,
+  askYes,
+  openWindow,
+  tell,
+  windowIsOpen,
+} from './ui/windows.js';
 
 const DIRECTIONS: Record<string, Point> = {
   N: { x: 0, y: -2 },
@@ -204,11 +200,17 @@ const KEY_DIRECTIONS: Record<string, string> = {
 
 export interface PlayElements {
   canvas: HTMLCanvasElement;
+  minimap: HTMLCanvasElement;
+  menuBar: HTMLElement;
   status: HTMLElement;
   unitPanel: HTMLElement;
   cityPanel: HTMLElement;
-  researchPanel: HTMLElement;
   log: HTMLElement;
+  /** What the Game menu does outside the game itself. */
+  onSave: () => void;
+  onLoad: () => void;
+  onJoin: () => void;
+  onQuit: () => void;
 }
 
 /** How long a pause in orders hands the lock back in simultaneous play. */
@@ -245,6 +247,13 @@ export class PlaySession {
   private talk: Conversation | null = null;
   selected: Unit | null = null;
   openCity: City | null = null;
+  readonly map: MapView;
+  private readonly cityWindow: CityWindow;
+  showGrid = false;
+  /** View Pieces: the cursor square; null while moving units. */
+  private viewCursor: Point | null = null;
+  private hidePieces = false;
+  private lastSelected: Unit | null = null;
   gotoMode = false;
   paradropMode = false;
   private seatPending = false;
@@ -257,16 +266,19 @@ export class PlaySession {
     readonly folder: GameFolder,
     public humanSlot: number,
     readonly el: PlayElements,
-    readonly renderOptions: () => WorldRenderOptions,
   ) {
     this.bindGame(game);
-    for (const panel of [el.cityPanel, el.unitPanel, el.researchPanel]) {
+    this.map = new MapView(el.canvas);
+    this.map.onDraw = () => this.drawWorldMap();
+    this.cityWindow = new CityWindow(this.cityHost(), el.cityPanel);
+    this.bindMapInput();
+    for (const panel of [el.cityPanel, el.unitPanel]) {
       panel.addEventListener('click', (e) => this.guardPanel(e, () => this.reclick(e)), true);
       panel.addEventListener('change', (e) => this.guardPanel(e, () => this.rechange(e)), true);
     }
     this.startTimer();
     void this.playMusic();
-    void this.buildMenuBar();
+    void this.buildMenus();
     this.log(`You lead the ${this.civ.name}. Arrow keys or the number pad move the selected unit.`);
     if (game.state.nextSlot === 0) {
       this.playOn();
@@ -347,21 +359,24 @@ export class PlaySession {
    * it when its player takes over the shared screen. The original scrambles the save block; this
    * only keeps a friend from reading the next player's map, as there.
    */
-  private askPassword(slot: number): void {
+  private async askPassword(slot: number): Promise<void> {
     const want = this.game.state.passwords?.[slot];
     if (!want) return;
     for (;;) {
-      const typed = window.prompt(`Password for the ${this.game.civ(slot).name}`);
+      const typed = await askText('Password', `Password for the ${this.game.civ(slot).name}`, '', {
+        password: true,
+      });
       if (typed === want) return;
-      if (typed === null && window.confirm('Skip this turn view?')) return;
+      if (typed === null && (await askYes('Skip this turn view?'))) return;
     }
   }
 
-  private setPassword(): void {
+  private async setPassword(): Promise<void> {
     const slot = this.humanSlot;
     const old = this.game.state.passwords?.[slot];
-    if (old && window.prompt('Current password') !== old) return;
-    const next = window.prompt('New password (empty for none)');
+    if (old && (await askText('Password', 'Current password', '', { password: true })) !== old)
+      return;
+    const next = await askText('Password', 'New password (empty for none)', '', { password: true });
     if (next === null) return;
     (this.game.state.passwords ??= {})[slot] = next;
   }
@@ -484,17 +499,56 @@ export class PlaySession {
 
   select(unit: Unit | null): void {
     this.selected = unit;
-    this.openCity = null;
     this.gotoMode = false;
     this.refresh();
+    if (unit) this.map.keepInView(unit.position);
   }
 
   // ---- input
 
   handleKey(e: KeyboardEvent): boolean {
     if (e.target instanceof HTMLSelectElement || e.target instanceof HTMLInputElement) return false;
+    if (windowIsOpen()) return false;
     if (!this.writable(() => this.handleKey(e))) return true;
+    const talkUp = document.getElementById('talkBox')?.style.display === 'block';
+    if (talkUp) {
+      if (e.key === 'Escape') this.closeTalk();
+      else if (e.key === 'Enter') {
+        const buttons = document.querySelectorAll<HTMLButtonElement>('#talkBox button');
+        if (buttons.length === 1) buttons[0]?.click();
+      }
+      return true;
+    }
+    if (this.openCity) {
+      const city = this.openCity;
+      if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') this.closeCity();
+      else if (e.key === 'ArrowLeft') this.cityWindow.step(-1);
+      else if (e.key === 'ArrowRight') this.cityWindow.step(1);
+      else if (e.key === 'b') void this.cityWindow.buy(city);
+      else if (e.key === 'c') void this.cityWindow.change(city);
+      else if (e.key === 'a') void this.cityWindow.auto(city);
+      return true;
+    }
     const dir = KEY_DIRECTIONS[e.key];
+    if (dir && this.viewCursor) {
+      const step = DIRECTIONS[dir];
+      const y = this.viewCursor.y + (step?.y ?? 0);
+      const x =
+        y >= 0 && y < this.world.rows
+          ? this.world.wrapX(this.viewCursor.x + (step?.x ?? 0), y)
+          : null;
+      if (x !== null) {
+        this.viewCursor = { x, y };
+        this.map.keepInView(this.viewCursor);
+        this.refresh();
+      }
+      return true;
+    }
+    if (dir && !this.selected) {
+      const step = DIRECTIONS[dir];
+      if (step) this.map.panBy(step.x * 32, step.y * 16);
+      return true;
+    }
     if (dir && this.selected) {
       this.moveSelected(dir);
       return true;
@@ -502,19 +556,30 @@ export class PlaySession {
     if (this.talk) return true;
     if (!this.ourMove) return false;
     if (e.ctrlKey) {
-      if (e.key === 'c') this.chat();
-      else if (e.key === 'r') this.retire();
+      if (e.key === 'c') void this.chat();
+      else if (e.key === 'r') void this.retire();
       else if (e.key === 'd') this.showCasualties();
       else if (e.key === 't') this.showTimer();
       else if (e.key === 'p') this.showParley();
+      else if (e.key === 's') this.el.onSave();
+      else if (e.key === 'l') this.el.onLoad();
+      else if (e.key === 'q') void this.quit();
+      else if (e.key === 'o') this.showOptions();
+      else if (e.key === 'g') {
+        this.showGrid = !this.showGrid;
+        this.refresh();
+      } else if (e.key === 'n') this.endTurn();
       else return false;
       return true;
     }
-    if (e.key === 'Escape' && document.getElementById('talkBox')?.style.display === 'block') {
-      this.closeTalk();
-      return true;
-    }
+    if (e.ctrlKey || e.metaKey) return false;
     switch (e.key) {
+      case 'z':
+        this.map.setZoom(this.map.zoom + 1);
+        return true;
+      case 'x':
+        this.map.setZoom(this.map.zoom - 1);
+        return true;
       case 'F1':
       case 'F2':
       case 'F3':
@@ -544,14 +609,20 @@ export class PlaySession {
       case '?':
         this.showPedia();
         return true;
-      case 'Enter':
-        this.endTurn();
+      case 'v':
+        this.toggleViewPieces();
         return true;
+      case 'Enter': {
+        // VERIFIED by the menu: the turn ends here only once nothing waits; Ctrl+N always ends it.
+        const at = this.viewCursor ?? this.selected?.position;
+        const city = at ? this.world.cityAt(at.x, at.y) : undefined;
+        if (city?.owner === this.humanSlot) this.showCity(city);
+        else if (!this.humanUnits().some((u) => this.needsOrders(u))) this.endTurn();
+        return true;
+      }
       case 'H':
-        return this.withSelected((u) => {
-          const c = setHomeCity(this.world, u);
-          this.log(c ? `Home city is now ${c.name}.` : 'Move into one of your cities first.');
-        });
+        this.showThrone(false);
+        return true;
       case 'l':
         return this.withSelected((u) => {
           this.airliftMenu(u);
@@ -573,15 +644,10 @@ export class PlaySession {
         this.findCity();
         return true;
       case 'T':
-        this.log(`Rates are in the panel: up to ${maxRate(this.civ.government) * 10} % each.`);
+        this.showTaxRate();
         return true;
       case 'R':
-        if (this.civ.government !== GOVERNMENT.anarchy) {
-          startRevolution(this.world, this.civ);
-          this.sound('REVOLT');
-          this.log('Revolution! The government falls into Anarchy.');
-          this.refresh();
-        }
+        void this.askRevolution();
         return true;
       case 'k':
         return this.withSelected((u) => {
@@ -605,6 +671,10 @@ export class PlaySession {
         return true;
       case 'f':
         return this.withSelected((u) => {
+          if (this.rules.units[u.type]?.role === 5) {
+            this.work(u, ORDER.fortress);
+            return;
+          }
           fortify(u);
           this.log(`${this.unitName(u)} fortifies.`);
         });
@@ -633,17 +703,30 @@ export class PlaySession {
       case 'F':
         return this.withSelected((u) => this.work(u, ORDER.fortress));
       case 'E':
+      case 'e':
         return this.withSelected((u) => this.work(u, ORDER.airbase));
       case 'p':
         return this.withSelected((u) => this.work(u, ORDER.pollution));
       case 'P':
-        return this.withSelected((u) => this.pillageSelected(u));
+        return this.withSelected((u) => void this.pillageSelected(u));
       case 'D':
-        return this.withSelected((u) => this.disbandSelected(u));
+        return this.withSelected((u) => void this.disbandSelected(u));
       case 't':
-        return this.withSelected((u) => this.caravanTrade(u));
+        if (this.selected && this.rules.units[this.selected.type]?.role === 7)
+          return this.withSelected((u) => this.caravanTrade(u));
+        this.hidePieces = !this.hidePieces;
+        this.refresh();
+        return true;
       case 'h':
-        return this.withSelected((u) => this.caravanHelp(u));
+        return this.withSelected((u) => {
+          const city = this.world.cityAt(u.position.x, u.position.y);
+          if (this.rules.units[u.type]?.role === 7 && city?.production.kind === 'improvement') {
+            this.caravanHelp(u);
+            return;
+          }
+          const c = setHomeCity(this.world, u);
+          this.log(c ? `Home city is now ${c.name}.` : 'Move into one of your cities first.');
+        });
       case 'c':
         if (this.selected) this.centreOn(this.selected.position);
         return true;
@@ -665,20 +748,17 @@ export class PlaySession {
 
   handleClick(clientX: number, clientY: number): void {
     if (!this.writable(() => this.handleClick(clientX, clientY))) return;
-    const rect = this.el.canvas.getBoundingClientRect();
-    const zoom = this.renderOptions().zoom;
-    const hit = hitTest(
-      { header: { widthX2: this.world.widthX2, height: this.world.rows } } as never,
-      zoom,
-      clientX - rect.left,
-      clientY - rect.top - WORLD_TOP_PAD * zoom,
-    );
+    const hit = this.map.squareAt(clientX, clientY);
     if (!hit) return;
-    const x = hit.c * 2 + (hit.y & 1);
-    const y = hit.y;
-    const p = { x, y };
+    const { x, y } = hit;
+    const p = hit;
+    if (this.viewCursor) {
+      this.viewCursor = p;
+      this.refresh();
+      return;
+    }
     if (this.paradropMode && this.selected) {
-      this.paradrop(this.selected, p);
+      void this.paradrop(this.selected, p);
       return;
     }
     if (this.gotoMode && this.selected) {
@@ -695,14 +775,13 @@ export class PlaySession {
     }
     const mine = this.world.unitsAt(x, y).filter((u) => u.owner === this.humanSlot);
     const city = this.world.cityAt(x, y);
-    if (
-      city &&
-      (mine.length === 0 || (this.selected?.position.x === x && this.selected.position.y === y))
-    ) {
-      this.openCity = city;
-      this.selected = null;
-      this.refresh();
+    if (city && city.owner === this.humanSlot) {
+      this.showCity(city);
       return;
+    }
+    if (city && this.world.isSeen(x, y, this.humanSlot)) {
+      const owner = this.world.civs[city.owner]?.adjective ?? '';
+      this.log(`${city.name}: ${owner} city, size ${city.size}.`);
     }
     if (mine.length > 0) {
       const idx = this.selected ? mine.indexOf(this.selected) : -1;
@@ -711,7 +790,80 @@ export class PlaySession {
       this.select(next);
       return;
     }
+    this.refresh();
+  }
+
+  private bindMapInput(): void {
+    const canvas = this.el.canvas;
+    canvas.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      const p = this.map.squareAt(e.clientX, e.clientY);
+      if (p) this.map.centreOn(p);
+    });
+    canvas.addEventListener(
+      'wheel',
+      (e) => {
+        e.preventDefault();
+        if (e.ctrlKey) this.map.setZoom(this.map.zoom + (e.deltaY < 0 ? 1 : -1));
+        else this.map.panBy(e.deltaX, e.deltaY);
+      },
+      { passive: false },
+    );
+    const pick = (e: PointerEvent) => {
+      const world = this.world;
+      const box = this.el.minimap.getBoundingClientRect();
+      const x = Math.floor(((e.clientX - box.left) / box.width) * world.widthX2);
+      const y = Math.floor(((e.clientY - box.top) / box.height) * world.rows);
+      this.map.centreOn({ x: x - ((x + y) & 1), y });
+    };
+    this.el.minimap.addEventListener('pointerdown', (e) => {
+      this.el.minimap.setPointerCapture(e.pointerId);
+      pick(e);
+    });
+    this.el.minimap.addEventListener('pointermove', (e) => {
+      if (e.buttons) pick(e);
+    });
+  }
+
+  private cityHost(): CityHost {
+    const game = () => this.game;
+    const humanSlot = () => this.humanSlot;
+    const world = () => this.world;
+    return {
+      get game() {
+        return game();
+      },
+      folder: this.folder,
+      get humanSlot() {
+        return humanSlot();
+      },
+      get world() {
+        return world();
+      },
+      refresh: () => this.refresh(),
+      log: (line) => this.log(line),
+      playSound: (name) => this.sound(name),
+      showCityView: (city) => this.showCityView(city),
+      showPedia: (category, row) =>
+        this.showPedia(category === 'units' ? 'UNIT' : row >= 39 ? 'WONDER' : 'IMPROVEMENT', row),
+      selectUnit: (u) => {
+        wake(u);
+        this.select(u);
+        this.map.centreOn(u.position);
+      },
+      closeCity: () => this.closeCity(),
+    };
+  }
+
+  showCity(city: City): void {
+    this.openCity = city;
+    this.cityWindow.open(city);
+    this.refresh();
+  }
+
+  closeCity(): void {
     this.openCity = null;
+    this.cityWindow.close();
     this.refresh();
   }
 
@@ -728,12 +880,13 @@ export class PlaySession {
     if (nx === null) return;
     const to = { x: nx, y: ny };
     const hadHut = hutAt(this.world, nx, ny);
+    const from = { ...unit.position };
     const r = tryMove(this.world, this.rules, this.game.rng, unit, to, this.moveCtx());
     switch (r.kind) {
       case 'moved':
-        this.log(`${this.unitName(unit)} moves to (${nx}, ${ny}).`);
         if (hadHut) this.resolveHut(unit);
-        break;
+        void this.map.slideUnit(unit, from, to).then(() => this.afterAction());
+        return;
       case 'boarded':
         this.log(`${this.unitName(unit)} boards the ${this.unitName(r.ship)}.`);
         break;
@@ -745,15 +898,9 @@ export class PlaySession {
         break;
       case 'diplomat':
         this.pendingAgent = { unit, city: r.city };
-        this.log(
-          `${this.unitName(unit)} at the gates of ${r.city.name}: choose a mission in the unit panel.`,
-        );
         break;
       case 'diplomat-unit':
         this.pendingAgent = { unit, target: r.target };
-        this.log(
-          `${this.unitName(unit)} approaches a lone ${this.unitName(r.target)}: choose in the unit panel.`,
-        );
         break;
       case 'caravan': {
         const events: TradeEvent[] = [];
@@ -763,8 +910,8 @@ export class PlaySession {
         break;
       }
       case 'attack':
-        this.attack(unit, to);
-        break;
+        void this.attack(unit, to).then(() => this.afterAction());
+        return;
       case 'refused':
         this.log(this.refusalText(r.reason));
         break;
@@ -791,7 +938,7 @@ export class PlaySession {
     }
   }
 
-  private attack(unit: Unit, to: Point): void {
+  private async attack(unit: Unit, to: Point): Promise<void> {
     const city = this.world.cityAt(to.x, to.y);
     const enemies = this.world.unitsAt(to.x, to.y).filter((u) => u.owner !== unit.owner);
     // VERIFIED (the attack handler 0x0052d472): attacking a civilization at cease-fire or peace
@@ -820,7 +967,7 @@ export class PlaySession {
           return;
         }
         const name = this.rules.units[lone.type]?.name ?? 'agent';
-        if (window.confirm(`Expel the ${this.game.civ(lone.owner).adjective} ${name}?`)) {
+        if (await askYes(`Expel the ${this.game.civ(lone.owner).adjective} ${name}?`)) {
           const home = expelAgent(this.world, lone);
           this.log(`The ${name} is sent home${home ? ` to ${home.name}` : ''}.`);
           adjustAttitude(this.world, lone.owner, unit.owner, this.game.rng.nextInt(4));
@@ -834,11 +981,9 @@ export class PlaySession {
         return;
       }
       if ((word & (TREATY.ceaseFire | TREATY.peace)) !== 0) {
-        const ok =
-          typeof window === 'undefined' ||
-          window.confirm(
-            `Attacking the ${this.world.civs.find((c) => c.slot === victim)?.name ?? 'civilization'} breaks our treaty. Declare war?`,
-          );
+        const ok = await askYes(
+          `Attacking the ${this.world.civs.find((c) => c.slot === victim)?.name ?? 'civilization'} breaks our treaty. Declare war?`,
+        );
         if (!ok) return;
         const un = this.game.ownsWonder(unit.owner, IMPROVEMENT.unitedNations);
         if (senateBlocks(this.world, unit.owner, victim, un)) {
@@ -901,6 +1046,7 @@ export class PlaySession {
     const attackerType = this.rules.units[unit.type];
     if (attackerType)
       this.sound(attackSound(attackerType, unit.type, this.rules.units[ev.defender.type]));
+    await this.map.explode(ev.attackerWon ? to : { ...unit.position });
     if (ev.stackLost.length > 0)
       this.log(`${ev.stackLost.length} more enemy unit(s) destroyed with the defender.`);
     if (ev.cityDestroyed) this.log(`${ev.cityShrunk?.name ?? 'The city'} is destroyed.`);
@@ -1044,15 +1190,25 @@ export class PlaySession {
       this.selected = null;
       return;
     }
-    const name = window.prompt('Name the new city', this.nextCityName()) ?? '';
+    void this.nameCity(unit);
+  }
+
+  private async nameCity(unit: Unit): Promise<void> {
+    const name = (
+      await askText('Name Your City', 'Name of the new city', this.nextCityName(), {
+        maxLength: 15,
+      })
+    )?.trim();
     if (!name) return;
     const city = foundCity(this.world, this.rules, this.civ, unit, { name });
     this.game.ensureWorkers(city);
+    this.sound('BLDCITY');
     this.log(`${name} founded.`);
     this.queueNews(NEWS_FOUNDED, `${name} founded.`);
     this.nextTalk();
     this.selected = null;
-    this.openCity = city;
+    this.afterAction();
+    this.showCity(city);
   }
 
   private work(unit: Unit, order: number): void {
@@ -1085,31 +1241,38 @@ export class PlaySession {
     else this.log(`${this.unitName(unit)} starts work (${ev.progress}/${ev.needed}).`);
   }
 
-  private pillageSelected(unit: Unit): void {
+  private async pillageSelected(unit: Unit): Promise<void> {
     const v = pillageOptions(this.world, this.rules, unit);
     if (!v.ok) {
       this.log(`Cannot pillage here (${v.reason}).`);
       return;
     }
-    const choice =
-      v.options.length === 1
-        ? v.options[0]
-        : (window.prompt(`Pillage which? ${v.options.join(', ')}`, v.options[0]) as
-            (typeof v.options)[number] | null);
-    if (!choice || !v.options.includes(choice)) return;
+    let choice = v.options[0];
+    if (v.options.length > 1) {
+      const pick = await askList(
+        'Pillage',
+        'What should we pillage?',
+        v.options.map((o) => ({ label: o })),
+      );
+      if (pick === null) return;
+      choice = v.options[pick];
+    }
+    if (!choice) return;
     const events: DiplomacyEvent[] = [];
     pillage(this.world, this.rules, unit, choice, { ctx: this.game.diplomacyContext(), events });
     for (const e of events) this.log(`${e.text}.`);
     this.log(`${this.unitName(unit)} pillages the ${choice}.`);
+    this.afterAction();
   }
 
-  private disbandSelected(unit: Unit): void {
-    if (!window.confirm(`Disband ${this.unitName(unit)}?`)) return;
+  private async disbandSelected(unit: Unit): Promise<void> {
+    if (!(await askYes(`Disband ${this.unitName(unit)}?`))) return;
     const refund = disbandUnit(this.world, this.rules, unit, this.civ, this.game.state.difficulty);
     this.log(
       `${this.unitName(unit)} disbanded${refund ? ` (${refund} shields to the city)` : ''}.`,
     );
     this.selected = null;
+    this.afterAction();
   }
 
   skipSelected(): void {
@@ -1156,7 +1319,7 @@ export class PlaySession {
     }
     this.humanSlot = moving;
     if (this.humanSlot !== before) {
-      this.askPassword(moving);
+      void this.askPassword(moving);
       this.log(`— The ${this.civ.name} to move —`);
       this.announceSeat();
     }
@@ -1166,6 +1329,10 @@ export class PlaySession {
       if (text) this.log(text);
       this.eventSound(e.event);
       if (e.event.kind === 'discovered') this.offerRevolution(e.event.advance);
+      if (text && (e.event.kind === 'built-improvement' || e.event.kind === 'built-wonder')) {
+        const city = this.world.cities.find((c) => 'city' in e && c.id === e.city);
+        if (city) this.news.push({ picture: -1, text, city });
+      }
       if (text && e.event.kind === 'disorder') this.queueNews(NEWS_DISORDER, text);
       if (text && e.event.kind === 'celebration-start') this.queueNews(NEWS_CELEBRATION, text);
     }
@@ -1177,7 +1344,7 @@ export class PlaySession {
     if (this.game.state.gameOver) {
       const w = this.world.civs[this.game.state.gameOver.winner];
       this.log(`GAME OVER: the ${w?.name ?? '?'} win by ${this.game.state.gameOver.reason}.`);
-      this.endOfGame();
+      void this.endOfGame();
     }
     this.selected = null;
     this.selectNext();
@@ -1225,18 +1392,30 @@ export class PlaySession {
     const v = document.createElement('video');
     v.src = url;
     v.autoplay = true;
-    v.style.cssText = 'position:fixed;left:50%;top:15%;transform:translateX(-50%);z-index:60';
+    v.style.cssText =
+      'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:60;' +
+      'box-shadow:0 0 0 100vmax rgb(0 0 0 / 70%);cursor:pointer';
+    v.title = 'Click to skip';
     const done = () => {
       v.remove();
       URL.revokeObjectURL(url);
+      window.removeEventListener('keydown', skip, true);
     };
+    const skip = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      done();
+    };
+    window.addEventListener('keydown', skip, true);
     v.addEventListener('ended', done);
     v.addEventListener('click', done);
+    v.addEventListener('error', done);
     document.body.append(v);
   }
 
   /** Play SOUND/NAME.WAV from the game folder, if it is there. */
   private sound(name: string | null): void {
+    // Sounds overlap by design; a missing file is simply silent.
     if (!name || this.muted) return;
     const file = name === 'CHEERS' ? `CHEERS${this.game.rng.nextInt(3) + 1}` : name;
     void this.folder.file(`SOUND/${file}.WAV`).then((blob) => {
@@ -1383,41 +1562,221 @@ export class PlaySession {
   }
 
   centreOn(p: Point): void {
-    const zoom = this.renderOptions().zoom;
-    const o = squareOrigin((p.x - (p.y & 1)) >> 1, p.y);
-    const wrap = this.el.canvas.parentElement;
-    if (!wrap) return;
-    wrap.scrollLeft = o.px * zoom - wrap.clientWidth / 2;
-    wrap.scrollTop = (o.py + WORLD_TOP_PAD) * zoom - wrap.clientHeight / 2;
+    this.map.centreOn(p);
+  }
+
+  /** The owner's colour on the world map and in the panels. */
+  private colourOf(slot: number): number {
+    return this.world.civs[slot]?.colour ?? slot;
+  }
+
+  /** The piece that shows on a stack: the strongest defender, as the original picks. */
+  private topUnit(units: Unit[]): Unit | undefined {
+    let best: Unit | undefined;
+    let score = -1;
+    for (const u of units) {
+      const t = this.rules.units[u.type];
+      const v = (t?.defence ?? 0) * 2 + (t?.attack ?? 0);
+      if (v > score) {
+        score = v;
+        best = u;
+      }
+    }
+    return best;
+  }
+
+  private orderLetter(u: Unit): string {
+    if (u.fortified || u.order === ORDER.fortified) return 'F';
+    switch (u.order) {
+      case ORDER.fortify:
+        return 'F';
+      case ORDER.sleep:
+        return 'S';
+      case ORDER.fortress:
+        return 'F';
+      case ORDER.road:
+        return 'R';
+      case ORDER.irrigation:
+        return 'I';
+      case ORDER.mine:
+        return 'M';
+      case ORDER.transform:
+        return 'O';
+      case ORDER.pollution:
+        return 'P';
+      case ORDER.airbase:
+        return 'E';
+      case ORDER.goTo:
+        return 'G';
+      default:
+        return u.automated ? 'A' : '';
+    }
+  }
+
+  private healthOf(u: Unit): number {
+    const full = (this.rules.units[u.type]?.hitPointsTens ?? 1) * 10;
+    return Math.max(0, (full - u.hitPointsLost) / full);
+  }
+
+  private drawWorldMap(): void {
+    const palette = ['#fff', '#d22', '#ddd', '#2c2', '#28f', '#ee2', '#2dd', '#e82', '#b4e'];
+    drawMinimap(this.el.minimap, this.world, this.humanSlot, this.map.viewRect(), (slot) => {
+      return palette[this.colourOf(slot)] ?? '#fff';
+    });
   }
 
   refresh(): void {
     this.showParleyOffer();
-    const opts = this.renderOptions();
-    drawWorld(this.el.canvas, this.world, this.folder, opts);
-    const ctx = this.el.canvas.getContext('2d');
-    if (ctx) {
-      ctx.setTransform(opts.zoom, 0, 0, opts.zoom, 0, 0);
-      const mark = (p: Point, colour: string) => {
-        const o = squareOrigin((p.x - (p.y & 1)) >> 1, p.y);
-        ctx.strokeStyle = colour;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(o.px + TILE_W / 2, o.py + WORLD_TOP_PAD);
-        ctx.lineTo(o.px + TILE_W, o.py + WORLD_TOP_PAD + TILE_H / 2);
-        ctx.lineTo(o.px + TILE_W / 2, o.py + WORLD_TOP_PAD + TILE_H);
-        ctx.lineTo(o.px, o.py + WORLD_TOP_PAD + TILE_H / 2);
-        ctx.closePath();
-        ctx.stroke();
-      };
-      if (this.selected) mark(this.selected.position, '#ffe066');
-      if (this.openCity) mark(this.openCity.position, '#7fd4ff');
-    }
+    if (this.selected && !this.world.units.includes(this.selected)) this.selected = null;
+    this.map.setScene({
+      world: this.world,
+      folder: this.folder,
+      viewer: this.humanSlot,
+      selected: this.selected,
+      marked: null,
+      grid: this.showGrid,
+      cursor: this.viewCursor,
+      hidePieces: this.hidePieces,
+      orderLetter: (u) => this.orderLetter(u),
+      health: (u) => this.healthOf(u),
+      topUnit: (units) => this.topUnit(units),
+      colourOf: (slot) => this.colourOf(slot),
+    });
+    if (this.selected && this.selected !== this.lastSelected)
+      this.map.keepInView(this.selected.position);
+    this.lastSelected = this.selected;
+    this.el.canvas.classList.toggle('targeting', this.gotoMode || this.paradropMode);
     this.renderStatus();
     this.renderUnitPanel();
-    this.renderCityPanel();
-    this.renderResearchPanel();
-    this.el.log.textContent = this.logLines.slice(-14).join('\n');
+    this.renderAgentChoice();
+    if (this.openCity) this.cityWindow.render();
+    this.el.log.textContent = this.logLines.slice(-40).join('\n');
+    this.el.log.parentElement?.scrollTo({ top: 1e6 });
+    this.promptGovernment();
+  }
+
+  /** A diplomat or spy's choices come up in a box as soon as it arrives. */
+  private renderAgentChoice(): void {
+    const pending = this.pendingAgent;
+    const box = document.getElementById('talkBox');
+    if (pending && this.world.units.includes(pending.unit)) {
+      if (this.agentShown === pending) return;
+      this.agentShown = pending;
+      const b = this.talkBox();
+      const heading = document.createElement('h3');
+      heading.textContent = this.unitName(pending.unit);
+      b.replaceChildren(heading, this.agentMenu(pending));
+    } else if (this.agentShown) {
+      this.agentShown = null;
+      this.pendingAgent = null;
+      if (box) box.style.display = 'none';
+    }
+  }
+
+  private agentShown: typeof this.pendingAgent = null;
+
+  /** Anarchy has ended and the new government is the player's to pick. */
+  private promptGovernment(): void {
+    if (!this.governmentChoiceDue || this.governmentAsked || windowIsOpen() || this.talk) return;
+    this.governmentAsked = true;
+    void this.chooseGovernment();
+  }
+
+  private governmentAsked = false;
+
+  private async chooseGovernment(): Promise<void> {
+    const civ = this.civ;
+    const ownsStatue = this.game.ownsWonder(this.humanSlot, 58);
+    const names = this.folder.rules.governments.map((g) => g.name);
+    const options: number[] = [];
+    for (let g = 1; g < 7; g++)
+      if (governmentAllowed(g, (a) => this.game.knows(this.humanSlot, a), ownsStatue))
+        options.push(g);
+    const pick = await askList(
+      'Revolution Ends',
+      'What form of government shall we adopt?',
+      options.map((g) => ({ label: names[g] ?? `Government ${g}` })),
+    );
+    this.governmentAsked = false;
+    const g = pick === null ? null : (options[pick] ?? null);
+    if (g === null) {
+      this.refresh();
+      return;
+    }
+    changeGovernment(this.world, civ, g, true);
+    this.governmentChoiceDue = false;
+    this.log(`The ${civ.name} adopt ${names[g] ?? 'a new government'}.`);
+    this.refresh();
+  }
+
+  /** Tax Rate (Shift+T): the three rates, ten per cent at a time, up to the government's limit. */
+  showTaxRate(): void {
+    const civ = this.civ;
+    const max = maxRate(civ.government);
+    const close = () => {
+      win.close();
+      this.refresh();
+    };
+    const win = openWindow({
+      title: 'Tax Rate',
+      width: 400,
+      id: 'taxWindow',
+      onCancel: close,
+      onAccept: close,
+    });
+    const gov = this.folder.rules.governments[civ.government]?.name ?? '';
+    const intro = document.createElement('p');
+    intro.className = 'windowText';
+    const rows = document.createElement('div');
+    const render = () => {
+      intro.textContent = `Government: ${gov}\nMaximum rate: ${max * 10}%\nTreasury: ${civ.treasury} gold`;
+      rows.replaceChildren();
+      const lux = 10 - civ.taxRate - civ.scienceRate;
+      const slider = (name: string, value: number, set: (v: number) => void) => {
+        const label = document.createElement('label');
+        label.style.cssText =
+          'display:grid;grid-template-columns:92px 1fr 44px;gap:8px;margin:6px 0';
+        const text = document.createElement('span');
+        text.textContent = name;
+        const r = document.createElement('input');
+        r.type = 'range';
+        r.min = '0';
+        r.max = String(max);
+        r.value = String(value);
+        r.addEventListener('input', () => {
+          set(Number(r.value));
+          render();
+        });
+        const pct = document.createElement('span');
+        pct.textContent = `${value * 10}%`;
+        label.append(text, r, pct);
+        rows.append(label);
+      };
+      slider('Taxes', civ.taxRate, (v) => {
+        setRates(civ, v, Math.min(civ.scienceRate, 10 - v));
+      });
+      slider('Luxuries', lux, (v) => {
+        const room = 10 - v;
+        const tax = Math.min(civ.taxRate, room);
+        setRates(civ, tax, room - tax);
+      });
+      slider('Science', civ.scienceRate, (v) => {
+        setRates(civ, Math.min(civ.taxRate, 10 - v), v);
+      });
+    };
+    render();
+    win.body.append(intro, rows);
+    addButton(win, 'OK', close);
+  }
+
+  /** Revolution (Shift+R), after the question the original asks. */
+  private async askRevolution(): Promise<void> {
+    if (this.civ.government === GOVERNMENT.anarchy) return;
+    if (!(await askYes('Are you sure you want to start a revolution?', 'Revolution'))) return;
+    startRevolution(this.world, this.civ);
+    this.sound('REVOLT');
+    this.log('Revolution! The government falls into Anarchy.');
+    this.refresh();
   }
 
   private clockText(): string {
@@ -1427,147 +1786,307 @@ export class PlaySession {
     return `${String(Math.trunc(left / 60)).padStart(2, '0')}:${seconds} left · `;
   }
 
+  private populationText(): string {
+    // Size n stands for n(n+1)/2 × 10,000 people.
+    let total = 0;
+    for (const c of this.world.cities)
+      if (c.owner === this.humanSlot) total += ((c.size * (c.size + 1)) / 2) * 10000;
+    return total.toLocaleString('en-US');
+  }
+
   private renderStatus(): void {
     const civ = this.civ;
-    const waiting = this.humanUnits().filter((u) => this.needsOrders(u)).length;
-    const gov =
-      this.folder.rules.governments[civ.government]?.name ?? `government ${civ.government}`;
-    this.el.status.textContent =
-      `${civ.name} · ${gov} · Turn ${this.game.state.turn} (${this.yearText()}) · ` +
-      `${civ.treasury} gold · tax ${civ.taxRate * 10} % lux ${(10 - civ.taxRate - civ.scienceRate) * 10} % sci ${civ.scienceRate * 10} % · ` +
-      `score ${this.game.scoreOf(civ.slot).total} · ` +
-      this.clockText() +
-      (this.game.state.gameOver
-        ? ` · GAME OVER: ${this.world.civs[this.game.state.gameOver.winner]?.name ?? '?'} win by ${this.game.state.gameOver.reason}`
-        : waiting > 0
-          ? `${waiting} unit(s) awaiting orders`
-          : 'press Enter to end the turn');
+    const el = this.el.status;
+    const gov = this.folder.rules.governments[civ.government]?.name ?? '';
+    const lux = 10 - civ.taxRate - civ.scienceRate;
+    const line = (text: string) => {
+      const d = document.createElement('div');
+      d.textContent = text;
+      return d;
+    };
+    const gold = line(`${civ.treasury} Gold (${civ.taxRate}.${lux}.${civ.scienceRate})`);
+    gold.className = 'goldLine';
+    gold.title = 'Tax Rate';
+    gold.addEventListener('click', () => this.showTaxRate());
+    const cost = this.game.researchCostFor(civ);
+    const current =
+      civ.researching === null
+        ? 'Nothing'
+        : (this.rules.advances[civ.researching]?.name ?? `advance ${civ.researching}`);
+    const research = line(`Researching: ${current}`);
+    research.className = 'goldLine';
+    research.title = 'Research';
+    research.addEventListener('click', () => this.showResearch());
+    const bar = document.createElement('div');
+    bar.id = 'researchBar';
+    const fill = document.createElement('div');
+    fill.style.width = `${cost > 0 ? Math.min(100, (civ.scienceStored / cost) * 100) : 0}%`;
+    bar.append(fill);
+    const over = this.game.state.gameOver;
+    el.replaceChildren(
+      line(`The ${civ.name} (${gov})`),
+      line(`Population: ${this.populationText()}`),
+      line(`${this.yearText()} (Turn ${this.game.state.turn})`),
+      gold,
+      research,
+      bar,
+      ...(this.timerEnds ? [line(this.clockText())] : []),
+      ...(over
+        ? [
+            line(
+              `Game over: the ${this.world.civs[over.winner]?.name ?? '?'} win by ${over.reason}`,
+            ),
+          ]
+        : []),
+    );
+  }
+
+  private unitLines(u: Unit): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'unitLine';
+    if (u === this.selected) row.classList.add('current');
+    const left = movesLeft(this.rules, u, this.moveCtx());
+    const type = this.rules.units[u.type];
+    const full = type ? type.hitPointsTens * 10 : 0;
+    const home =
+      u.homeCity === null
+        ? 'None'
+        : (this.world.cities.find((c) => c.id === u.homeCity)?.name ?? '?');
+    const text = document.createElement('div');
+    text.className = 'unitText';
+    text.textContent =
+      `${this.civ.adjective} ${this.unitName(u)}${u.veteran ? ' (Veteran)' : ''}\n` +
+      `Moves: ${Math.floor(left / 3)}${left % 3 ? ` ${left % 3}/3` : ''}  HP: ${full - u.hitPointsLost}/${full}\n` +
+      `Home: ${home}`;
+    text.style.whiteSpace = 'pre-wrap';
+    row.append(unitIcon(this.folder, u.type, 36), text);
+    row.addEventListener('click', () => {
+      wake(u);
+      this.select(u);
+    });
+    return row;
+  }
+
+  private terrainText(p: Point): string {
+    const t = this.rules.terrain[this.world.terrainAt(p.x, p.y)] as { name?: string } | undefined;
+    const name = t?.name ?? this.folder.rules.terrain[this.world.terrainAt(p.x, p.y)]?.name ?? '';
+    const marks: [number, string][] = [
+      [SquareFlag.Road, 'Road'],
+      [SquareFlag.Railroad, 'Railroad'],
+      [SquareFlag.Irrigation, 'Irrigation'],
+      [SquareFlag.Mine, 'Mine'],
+      [SquareFlag.Fortress, 'Fortress'],
+      [SquareFlag.Airbase, 'Airbase'],
+      [SquareFlag.Pollution, 'Pollution'],
+    ];
+    const extras = marks
+      .filter(([f]) => this.world.hasFlag(p.x, p.y, f as never))
+      .map(([, n]) => n);
+    return extras.length > 0 ? `${name} (${extras.join(', ')})` : name;
   }
 
   private renderUnitPanel(): void {
-    const u = this.selected;
     const el = this.el.unitPanel;
-    if (!u) {
-      el.textContent = this.gotoMode
-        ? 'Click a destination.'
-        : 'No unit selected. Click one of your units, or press Enter to end the turn.';
-      return;
+    const u = this.selected;
+    const waiting = this.humanUnits().filter((o) => this.needsOrders(o)).length;
+    const parts: HTMLElement[] = [];
+    if (u) {
+      const stack = this.world
+        .unitsAt(u.position.x, u.position.y)
+        .filter((o) => o.owner === this.humanSlot);
+      const where = document.createElement('div');
+      where.textContent = this.terrainText(u.position);
+      const mode = document.createElement('div');
+      mode.textContent = this.gotoMode
+        ? 'Go to: click the destination.'
+        : this.paradropMode
+          ? 'Paradrop: click the square.'
+          : '';
+      parts.push(this.unitLines(u), where, mode);
+      for (const o of stack) if (o !== u) parts.push(this.unitLines(o));
     }
-    const type = this.rules.units[u.type];
-    const left = movesLeft(this.rules, u, this.moveCtx());
-    const hp = type ? type.hitPointsTens * 10 - u.hitPointsLost : 0;
-    const home =
-      u.homeCity === null
-        ? 'none'
-        : (this.world.cities.find((c) => c.id === u.homeCity)?.name ?? '?');
-    const pending = this.pendingAgent;
-    if (pending && pending.unit === u && this.world.units.includes(u)) {
-      el.replaceChildren(this.agentMenu(pending));
-      return;
+    if (waiting === 0 && this.ourMove && !this.game.state.gameOver) {
+      const end = document.createElement('div');
+      end.className = 'endTurnPrompt';
+      end.textContent = 'End of Turn\n(Press ENTER)';
+      end.style.whiteSpace = 'pre-wrap';
+      end.addEventListener('click', () => this.endTurn());
+      parts.push(end);
     }
-    el.textContent =
-      `${this.unitName(u)}${u.veteran ? ' (veteran)' : ''} at (${u.position.x}, ${u.position.y})\n` +
-      `moves ${Math.floor(left / 3)}${left % 3 ? ` ${left % 3}/3` : ''} · HP ${hp}/${type ? type.hitPointsTens * 10 : '?'} · home ${home}\n` +
-      (this.gotoMode ? 'Go to: click the destination.\n' : '') +
-      `keys: arrows/numpad move · f fortify · s sleep · g go to · w wait · b build city\n` +
-      `r road · i irrigate · m mine · o transform · F fortress · E airbase · p clean pollution\n` +
-      `P pillage · D disband · t trade route · h help wonder · Tab next unit · c centre · Enter end turn`;
+    el.replaceChildren(...parts);
+  }
+
+  /** What a menu item does, or null when the game has nothing for it. */
+  private menuAction(entry: MenuEntry): (() => void) | null {
+    const { section, label } = entry;
+    const key = (k: string) => () => {
+      this.handleKey({ key: k, target: null } as unknown as KeyboardEvent);
+      this.refresh();
+    };
+    const zoom = (z: number) => () => this.map.setZoom(z);
+    if (section === 'CHEAT') return () => void this.runCheat(label);
+    if (section === 'PEDIA')
+      return label.startsWith('About')
+        ? () =>
+            void tell(
+              'Mudbrick is a free re-creation written from a clean-room specification. It reads the art and text from your own copy of the original game.',
+              'About',
+            )
+        : key('?');
+    const table: Record<string, (() => void) | undefined> = {
+      'Game Options': key('O'),
+      'Graphic Options': () => this.showGraphicOptions(),
+      'Join Game': () => this.el.onJoin(),
+      'Move Pieces': () => {
+        if (this.viewCursor) this.toggleViewPieces();
+      },
+      'View Pieces': () => {
+        if (!this.viewCursor) this.toggleViewPieces();
+      },
+      'Show Hidden Terrain': () => {
+        this.hidePieces = !this.hidePieces;
+        this.refresh();
+      },
+      'Save Game': () => this.el.onSave(),
+      'Load Game': () => this.el.onLoad(),
+      'Set Password': () => void this.setPassword(),
+      'Change Timer': () => this.showTimer(),
+      Retire: () => void this.retire(),
+      Quit: () => void this.quit(),
+      'Pick Music': () => void this.playMusic(),
+      'Tax Rate': () => this.showTaxRate(),
+      'View Throne Room': () => this.showThrone(false),
+      'Find City': () => this.findCity(),
+      REVOLUTION: () => void this.askRevolution(),
+      'Zoom In': () => this.map.setZoom(this.map.zoom + 1),
+      'Zoom Out': () => this.map.setZoom(this.map.zoom - 1),
+      'Max Zoom In': zoom(8),
+      'Standard Zoom': zoom(0),
+      'Medium Zoom Out': zoom(-4),
+      'Max Zoom Out': zoom(-7),
+      'Show Map Grid': () => {
+        this.showGrid = !this.showGrid;
+        this.refresh();
+      },
+      'Center View': key('c'),
+      'Build New City': key('b'),
+      'Build Road': key('r'),
+      'Build Irrigation': key('i'),
+      'Build Mines': key('m'),
+      'Transform to ...': key('o'),
+      'Build Airbase': key('e'),
+      'Build Fortress': key('F'),
+      'Automate Settler': key('k'),
+      'Clean Up Pollution': key('p'),
+      Pillage: key('P'),
+      Unload: key('u'),
+      'Go To': key('g'),
+      Paradrop: key('j'),
+      Airlift: key('l'),
+      'Set Home City': key('h'),
+      Fortify: key('f'),
+      Sleep: key('s'),
+      Disband: key('D'),
+      'Activate Unit': key('a'),
+      Wait: key('w'),
+      'Skip Turn': key(' '),
+      'End Player Turn': () => this.endTurn(),
+      'Chat with Kings': () => this.chat(),
+      'Consult High Council': key('F10'),
+      'City Status': key('F1'),
+      'Defense Minister': key('F2'),
+      'Foreign Minister': key('F3'),
+      'Attitude Advisor': key('F4'),
+      'Trade Advisor': key('F5'),
+      'Science Advisor': key('F6'),
+      'Casualty Timeline': () => this.showCasualties(),
+      'Wonders of the World': key('F7'),
+      'Top 5 Cities': key('F8'),
+      'Civilization Score': key('F9'),
+      Demographics: key('F11'),
+      Spaceships: key('F12'),
+    };
+    return table[label] ?? null;
+  }
+
+  private toggleViewPieces(): void {
+    if (this.viewCursor) {
+      this.viewCursor = null;
+      if (!this.selected) this.selectNext();
+    } else {
+      const c = this.map.viewRect();
+      const y = Math.max(0, Math.min(this.world.rows - 1, Math.round((c.y + c.h / 2) / 16)));
+      const x = Math.round((c.x + c.w / 2) / 32);
+      const u = this.selected?.position;
+      this.viewCursor = u ?? { x: x - ((x + y) & 1), y };
+      this.selected = null;
+    }
+    this.refresh();
+  }
+
+  /** Graphic Options: what the map shows. */
+  private showGraphicOptions(): void {
+    const close = () => {
+      win.close();
+      this.refresh();
+    };
+    const win = openWindow({
+      title: 'Graphic Options',
+      width: 320,
+      onCancel: close,
+      onAccept: close,
+    });
+    const grid = document.createElement('div');
+    grid.className = 'optionGrid';
+    const box = (name: string, value: boolean, set: (v: boolean) => void) => {
+      const l = document.createElement('label');
+      const c = document.createElement('input');
+      c.type = 'checkbox';
+      c.checked = value;
+      c.addEventListener('change', () => {
+        set(c.checked);
+      });
+      l.append(c, name);
+      grid.append(l);
+    };
+    box('City names', this.map.showNames, (v) => {
+      this.map.showNames = v;
+    });
+    box('Animated moves and battles', this.map.animations, (v) => {
+      this.map.animations = v;
+    });
+    box('Map grid', this.showGrid, (v) => {
+      this.showGrid = v;
+    });
+    win.body.append(grid);
+    addButton(win, 'OK', close);
+  }
+
+  private async quit(): Promise<void> {
+    if (await askYes('Quit this game? Anything not saved is lost.', 'Quit')) this.el.onQuit();
+  }
+
+  /** Stops the clock and the map before the game is left. */
+  dispose(): void {
+    this.map.stop();
+    this.cityWindow.close();
+    clearInterval(this.timerTick);
+    document.getElementById('talkBox')?.remove();
   }
 
   /** The menu bar, from the folder's Menu.txt: same labels, same keys. */
-  private async buildMenuBar(): Promise<void> {
+  private async buildMenus(): Promise<void> {
     const file = await this.folder.file('MENU.TXT');
     if (!file) return;
-    const text = decodeText(new Uint8Array(await file.arrayBuffer()));
-    const bar = document.createElement('div');
-    bar.id = 'menuBar';
-    bar.style.cssText = 'font:13px sans-serif;background:#ddd;padding:2px;user-select:none';
-    const skip = new Set(['EDITOR']);
-    let menu: HTMLSelectElement | null = null;
-    let section = '';
-    let first = false;
-    for (const raw of text.split(/\r?\n/)) {
-      const line = raw.trim();
-      if (line.startsWith(';') || line === '') continue;
-      if (line.startsWith('@')) {
-        section = line.slice(1);
-        first = true;
-        continue;
-      }
-      if (skip.has(section)) continue;
-      const [label = '', key = ''] = line.replace(/&/g, '').split('|');
-      if (first) {
-        first = false;
-        const m = document.createElement('select');
-        const title = document.createElement('option');
-        title.textContent = label;
-        title.value = '';
-        m.append(title);
-        m.addEventListener('change', () => {
-          const value = m.value;
-          m.selectedIndex = 0;
-          if (value === 'CASUALTY') this.showCasualties();
-          else if (value === 'THRONE') this.showThrone(false);
-          else if (value === 'RETIRE') this.retire();
-          else if (value === 'TIMER') this.showTimer();
-          else if (value === 'CHAT') this.chat();
-          else if (value === 'PARLEY') this.showParley();
-          else if (value.startsWith('CHEAT:')) this.runCheat(value.slice(6));
-          else if (value) this.handleKey({ key: value, target: null } as unknown as KeyboardEvent);
-          this.refresh();
-        });
-        bar.append(m);
-        menu = m;
-        continue;
-      }
-      const opt = document.createElement('option');
-      opt.textContent = key ? `${label}    ${key}` : label;
-      let code = key.replace(/^Shift\+/, '');
-      if (key.startsWith('Shift+')) code = code.toUpperCase();
-      if (key === 'SPACE') code = ' ';
-      if (label.startsWith('End Player')) code = 'Enter';
-      if (label.startsWith('Change Timer')) code = 'TIMER';
-      if (label === 'Consult High Council') code = 'F10';
-      if (label.startsWith('Casualty')) code = 'CASUALTY';
-      if (section === 'PEDIA') code = '?';
-      if (label === 'Game Options') code = 'O';
-      if (label === 'View Throne Room') code = 'THRONE';
-      if (label === 'Retire') code = 'RETIRE';
-      if (label === 'Chat with Kings') code = 'CHAT';
-      if (label.startsWith('Parley')) code = 'PARLEY';
-      if (section === 'CHEAT') code = `CHEAT:${label}`;
-      const bound =
-        /^F\d+$/.test(code) ||
-        [
-          'Enter',
-          ' ',
-          '?',
-          'CASUALTY',
-          'RETIRE',
-          'CHAT',
-          'PARLEY',
-          'O',
-          'THRONE',
-          'TIMER',
-        ].includes(code) ||
-        code.startsWith('CHEAT:') ||
-        (code.length === 1 && 'brimopgfshwkauljFEPDHCMTR'.includes(code));
-      opt.value = bound ? code : '';
-      opt.disabled = !bound;
-      menu?.append(opt);
-    }
-    bar.style.position = 'sticky';
-    bar.style.top = '0';
-    bar.style.left = '0';
-    bar.style.zIndex = '20';
-    this.el.canvas.parentElement?.prepend(bar);
+    const menus = parseMenu(new Uint8Array(await file.arrayBuffer()));
+    buildMenuBar(this.el.menuBar, menus, (entry) => this.menuAction(entry));
   }
 
   /** The Cheat menu (cheats.ts). Each item asks what the original's dialog asks. */
-  private runCheat(item: string): void {
+  private async runCheat(item: string): Promise<void> {
     const state = this.game.state;
     if (item.startsWith('Toggle')) {
-      if (!state.cheatMode && !window.confirm('Cheat mode changes the game. Turn it on?')) return;
+      if (!state.cheatMode && !(await askYes('Cheat mode changes the game. Turn it on?'))) return;
       state.cheatMode = !state.cheatMode;
       this.log(`Cheat mode ${state.cheatMode ? 'on' : 'off'}.`);
       return;
@@ -1576,22 +2095,19 @@ export class PlaySession {
       this.log('Turn cheat mode on first.');
       return;
     }
-    const ask = (q: string, d: number) => {
-      const a = window.prompt(q, String(d));
-      return a === null || a === '' || Number.isNaN(Number(a)) ? null : Number(a);
-    };
+    const ask = (q: string, d: number) => askNumber('Cheat', q, d);
     const slot = () => ask('Which civilization, by slot?', this.humanSlot);
     const unit = this.selected;
     const at = unit?.position ?? this.openCity?.position;
     const name = item.replace(/&/g, '');
     if (name.startsWith('Create Unit') && at) {
-      const t = ask(`Unit type, 0 to ${this.rules.units.length - 1}`, 0);
+      const t = await ask(`Unit type, 0 to ${this.rules.units.length - 1}`, 0);
       if (t !== null) cheatCreateUnit(this.game, t, this.humanSlot, at.x, at.y);
     } else if (name.startsWith('Reveal Map')) {
-      const s = slot();
+      const s = await slot();
       if (s !== null) cheatRevealMap(this.game, s);
     } else if (name.startsWith('Set Human')) {
-      const s = slot();
+      const s = await slot();
       if (s !== null) {
         cheatSetHuman(this.game, this.humanSlot, s);
         this.humanSlot = s;
@@ -1599,38 +2115,38 @@ export class PlaySession {
         this.selectNext();
       }
     } else if (name.startsWith('Set Game Year')) {
-      const t = ask('Turn number', state.turn);
+      const t = await ask('Turn number', state.turn);
       if (t !== null) state.turn = t;
     } else if (name.startsWith('Kill')) {
-      const s = slot();
+      const s = await slot();
       if (s !== null) cheatKillCivilization(this.game, s);
     } else if (name.startsWith('Technology') || name.startsWith('Edit Technologies')) {
-      const s = slot();
-      const a = ask(`Advance, 0 to ${this.rules.advances.length - 1}`, 0);
+      const s = await slot();
+      const a = await ask(`Advance, 0 to ${this.rules.advances.length - 1}`, 0);
       if (s !== null && a !== null) {
         const c = this.game.civ(s);
         grantAdvance(c, a, 'other');
         this.game.advanceGained(c, a);
       }
     } else if (name.startsWith('Force Government')) {
-      const s = slot();
-      const g = ask('Government, 0 to 6', 1);
+      const s = await slot();
+      const g = await ask('Government, 0 to 6', 1);
       if (s !== null && g !== null) changeGovernment(this.world, this.game.civ(s), g, false);
     } else if (name.startsWith('Change Terrain') && at) {
-      this.changeTerrain(at, ask);
+      await this.changeTerrain(at, ask);
     } else if (name.startsWith('Destroy') && at) {
       cheatDestroyUnits(this.game, at.x, at.y);
       this.selected = null;
     } else if (name.startsWith('Change Money')) {
-      const s = slot();
-      const m = s === null ? null : ask('Gold', this.game.civ(s).treasury);
+      const s = await slot();
+      const m = s === null ? null : await ask('Gold', this.game.civ(s).treasury);
       if (s !== null && m !== null) cheatSetMoney(this.game, s, m);
     } else if (name.startsWith('Edit Unit') && unit) {
-      this.editUnit(unit, ask);
+      await this.editUnit(unit, ask);
     } else if (name.startsWith('Edit King')) {
-      this.editKing(ask);
+      await this.editKing(ask);
     } else if (name.startsWith('Edit City') && this.openCity) {
-      this.editCity(this.openCity, ask);
+      await this.editCity(this.openCity, ask);
     } else {
       this.log('That needs the scenario tools, which are parked, or something selected first.');
     }
@@ -1638,11 +2154,14 @@ export class PlaySession {
   }
 
   /** Change Terrain At Cursor (0x005094bf): the base terrain, then the seven check boxes. */
-  private changeTerrain(at: Point, ask: (q: string, d: number) => number | null): void {
+  private async changeTerrain(
+    at: Point,
+    ask: (q: string, d: number) => Promise<number | null>,
+  ): Promise<void> {
     if (this.world.cityAt(at.x, at.y)) return;
     const was = this.world.terrainAt(at.x, at.y);
     const list = was === OCEAN ? [] : cheatTerrainChain(this.game, was);
-    const t = ask(
+    const t = await ask(
       list.length > 1
         ? `Terrain, 0 to 10 (the short list is ${list.join(', ')})`
         : 'Terrain, 0 to 10',
@@ -1654,7 +2173,7 @@ export class PlaySession {
     const b = cheatSquareImprovements(this.game, at.x, at.y);
     const names = Object.keys(b) as (keyof typeof b)[];
     const sum = names.reduce((n, k, i) => n + (b[k] ? 1 << i : 0), 0);
-    const v = ask(
+    const v = await ask(
       'Improvements as a sum: 1 irrigation, 2 mine, 4 road, 8 railroad, 16 fortress, 32 airbase, 64 pollution',
       sum,
     );
@@ -1664,78 +2183,84 @@ export class PlaySession {
   }
 
   /** Edit Unit (0x0050ad7f): the dialog's items, chosen by number. */
-  private editUnit(unit: Unit, ask: (q: string, d: number) => number | null): void {
-    const item = ask(
+  private async editUnit(
+    unit: Unit,
+    ask: (q: string, d: number) => Promise<number | null>,
+  ): Promise<void> {
+    const item = await ask(
       '1 toggle veteran, 2 restore moves, 3 hit points lost, 4 home city, 5 toggle fortified, 6 commodity',
       1,
     );
     if (item === 1) cheatEditUnit(this.game, unit, { toggleVeteran: true });
     else if (item === 2) cheatEditUnit(this.game, unit, { restoreMoves: true });
     else if (item === 3) {
-      const h = ask('Hit points lost', unit.hitPointsLost);
+      const h = await ask('Hit points lost', unit.hitPointsLost);
       if (h !== null) cheatEditUnit(this.game, unit, { hitPointsLost: h });
     } else if (item === 4) {
       const own = this.world.cities.filter((c) => c.owner === unit.owner);
       const list = own.map((c) => `${c.id} ${c.name}`).join(', ');
-      const h = ask(`Home city by number, -1 for none: ${list}`, unit.homeCity ?? -1);
+      const h = await ask(`Home city by number, -1 for none: ${list}`, unit.homeCity ?? -1);
       if (h === -1) cheatEditUnit(this.game, unit, { homeCity: null });
       else if (own.some((c) => c.id === h)) cheatEditUnit(this.game, unit, { homeCity: h });
     } else if (item === 5) cheatEditUnit(this.game, unit, { toggleFortified: true });
     else if (item === 6) {
-      const c = ask('Commodity, 0 to 15, or -1 for none', unit.commodity ?? -1);
+      const c = await ask('Commodity, 0 to 15, or -1 for none', unit.commodity ?? -1);
       if (c !== null) cheatEditUnit(this.game, unit, { commodity: c < 0 ? 0xff : c });
     }
   }
 
   /** Edit City (0x0050b507): the dialog's items, chosen by number. */
-  private editCity(city: City, ask: (q: string, d: number) => number | null): void {
-    const item = ask(
+  private async editCity(
+    city: City,
+    ask: (q: string, d: number) => Promise<number | null>,
+  ): Promise<void> {
+    const item = await ask(
       '1 size, 2 clear wonders, 3 clear disorder and celebration, 4 copy improvements, 5 shields, 6 toggle objective',
       1,
     );
     if (item === 1) {
-      const n = ask('City size', city.size);
+      const n = await ask('City size', city.size);
       if (n !== null) cheatEditCity(city, { size: n });
     } else if (item === 2) cheatEditCity(city, { clearWonders: true });
     else if (item === 3) cheatEditCity(city, { clearOrderFlags: true });
     else if (item === 4) {
       const list = this.world.cities.filter((c) => c !== city);
-      const n = ask(`Copy from: ${list.map((c) => `${c.id} ${c.name}`).join(', ')}`, -1);
+      const n = await ask(`Copy from: ${list.map((c) => `${c.id} ${c.name}`).join(', ')}`, -1);
       const from = list.find((c) => c.id === n);
       if (from) cheatEditCity(city, { copyImprovementsFrom: from });
     } else if (item === 5) {
-      const n = ask('Shields stored', city.shieldsStored);
+      const n = await ask('Shields stored', city.shieldsStored);
       if (n !== null) cheatEditCity(city, { shields: n });
     } else if (item === 6) cheatEditCity(city, { toggleObjective: true });
   }
 
   /** Edit King (0x0050ba78): the dialog's items, chosen by number. */
-  private editKing(ask: (q: string, d: number) => number | null): void {
-    const slot = ask('Which civilization, by slot?', this.humanSlot);
+  private async editKing(ask: (q: string, d: number) => Promise<number | null>): Promise<void> {
+    const slot = await ask('Which civilization, by slot?', this.humanSlot);
     if (slot === null) return;
-    const item = ask(
+    const item = await ask(
       '1 treaties, 2 attitude, 3 reputation, 4 research progress, 5 clear research, 6 names, 7 copy advances, 8 clear patience, 9 research goal, 10 last contact, 11 clear all last contact, 12 toggle female',
       1,
     );
     const other = () => ask('Toward which civilization, by slot?', this.humanSlot);
     if (item === 1) {
-      const o = other();
-      const f = ask(
+      const o = await other();
+      const f = await ask(
         'Treaties as a sum: 1 contact, 2 cease-fire, 4 peace, 8 alliance, 16 war, 32 vendetta, 64 embassy',
         1,
       );
       if (o !== null && f !== null)
         cheatEditKing(this.game, slot, { treatiesWith: { other: o, flags: f } });
     } else if (item === 2) {
-      const o = other();
-      const v = ask('Attitude', 50);
+      const o = await other();
+      const v = await ask('Attitude', 50);
       if (o !== null && v !== null)
         cheatEditKing(this.game, slot, { attitudeTo: { other: o, value: v } });
     } else if (item === 3) {
-      const v = ask('Reputation', this.game.civ(slot).reputation ?? 0);
+      const v = await ask('Reputation', this.game.civ(slot).reputation ?? 0);
       if (v !== null) cheatEditKing(this.game, slot, { reputation: v });
     } else if (item === 4) {
-      const v = ask('Research progress', this.game.civ(slot).scienceStored);
+      const v = await ask('Research progress', this.game.civ(slot).scienceStored);
       if (v !== null) cheatEditKing(this.game, slot, { progress: v });
     } else if (item === 5) {
       cheatEditKing(this.game, slot, { clearResearch: true });
@@ -1743,9 +2268,9 @@ export class PlaySession {
       const c = this.game.civ(slot);
       cheatEditKing(this.game, slot, {
         names: {
-          leader: window.prompt('Leader', c.leader) ?? '',
-          name: window.prompt('Tribe', c.name) ?? '',
-          adjective: window.prompt('Adjective', c.adjective) ?? '',
+          leader: (await askText('Edit King', 'Leader', c.leader)) ?? '',
+          name: (await askText('Edit King', 'Tribe', c.name)) ?? '',
+          adjective: (await askText('Edit King', 'Adjective', c.adjective)) ?? '',
         },
       });
     } else if (item === 8) {
@@ -1753,11 +2278,11 @@ export class PlaySession {
     } else if (item === 9) {
       this.showResearch();
     } else if (item === 7) {
-      const o = other();
+      const o = await other();
       if (o !== null) cheatEditKing(this.game, slot, { copyAdvancesFrom: o });
     } else if (item === 10) {
-      const o = other();
-      const v = ask('Turn of last contact', this.game.state.turn);
+      const o = await other();
+      const v = await ask('Turn of last contact', this.game.state.turn);
       if (o !== null && v !== null)
         cheatEditKing(this.game, slot, { lastContact: { other: o, turn: v } });
     } else if (item === 11) {
@@ -2020,16 +2545,28 @@ export class PlaySession {
     this.talkButton(box, 'No', () => this.closeTalk());
   }
 
-  private readonly news: { picture: number; text: string }[] = [];
+  private readonly news: { picture: number; text: string; city?: City }[] = [];
 
   /** An event worth an engraving (0x004b7280): the second of each pair after advance 37. */
   private queueNews(picture: number, text: string): void {
     this.news.push({ picture: picture + (this.civ.knownAdvances[37] === true ? 1 : 0), text });
   }
 
-  private showNews(item: { picture: number; text: string }): void {
+  private showNews(item: { picture: number; text: string; city?: City }): void {
     const box = this.talkBox();
     box.replaceChildren();
+    const city = item.city;
+    if (city) {
+      const text = document.createElement('p');
+      text.textContent = item.text;
+      box.append(text);
+      this.talkButton(box, 'Continue', () => this.closeTalk());
+      this.talkButton(box, 'Zoom to City', () => {
+        this.closeTalk();
+        this.showCity(city);
+      });
+      return;
+    }
     const img = document.createElement('img');
     img.style.cssText = 'display:block;margin:0 auto 8px;max-width:100%';
     void this.folder.art('TILES.DLL', item.picture, true).then((url) => {
@@ -2064,10 +2601,11 @@ export class PlaySession {
     ];
     for (const [label, ms] of choices) this.talkButton(box, label, () => set(ms));
     this.talkButton(box, 'Custom', () => {
-      const minutes = Number(window.prompt('Minutes', '10') ?? 0);
-      const seconds = Number(window.prompt('Seconds', '0') ?? 0);
-      if (Number.isFinite(minutes) && Number.isFinite(seconds))
+      void (async () => {
+        const minutes = (await askNumber('Game timer', 'Minutes', 10)) ?? 0;
+        const seconds = (await askNumber('Game timer', 'Seconds', 0)) ?? 0;
         set(Math.max(0, minutes * 60000 + seconds * 1000));
+      })();
     });
   }
 
@@ -2323,7 +2861,8 @@ export class PlaySession {
   /** The City View, for a city you can see. */
   private showCityView(city: City): void {
     const box = this.talkBox();
-    box.style.width = '960px';
+    box.style.width = 'min(960px, calc(100vw - 40px))';
+    box.style.zIndex = '46';
     box.replaceChildren();
     const canvas = document.createElement('canvas');
     canvas.style.cssText = 'width:100%;image-rendering:auto';
@@ -2332,7 +2871,7 @@ export class PlaySession {
       if (!ok) canvas.remove();
     });
     this.talkButton(box, 'Close', () => {
-      box.style.width = '420px';
+      box.style.width = '';
       this.closeTalk();
     });
   }
@@ -2353,7 +2892,7 @@ export class PlaySession {
     const box = this.talkBox();
     box.replaceChildren();
     for (const c of r.targets)
-      this.talkButton(box, c.name, () => {
+      this.talkButton(box, c.name, async () => {
         const threat = airliftThreat(
           this.world,
           this.rules,
@@ -2361,7 +2900,7 @@ export class PlaySession {
           c,
           (o) => ((treatiesOf(this.civ)[o] ?? 0) & TREATY.war) !== 0,
         );
-        if (threat.count > 0 && !window.confirm('Enemy fighters are in range. Fly anyway?')) return;
+        if (threat.count > 0 && !(await askYes('Enemy fighters are in range. Fly anyway?'))) return;
         if (airlift(this.world, this.game.rng, unit, c, threat.count))
           this.log(`${this.unitName(unit)} flies to ${c.name}.`);
         else {
@@ -2389,7 +2928,7 @@ export class PlaySession {
     this.talkButton(box, 'Close', () => this.closeTalk());
   }
 
-  private paradrop(unit: Unit, to: Point): void {
+  private async paradrop(unit: Unit, to: Point): Promise<void> {
     this.paradropMode = false;
     const range = this.folder.rules.cosmic.maxParadropRange;
     const why = paradropCheck(this.world, unit, to.x, to.y, range);
@@ -2409,7 +2948,7 @@ export class PlaySession {
       const word = treaty(this.world, unit.owner, city.owner);
       if ((word & (TREATY.ceaseFire | TREATY.peace | TREATY.alliance)) !== 0) {
         const name = this.world.civs.find((c) => c.slot === city.owner)?.name ?? '';
-        if (!window.confirm(`This breaks your treaty with the ${name}. Proceed?`)) return;
+        if (!(await askYes(`This breaks your treaty with the ${name}. Proceed?`))) return;
         const events: DiplomacyEvent[] = [];
         declareWar(this.world, unit.owner, city.owner, this.game.diplomacyContext(), events);
         for (const e of events) this.log(`${e.text}.`);
@@ -2544,7 +3083,7 @@ export class PlaySession {
     this.talkButton(box, 'Close', () => this.closeTalk());
   }
 
-  private chat(): void {
+  private async chat(): Promise<void> {
     if (!this.onChat) {
       this.log('Chat needs a network game.');
       return;
@@ -2552,11 +3091,12 @@ export class PlaySession {
     const humans = this.world.civs.filter(
       (c) => c.isHuman && c.inPlay && c.slot !== this.humanSlot,
     );
-    const who = window.prompt(
+    const who = await askText(
+      'Chat',
       `Send to which players? ${humans.map((c) => `${c.slot} ${c.name}`).join(', ')} (empty for all)`,
     );
     if (who === null) return;
-    const text = window.prompt('Message:');
+    const text = await askText('Chat', 'Message');
     if (!text) return;
     const to = who.trim() === '' ? humans.map((c) => c.slot) : who.split(/[ ,]+/).map(Number);
     // VERIFIED (0x0048fb53): a spy listening to the sender gets a copy of everything.
@@ -2567,22 +3107,22 @@ export class PlaySession {
       )
         to.push(c.slot);
     // VERIFIED (0x0048fb53, box 0x40d at 0x004ec448): the sender can leave their name off.
-    const anonymous = window.confirm('Send without your name?');
+    const anonymous = await askYes('Send without your name?', 'Chat');
     this.onChat(text, to, anonymous);
   }
 
   /** Retire (0x004af61c): the power graph, then the score, and the game ends. */
-  private retire(): void {
+  private async retire(): Promise<void> {
     if (this.seat !== null && !this.game.state.byFile) {
       // Network play: this player leaves and the game goes on (0x004aeab6).
-      if (!window.confirm('Really leave the game?')) return;
+      if (!(await askYes('Really leave the game?'))) return;
       const seat = this.seat;
       if (!this.writable(() => this.game.retireHuman(seat))) return;
       this.game.retireHuman(seat);
       this.refresh();
       return;
     }
-    if (window.confirm('Really retire?')) this.showPowerGraph(true);
+    if (await askYes('Really retire?')) this.showPowerGraph(true);
   }
 
   /**
@@ -2590,7 +3130,7 @@ export class PlaySession {
    * a conquest, the score, and alone against the computer the choice to play on. A defeated
    * player has no such choice.
    */
-  private endOfGame(): void {
+  private async endOfGame(): Promise<void> {
     const over = this.game.state.gameOver;
     if (!over) return;
     if (over.reason === 'defeat') void this.playVideo('LOSER');
@@ -2602,7 +3142,7 @@ export class PlaySession {
     this.enterHallOfFame();
     const alone = this.seat === null && this.world.civs.filter((c) => c.isHuman).length === 1;
     if (!alone || over.reason === 'defeat') return;
-    if (window.confirm('Your final score is in. Keep playing? No further score is recorded.')) {
+    if (await askYes('Your final score is in. Keep playing? No further score is recorded.')) {
       this.game.keepPlaying();
       this.fameEntered = false;
       this.log('The game goes on.');
@@ -2770,8 +3310,40 @@ export class PlaySession {
         box.appendChild(canvas);
         void this.drawShip(canvas, ship);
       }
+      this.shipControls(box);
     }
     this.talkButton(box, 'Close', () => this.closeTalk());
+  }
+
+  /** The spaceship's figures, and the launch while it has a structure and has not flown. */
+  private shipControls(box: HTMLElement): void {
+    const civ = this.civ;
+    const ship = civ.spaceship;
+    if (!ship || !hasStarted(civ)) return;
+    const ev = evaluateShip(
+      ship,
+      true,
+      this.rules.cosmic.massThrustParadigm ?? 75,
+      this.game.knows(this.humanSlot, 32),
+      yearOf(this.game.state),
+      true,
+    );
+    const text = document.createElement('p');
+    text.textContent =
+      `${PART_NAMES.map((n, i) => `${ship.parts[i] ?? 0} ${n}`).join(', ')}\n` +
+      `Success ${ev.success} %, flight ${(ev.flightTenths / 10).toFixed(1)} years, ` +
+      (hasLaunched(civ)
+        ? `launched ${ship.launchYear}, arrives ${ship.arrival}`
+        : `would arrive ${ev.arrivalYear}`);
+    box.append(text);
+    if (hasLaunched(civ) || (ship.parts[0] ?? 0) === 0) return;
+    this.talkButton(box, 'Launch', () => {
+      const events: SpaceshipEvent[] = [];
+      launchShip(this.world, civ, this.game.shipContext(), events);
+      void this.playVideo('LAUNCH');
+      for (const e of events) this.log(`${e.text}.`);
+      this.closeTalk();
+    });
   }
 
   /** The ship against the stars (0x004a224f): under-parts, the frame, then the parts on top. */
@@ -2949,9 +3521,6 @@ export class PlaySession {
     if (!box) {
       box = document.createElement('div');
       box.id = 'talkBox';
-      box.style.cssText =
-        'position:fixed;left:50%;top:18%;transform:translateX(-50%);width:420px;padding:14px;' +
-        'background:#efe6cf;color:#222;border:2px solid #333;z-index:50;white-space:pre-wrap';
       document.body.appendChild(box);
     }
     box.style.display = 'block';
@@ -2961,7 +3530,6 @@ export class PlaySession {
   private talkButton(box: HTMLElement, label: string, run: () => void): HTMLButtonElement {
     const b = document.createElement('button');
     b.textContent = label;
-    b.style.cssText = 'display:block;width:100%;margin-top:6px;text-align:left';
     b.addEventListener('click', run);
     box.appendChild(b);
     return b;
@@ -3183,355 +3751,5 @@ export class PlaySession {
     c.addEventListener('click', cancel);
     box.appendChild(c);
     return box;
-  }
-
-  private renderCityPanel(): void {
-    const city = this.openCity;
-    const el = this.el.cityPanel;
-    if (!city || !this.world.cities.includes(city)) {
-      el.replaceChildren();
-      return;
-    }
-    const ctx = this.game.cityContext(city);
-    const raw = rawYields(this.world, this.rules, city, ctx);
-    const homed = this.world.units.filter((u) => u.homeCity === city.id);
-    const support = unitSupport(this.world, this.rules, city, ctx, homed);
-    const shields = shieldTotals(this.rules, city, ctx, raw.shields, support.shields);
-    const trade = tradeSplit(this.rules, city, ctx, raw.trade);
-    const m = mood(this.rules, city, ctx, {
-      luxuries: trade.luxuries,
-      militaryInCity: support.inCity,
-      militaryAbroad: support.abroad,
-      noMilitaryUnhappiness: support.abroad === 0,
-    });
-    const eaten = city.size * this.rules.cosmic.foodPerCitizen + support.settlers;
-    const prodName =
-      city.production.kind === 'unit'
-        ? this.rules.units[city.production.index]?.name
-        : this.rules.improvements[city.production.index]?.name;
-    const cost =
-      this.game.productionContext(city).shieldRows *
-      (city.production.kind === 'unit'
-        ? (this.rules.units[city.production.index]?.costRows ?? 0)
-        : (this.rules.improvements[city.production.index]?.costRows ?? 0));
-    const built = city.improvements
-      .map((has, i) => (has ? this.rules.improvements[i]?.name : undefined))
-      .filter((n): n is string => Boolean(n));
-    const header = document.createElement('div');
-    header.textContent =
-      `${city.name} (size ${city.size})${city.inDisorder ? ' — DISORDER' : city.celebrating ? ' — celebrating' : ''}\n` +
-      `food ${raw.food} − ${eaten} eaten (stored ${city.foodStored}) · shields ${shields.produced} − ${support.shields} support (waste ${shields.waste}) · ` +
-      `trade ${raw.trade}: lux ${trade.luxuries} sci ${trade.science} tax ${trade.tax} (corruption ${trade.corruption})\n` +
-      `citizens: ${m.happy} happy, ${m.content} content, ${m.unhappy} unhappy; ${city.specialists.entertainers + city.specialists.taxCollectors + city.specialists.scientists} specialists\n` +
-      `producing ${prodName ?? '?'}: ${city.shieldsStored}/${cost} shields\n` +
-      `buildings: ${built.join(', ') || 'none'}`;
-    header.style.whiteSpace = 'pre-wrap';
-    const label = document.createElement('label');
-    label.textContent = 'Change production: ';
-    const select = document.createElement('select');
-    const canBuildOption = (opt: { kind: 'unit' | 'improvement'; index: number }) =>
-      opt.kind === 'unit'
-        ? this.game.canBuildUnitAt(city, opt.index)
-        : this.game.canBuildImprovement(city, opt.index);
-    const options: { kind: 'unit' | 'improvement'; index: number; label: string }[] = [];
-    this.rules.units.forEach((u, i) => {
-      if (canBuildOption({ kind: 'unit', index: i }))
-        options.push({
-          kind: 'unit',
-          index: i,
-          label: `${u.name} (${u.costRows * this.game.productionContext(city).shieldRows})`,
-        });
-    });
-    this.rules.improvements.forEach((imp, i) => {
-      if (canBuildOption({ kind: 'improvement', index: i }))
-        options.push({
-          kind: 'improvement',
-          index: i,
-          label: `${imp.name} (${imp.costRows * this.game.productionContext(city).shieldRows})`,
-        });
-    });
-    for (const o of options) {
-      const opt = document.createElement('option');
-      opt.value = `${o.kind}:${o.index}`;
-      opt.textContent = o.label;
-      if (o.kind === city.production.kind && o.index === city.production.index) opt.selected = true;
-      select.append(opt);
-    }
-    select.addEventListener('change', () => {
-      const [kind, idx] = select.value.split(':');
-      if (kind === 'unit' || kind === 'improvement') {
-        const lost = changeProduction(
-          this.rules,
-          city,
-          { kind, index: Number(idx) },
-          this.game.state.difficulty,
-        );
-        this.log(
-          `${city.name} now builds ${select.selectedOptions[0]?.textContent ?? ''}${lost ? ` (${lost} shields lost to the change)` : ''}.`,
-        );
-        this.refresh();
-      }
-    });
-    label.append(select);
-    el.replaceChildren(header, label, this.autoProductionBox(city), this.cityOrders(city));
-  }
-
-  /** The Auto choice and the advisors' suggestions (0x004d0c6c). */
-  private autoProductionBox(city: City): HTMLElement {
-    const box = document.createElement('div');
-    const auto = document.createElement('label');
-    auto.textContent = 'Advisors choose: ';
-    const select = document.createElement('select');
-    const modes = [
-      ['off', 'No'],
-      ['both', 'Both'],
-      ['military', 'Military'],
-      ['domestic', 'Domestic'],
-    ] as const;
-    for (const [value, text] of modes) {
-      const o = document.createElement('option');
-      o.value = value;
-      o.textContent = text;
-      o.selected = (city.autoProduction ?? 'off') === value;
-      select.append(o);
-    }
-    select.addEventListener('change', () => {
-      const v = select.value;
-      this.game.setAutoProduction(
-        city,
-        v === 'both' || v === 'military' || v === 'domestic' ? v : null,
-      );
-      this.refresh();
-    });
-    auto.append(select);
-    box.append(auto);
-    const advice = this.game.adviseProduction(city);
-    const name = (p: Production | null) =>
-      p === null
-        ? 'nothing'
-        : p.kind === 'unit'
-          ? (this.rules.units[p.index]?.name ?? '?')
-          : (this.rules.improvements[p.index]?.name ?? '?');
-    const hint = document.createElement('div');
-    hint.textContent = `Military suggests ${name(advice.military)}. Domestic suggests ${name(advice.domestic)}.`;
-    box.append(hint);
-    return box;
-  }
-
-  /** Buy, sell and the workers (humanOrders.ts). */
-  private cityOrders(city: City): HTMLElement {
-    const box = document.createElement('div');
-    const civ = this.civ;
-    const button = (label: string, run: () => void) => {
-      const b = document.createElement('button');
-      b.textContent = label;
-      b.addEventListener('click', () => {
-        run();
-        this.refresh();
-      });
-      return b;
-    };
-    const price = buyCost(this.rules, city);
-    if (price !== null)
-      box.appendChild(
-        button(`Buy for ${price} gold`, () => {
-          const r = buyProduction(this.rules, civ, city);
-          if (r === null) this.sound('POS1');
-          if (r === 'gold') this.log(`You need ${price} gold.`);
-          if (r === 'disorder') this.log(`${city.name} is in disorder: no units can be bought.`);
-        }),
-      );
-    box.appendChild(button('View', () => this.showCityView(city)));
-    const sell = document.createElement('select');
-    const none = document.createElement('option');
-    none.textContent = city.soldThisTurn ? '(sold this turn)' : 'Sell…';
-    none.value = '';
-    sell.append(none);
-    if (!city.soldThisTurn) {
-      for (let i = 2; i < 39; i++) {
-        if (!city.improvements[i]) continue;
-        const o = document.createElement('option');
-        const r = this.rules.improvements[i];
-        o.value = String(i);
-        o.textContent = `${r?.name ?? '?'} (${(r?.costRows ?? 0) * this.rules.cosmic.shieldBoxRows} gold)`;
-        sell.append(o);
-      }
-    }
-    sell.addEventListener('change', () => {
-      if (sell.value === '') return;
-      sellImprovement(this.rules, civ, city, Number(sell.value));
-      this.sound('SELL');
-      this.log(`${city.name} sells ${this.rules.improvements[Number(sell.value)]?.name ?? ''}.`);
-      this.refresh();
-    });
-    box.appendChild(sell);
-    const grid = document.createElement('div');
-    grid.style.cssText = 'display:grid;grid-template-columns:repeat(7,28px);gap:1px;margin-top:4px';
-    const { x: cx, y: cy } = city.position;
-    const ctx = this.game.cityContext(city);
-    const cells: (HTMLElement | null)[] = Array<HTMLElement | null>(49).fill(null);
-    for (let i = 0; i <= CITY_CENTRE_INDEX; i++) {
-      const p = this.world.radiusSquare(cx, cy, i);
-      if (!p) continue;
-      let dx = p.x - cx;
-      if (dx > this.world.widthX2 / 2) dx -= this.world.widthX2;
-      if (dx < -this.world.widthX2 / 2) dx += this.world.widthX2;
-      const col = Math.round(dx / 2 + (p.y - cy) / 2) + 3;
-      const row = Math.round((p.y - cy) / 2 - dx / 2) + 3;
-      const cell = document.createElement('button');
-      const worked = i === CITY_CENTRE_INDEX || (city.worked & (1 << i)) !== 0;
-      const y = ([0, 1, 2] as const).map((k) =>
-        squareYield(this.world, this.rules, city, i, k, ctx),
-      );
-      cell.textContent = y.join('');
-      cell.title = 'food shields trade';
-      cell.style.cssText = `padding:0;font:10px monospace;height:22px;background:${worked ? '#9c9' : '#ddd'}`;
-      cell.addEventListener('click', () => {
-        this.game.clickCitySquare(city, i);
-        this.refresh();
-      });
-      cells[row * 7 + col] = cell;
-    }
-    for (const c of cells) grid.appendChild(c ?? document.createElement('span'));
-    box.appendChild(grid);
-    const sp = city.specialists;
-    (['entertainers', 'taxCollectors', 'scientists'] as const).forEach((k, n) => {
-      if (sp[k] > 0)
-        box.appendChild(
-          button(`${sp[k]} ${['entertainers', 'tax collectors', 'scientists'][n]}`, () => {
-            cycleSpecialist(city, n as 0 | 1 | 2);
-          }),
-        );
-    });
-    return box;
-  }
-
-  private renderResearchPanel(): void {
-    const civ = this.civ;
-    const el = this.el.researchPanel;
-    const current =
-      civ.researching === null
-        ? 'nothing'
-        : (this.rules.advances[civ.researching]?.name ?? `advance ${civ.researching}`);
-    const cost = this.game.researchCostFor(civ);
-    const text = document.createElement('div');
-    text.textContent = `Researching ${current}: ${civ.scienceStored}/${cost} beakers · ${civ.advancesCount} advances known`;
-    if (civ.spaceship && hasStarted(civ)) {
-      const ship = civ.spaceship;
-      const ev = evaluateShip(
-        ship,
-        true,
-        this.rules.cosmic.massThrustParadigm ?? 75,
-        this.game.knows(this.humanSlot, 32),
-        yearOf(this.game.state),
-        true,
-      );
-      text.textContent += `\nSpaceship: ${PART_NAMES.map((n, i) => `${ship.parts[i] ?? 0} ${n}`).join(', ')} · success ${ev.success} % · flight ${(ev.flightTenths / 10).toFixed(1)} years · ${hasLaunched(civ) ? `launched ${ship.launchYear}, arrives ${ship.arrival}` : `would arrive ${ev.arrivalYear}`}`;
-      if (!hasLaunched(civ) && (ship.parts[0] ?? 0) > 0) {
-        const launch = document.createElement('button');
-        launch.textContent = 'Launch';
-        launch.addEventListener('click', () => {
-          const events: SpaceshipEvent[] = [];
-          launchShip(this.world, civ, this.game.shipContext(), events);
-          void this.playVideo('LAUNCH');
-          for (const e of events) this.log(`${e.text}.`);
-          this.refresh();
-        });
-        text.append(' ', launch);
-      }
-    }
-    const label = document.createElement('label');
-    label.textContent = 'Research: ';
-    const select = document.createElement('select');
-    const none = document.createElement('option');
-    none.value = '';
-    none.textContent = '(choose)';
-    select.append(none);
-    for (const a of researchChoices(this.rules, civ, this.game.state.difficulty)) {
-      const opt = document.createElement('option');
-      opt.value = String(a);
-      opt.textContent = this.rules.advances[a]?.name ?? String(a);
-      if (a === civ.researching) opt.selected = true;
-      select.append(opt);
-    }
-    select.addEventListener('change', () => {
-      civ.researching = select.value === '' ? null : Number(select.value);
-      this.refresh();
-    });
-    label.append(select);
-    const rates = document.createElement('div');
-    const max = maxRate(civ.government);
-    const slider = (name: string, value: number, set: (v: number) => void) => {
-      const l = document.createElement('label');
-      l.textContent = ` ${name} ${value * 10} %`;
-      const r = document.createElement('input');
-      r.type = 'range';
-      r.min = '0';
-      r.max = String(max);
-      r.value = String(value);
-      r.addEventListener('change', () => {
-        set(Number(r.value));
-        this.refresh();
-      });
-      l.append(r);
-      return l;
-    };
-    rates.append(
-      slider('Tax', civ.taxRate, (v) => {
-        setRates(civ, v, civ.scienceRate);
-      }),
-      slider('Science', civ.scienceRate, (v) => {
-        setRates(civ, civ.taxRate, v);
-      }),
-    );
-    const govLabel = document.createElement('label');
-    govLabel.textContent = ' Government: ';
-    const govSelect = document.createElement('select');
-    const names = [
-      'Anarchy',
-      'Despotism',
-      'Monarchy',
-      'Communism',
-      'Fundamentalism',
-      'Republic',
-      'Democracy',
-    ];
-    const ownsStatue = this.game.ownsWonder(this.humanSlot, 58);
-    for (let g = 1; g < 7; g++) {
-      const opt = document.createElement('option');
-      opt.value = String(g);
-      opt.textContent = names[g] ?? String(g);
-      opt.disabled = !governmentAllowed(
-        g,
-        (adv) => this.game.knows(this.humanSlot, adv),
-        ownsStatue,
-      );
-      if (g === civ.government) opt.selected = true;
-      govSelect.append(opt);
-    }
-    if (civ.government === 0) {
-      const opt = document.createElement('option');
-      opt.value = '0';
-      opt.textContent = this.governmentChoiceDue ? 'Anarchy (choose now)' : 'Anarchy';
-      opt.selected = true;
-      govSelect.append(opt);
-    }
-    govSelect.addEventListener('change', () => {
-      const g = Number(govSelect.value);
-      if (civ.government === 0 && this.governmentChoiceDue) {
-        changeGovernment(this.world, civ, g, true);
-        this.governmentChoiceDue = false;
-        this.log(`${civ.name} become a ${names[g] ?? 'new government'}.`);
-      } else if (civ.government !== 0 && g !== civ.government) {
-        startRevolution(this.world, civ);
-        this.wantedGovernment = g;
-        this.log(
-          'Revolution! Anarchy until a turn divisible by four (at once with the Statue of Liberty).',
-        );
-      }
-      this.refresh();
-    });
-    govLabel.append(govSelect);
-    el.replaceChildren(text, label, rates, govLabel);
   }
 }

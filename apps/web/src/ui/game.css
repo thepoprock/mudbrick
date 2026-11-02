@@ -1,0 +1,510 @@
+:root {
+  color-scheme: light;
+  --stone-outer: #8d8d8d;
+  --stone-inner: #b4b4b4;
+  --ink: #000;
+  --title-bar: linear-gradient(90deg, #00007b, #1084d0);
+  font:
+    bold 14px/1.3 'Times New Roman',
+    Times,
+    serif;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  color: var(--ink);
+  user-select: none;
+}
+[hidden] {
+  display: none !important;
+}
+button {
+  font:
+    bold 13px 'Times New Roman',
+    Times,
+    serif;
+  padding: 3px 14px;
+  color: #000;
+  background: #c0c0c0;
+  border: 2px solid;
+  border-color: #fff #404040 #404040 #fff;
+  border-radius: 0;
+  cursor: pointer;
+}
+button:active:not(:disabled) {
+  border-color: #404040 #fff #fff #404040;
+}
+button:disabled {
+  color: #777;
+  cursor: default;
+}
+button:focus-visible {
+  outline: 1px dotted #000;
+  outline-offset: -5px;
+}
+input,
+select {
+  font:
+    13px 'Times New Roman',
+    Times,
+    serif;
+}
+
+/* ---- the screen while playing */
+#game {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+#menuBar {
+  display: flex;
+  flex: none;
+  height: 22px;
+  align-items: stretch;
+  background: #c0c0c0;
+  border-bottom: 1px solid #404040;
+  font:
+    13px Tahoma,
+    'Segoe UI',
+    system-ui,
+    sans-serif;
+}
+.menuTitle {
+  padding: 3px 9px;
+  cursor: default;
+  position: relative;
+}
+.menuTitle.active {
+  background: #00007b;
+  color: #fff;
+}
+.menuDrop {
+  position: absolute;
+  z-index: 40;
+  left: 0;
+  top: 100%;
+  min-width: 230px;
+  padding: 2px;
+  background: #c0c0c0;
+  color: #000;
+  border: 2px solid;
+  border-color: #fff #404040 #404040 #fff;
+  box-shadow: 2px 2px 0 rgb(0 0 0 / 35%);
+}
+.menuItem {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 2px 10px 2px 18px;
+  white-space: nowrap;
+}
+.menuItem:hover:not(.off) {
+  background: #00007b;
+  color: #fff;
+}
+.menuItem.off {
+  color: #808080;
+}
+#gameMain {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+#mapWrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  background: #000;
+  overflow: hidden;
+}
+#map {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  cursor: default;
+}
+#map.targeting {
+  cursor: crosshair;
+}
+#panel {
+  flex: none;
+  width: 262px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px;
+  background: var(--stone-outer);
+  border-left: 2px solid #404040;
+}
+.panelBox {
+  border: 2px solid;
+  border-color: #404040 #eee #eee #404040;
+  background: var(--stone-inner);
+}
+.panelTitle {
+  font-size: 12px;
+  padding: 1px 6px;
+  color: #fff;
+  background: var(--title-bar);
+}
+#minimap {
+  display: block;
+  width: 100%;
+  height: 150px;
+  background: #000;
+  cursor: crosshair;
+  image-rendering: pixelated;
+}
+#statusBox {
+  flex: 1 1 60%;
+  min-height: 0;
+  overflow: auto;
+}
+#status {
+  padding: 4px 8px;
+  border-bottom: 1px solid #555;
+}
+#status .goldLine {
+  cursor: pointer;
+}
+#statusIcons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+}
+#researchBar {
+  height: 6px;
+  margin-top: 3px;
+  background: #333;
+  border: 1px solid #000;
+}
+#researchBar > div {
+  height: 100%;
+  background: #3cc;
+}
+#unitPanel {
+  padding: 4px 8px;
+}
+.endTurnPrompt {
+  margin-top: 8px;
+  padding: 6px;
+  text-align: center;
+  font-size: 15px;
+  color: #fff;
+  background: #000;
+  cursor: pointer;
+  animation: blink 1s steps(2) infinite;
+}
+@keyframes blink {
+  50% {
+    color: #ff6;
+  }
+}
+.unitLine {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 36px;
+  cursor: pointer;
+}
+.unitLine.current {
+  background: rgb(255 255 255 / 45%);
+}
+.unitLine canvas {
+  flex: none;
+}
+.unitText {
+  font-size: 13px;
+  line-height: 1.15;
+}
+#logBox {
+  flex: 1 1 28%;
+  min-height: 70px;
+  overflow: auto;
+}
+#log {
+  padding: 3px 6px;
+  font:
+    12px/1.2 'Times New Roman',
+    Times,
+    serif;
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+/* ---- windows */
+#windowLayer {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+}
+.windowBackdrop {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+}
+.gameWindow,
+#talkBox {
+  position: fixed;
+  left: 50%;
+  top: 46%;
+  transform: translate(-50%, -50%);
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 24px);
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+  background: var(--stone-outer);
+  border: 2px solid;
+  border-color: #fff #000 #000 #fff;
+  box-shadow: 3px 4px 0 rgb(0 0 0 / 45%);
+}
+#talkBox {
+  z-index: 45;
+  width: 460px;
+  display: block;
+  padding: 12px 14px;
+  overflow: auto;
+  white-space: pre-wrap;
+  background: var(--stone-inner);
+}
+#talkBox h3 {
+  margin: -12px -14px 8px;
+  padding: 3px 8px;
+  font-size: 14px;
+  color: #fff;
+  background: var(--title-bar);
+}
+#talkBox button {
+  display: block;
+  width: 100%;
+  margin-top: 5px;
+  text-align: left;
+}
+.windowTitle {
+  display: flex;
+  flex: none;
+  justify-content: space-between;
+  align-items: center;
+  height: 22px;
+  padding: 0 3px 0 8px;
+  color: #fff;
+  background: var(--title-bar);
+  cursor: move;
+}
+.windowClose {
+  padding: 0 5px;
+  font-size: 13px;
+  line-height: 14px;
+}
+.windowBody {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 14px;
+  background: var(--stone-inner);
+}
+.windowFooter {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 6px 10px;
+}
+.windowFooter:empty {
+  display: none;
+}
+.windowText {
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+}
+.windowInput {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 3px 5px;
+  font-size: 14px;
+}
+.windowList {
+  max-height: min(56vh, 420px);
+  overflow: auto;
+  background: #fff;
+  border: 2px solid;
+  border-color: #404040 #eee #eee #404040;
+  outline: none;
+}
+.windowRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 1px 6px;
+  min-height: 19px;
+  cursor: pointer;
+}
+.windowRow.chosen {
+  color: #fff;
+  background: #00007b;
+}
+.windowRow.disabled {
+  color: #888;
+  cursor: default;
+}
+.rowLabel {
+  flex: 1;
+}
+.rowNote {
+  font-weight: normal;
+}
+.optionGrid {
+  display: grid;
+  gap: 4px 16px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+.optionGrid label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* ---- the title screen */
+#titleScreen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #000 center / cover;
+  color: #e8c860;
+}
+#titleScreen h1 {
+  margin: 0 0 18px;
+  font:
+    bold 58px 'Times New Roman',
+    Times,
+    serif;
+  letter-spacing: 0.04em;
+  text-shadow: 0 2px 0 #7a4f10;
+}
+#titleMenu {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 300px;
+}
+#titleMenu button {
+  padding: 6px 12px;
+  font-size: 15px;
+}
+#titleNote {
+  max-width: 520px;
+  margin-top: 14px;
+  font-weight: normal;
+  text-align: center;
+  color: #bbb;
+}
+
+/* ---- the city window */
+#cityWindow {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 55%);
+}
+#cityFrame {
+  position: relative;
+  flex: none;
+  transform-origin: center;
+  background: var(--stone-outer);
+  border: 2px solid;
+  border-color: #fff #000 #000 #fff;
+  box-shadow: 4px 5px 0 rgb(0 0 0 / 50%);
+}
+#citySheet {
+  position: relative;
+  width: 636px;
+  height: 421px;
+  overflow: hidden;
+  background: #808080 0 0 no-repeat;
+}
+.cityPane {
+  position: absolute;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.1;
+}
+.paneHead {
+  text-align: center;
+  font-size: 12px;
+  color: #ffd86a;
+  text-shadow: 1px 1px 0 #000;
+}
+.cityRow {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 16px;
+  color: #fff;
+  font-size: 12px;
+  text-shadow: 1px 1px 0 #000;
+}
+.iconRun {
+  display: flex;
+  height: 14px;
+}
+.iconRun canvas {
+  flex: none;
+}
+.cityButtons {
+  position: absolute;
+  left: 442px;
+  top: 358px;
+  width: 188px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+}
+.cityButtons button {
+  padding: 3px 0;
+  font-size: 12px;
+}
+.buildingRow {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  height: 15px;
+  cursor: pointer;
+  white-space: nowrap;
+  color: #fff;
+  text-shadow: 1px 1px 0 #000;
+}
+.buildingRow:hover {
+  background: rgb(0 0 0 / 25%);
+}
+.buildingRow canvas {
+  flex: none;
+}
+.unitChip {
+  display: inline-block;
+  cursor: pointer;
+}
+.cityUnits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 2px;
+  align-content: flex-start;
+}

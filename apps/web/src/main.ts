@@ -1,10 +1,7 @@
 /**
- * Entry point of the browser app.
- *
- * Viewer: the player picks their own game folder (RULES.TXT and the sprite sheets are read in the
- * browser and never leave the machine), then a map (.MP) or a save/scenario (.SAV/.SCN); the world
- * is drawn with the original tiles. Play: with a save loaded, "Play" hands the human civilization
- * to the player — orders, movement, cities, research and the end of turn go through the engine.
+ * Entry point of the browser app: the title screen, the new game questions, and the handover to
+ * the play session. The player's own game folder supplies the rules and art; files are read in
+ * the browser and never leave the machine.
  */
 import { Game, isSnapshot, newGame, restoreGame, Rng, snapshotGame, World } from '@mudbrick/engine';
 import {
@@ -14,21 +11,30 @@ import {
   parseMap,
   serializeMap,
   parseSave,
+  sprites,
   toGameCoords,
   type MapFile,
   type SaveFile,
   decodeText,
   parseEvents,
 } from '@mudbrick/formats';
-import { installDevLoader } from './devLoader.js';
 import { gameFromSave } from './gameFromSave.js';
-import { loadGameFolder, type GameFolder, withScenarioFolder } from './gameFiles.js';
+import {
+  loadGameFolder,
+  loadGameFolderFromFiles,
+  loadGameFolderFromUrl,
+  type GameFolder,
+  withScenarioFolder,
+} from './gameFiles.js';
+import { fameLines, readFame } from './hallOfFame.js';
 import { drawMap, hitTest } from './mapRenderer.js';
 import { NetLink } from './net.js';
 import { PlaySession } from './play.js';
 import { downloadBytes, saveFromGame } from './saveFromGame.js';
+import { filesOf, pickFolder, rememberedFolder } from './ui/folderStore.js';
+import './ui/game.css';
+import { addButton, askList, askNumber, askText, openWindow, tell } from './ui/windows.js';
 import { engineRules, worldFromMap, worldFromSave } from './worldFromSave.js';
-import { drawWorld, WORLD_TOP_PAD } from './worldRenderer.js';
 
 function byId<T extends HTMLElement>(id: string): T {
   const el = document.getElementById(id);
@@ -37,15 +43,7 @@ function byId<T extends HTMLElement>(id: string): T {
 }
 
 const canvas = byId<HTMLCanvasElement>('map');
-const info = byId<HTMLParagraphElement>('info');
-const statusLine = byId<HTMLSpanElement>('statusLine');
-const zoomSelect = byId<HTMLSelectElement>('zoom');
-const showUnits = byId<HTMLInputElement>('showUnits');
-const showCities = byId<HTMLInputElement>('showCities');
-const playButton = byId<HTMLButtonElement>('play');
-const endTurnButton = byId<HTMLButtonElement>('endTurn');
-const saveButton = byId<HTMLButtonElement>('save');
-const newGameButton = byId<HTMLButtonElement>('newGame');
+const editCanvas = byId<HTMLCanvasElement>('editCanvas');
 
 let folder: GameFolder | undefined;
 let map: MapFile | undefined;
@@ -54,73 +52,82 @@ let saveBytes: Uint8Array | undefined;
 let world: World | undefined;
 let session: PlaySession | undefined;
 let sourceName = '';
+/** The loaded map is the world for the next new game. */
+let premade = false;
 
-const TERRAIN_NAMES = [
-  'Desert',
-  'Plains',
-  'Grassland',
-  'Forest',
-  'Hills',
-  'Mountains',
-  'Tundra',
-  'Glacier',
-  'Swamp',
-  'Jungle',
-  'Ocean',
-];
+function showScreen(which: 'title' | 'game' | 'editor'): void {
+  byId('titleScreen').hidden = which !== 'title';
+  byId('game').hidden = which !== 'game';
+  byId('editor').hidden = which !== 'editor';
+}
 
-function renderOptions() {
-  return {
-    zoom: Number(zoomSelect.value),
-    showUnits: showUnits.checked,
-    showCities: showCities.checked,
-    // Fog of war: while playing, only what the human's civilization has seen is drawn.
-    ...(session ? { viewer: session.humanSlot } : {}),
+/** The game has a session: on to the map. */
+function enterGame(): void {
+  showScreen('game');
+  session?.refresh();
+  const s = session;
+  if (s?.selected) s.centreOn(s.selected.position);
+}
+
+function leaveGame(): void {
+  session?.dispose();
+  session = undefined;
+  save = undefined;
+  saveBytes = undefined;
+  map = undefined;
+  world = undefined;
+  premade = false;
+  showScreen('title');
+  renderTitle();
+}
+
+function saveGame(): void {
+  if (!session) return;
+  const base = sourceName.replace(/\.[^.]+$/, '').replace(/[^\w-]+/g, '-');
+  const turn = session.game.state.turn;
+  if (save && saveBytes) {
+    const bytes = saveFromGame(saveBytes, save, session.game);
+    downloadBytes(bytes, `${base}-turn${turn}.SAV`);
+    session.log(`Saved ${base}-turn${turn}.SAV (${bytes.length} bytes).`);
+  } else {
+    // A game started here: Mudbrick's own format, which Load Game reads back.
+    const text = snapshotGame(session.game, session.humanSlot);
+    downloadBytes(new TextEncoder().encode(text), `${base}-turn${turn}.mudbrick.json`);
+    session.log(`Saved ${base}-turn${turn}.mudbrick.json.`);
+  }
+  session.refresh();
+}
+
+function openSession(game: Game, slot: number): PlaySession {
+  if (!folder) throw new Error('no game folder');
+  return new PlaySession(game, folder, slot, {
+    canvas,
+    minimap: byId('minimap'),
+    menuBar: byId('menuBar'),
+    status: byId('status'),
+    unitPanel: byId('unitPanel'),
+    cityPanel: byId('cityWindow'),
+    log: byId('log'),
+    onSave: saveGame,
+    onLoad: chooseGameFile,
+    onJoin: joinNetwork,
+    onQuit: leaveGame,
+  });
+}
+
+/** The stone of the panels and windows, from the player's own sheet. */
+async function applyStone(f: GameFolder): Promise<void> {
+  const icons = f.sheets.ICONS;
+  if (!icons) return;
+  const cut = async (r: sprites.Rect) => {
+    const c = new OffscreenCanvas(r.w, r.h);
+    c.getContext('2d')?.drawImage(icons.canvas, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
+    return URL.createObjectURL(await c.convertToBlob());
   };
-}
-
-function headline(): string {
-  if (session) {
-    return `${sourceName}: playing the ${session.civ.name}. Click a unit or city; keys are listed under "Selected unit".`;
-  }
-  if (save && world) {
-    const h = save.map.header;
-    const humans = world.civs.filter((c) => c.isHuman).map((c) => c.name);
-    return (
-      `${sourceName}: save version ${save.version}, turn ${save.parameters.turn}, ` +
-      `${h.widthX2}×${h.height} ${h.flatEarth ? 'flat' : 'round'} world, ` +
-      `${world.cities.length} cities, ${world.units.length} units, human: ${humans.join(', ') || '?'}` +
-      (save.scenario ? `, scenario "${save.scenario.name}"` : '')
-    );
-  }
-  if (save) {
-    return `${sourceName}: save version ${save.version}, turn ${save.parameters.turn}. Pick the game folder to draw cities and units.`;
-  }
-  if (map) {
-    const h = map.header;
-    return `${sourceName}: ${h.widthX2}×${h.height} game squares, ${h.area} squares, ${h.flatEarth ? 'flat' : 'round'} world, resource seed ${h.resourceSeed}`;
-  }
-  return 'Choose a .MP map or a .SAV/.SCN game from your own copy.';
-}
-
-function redraw(): void {
-  if (session) {
-    session.refresh();
-  } else if (world && folder) {
-    drawWorld(canvas, world, folder, renderOptions());
-  } else if (map) {
-    const terrain = folder?.sheets.TERRAIN1;
-    drawMap(canvas, map, Number(zoomSelect.value), terrain ? { image: terrain.canvas } : undefined);
-  }
-  info.textContent = `${headline()}\nHover a square for details.`;
-  playButton.disabled = !(world && folder && save) || session !== undefined;
-  newGameButton.disabled = !folder || session !== undefined;
-  endTurnButton.disabled = session === undefined;
-  saveButton.disabled = session === undefined;
-}
-
-function showError(name: string, err: unknown): void {
-  info.textContent = `Could not read ${name}: ${err instanceof Error ? err.message : String(err)}`;
+  const root = document.documentElement.style;
+  const stone = `url(${await cut(sprites.PANEL_INNER)})`;
+  root.setProperty('--stone-inner', stone);
+  root.setProperty('--stone-outer', stone);
 }
 
 function applyFolder(f: GameFolder): void {
@@ -144,11 +151,12 @@ function applyFolder(f: GameFolder): void {
       return o;
     }),
   );
-  const sheets = Object.keys(f.sheets).join(', ');
-  statusLine.textContent = `rules loaded (${f.rules.units.length} unit types); sheets: ${sheets || 'none'}${f.prefix ? ` — from ${f.prefix}` : ''}`;
+  void applyStone(f);
+  void f.art('CIV2ART.DLL', 30000, true).then((url) => {
+    if (url) byId('titleScreen').style.backgroundImage = `url(${url})`;
+  });
   if (save) world = worldFromSave(save, f.rules);
-  session = undefined;
-  redraw();
+  renderTitle();
 }
 
 /** The folder (upper case, trailing slash) a picked file sits in, from the folder listing or its own path. */
@@ -158,61 +166,54 @@ function folderOf(name: string, f: GameFolder): string {
   return hit.includes('/') ? hit.slice(0, hit.lastIndexOf('/') + 1) : '';
 }
 
-async function applyGame(name: string, bytes: Uint8Array): Promise<void> {
+/** A picked file: a Mudbrick save, a saved game or scenario, or a map for a new game. */
+async function openGameFile(name: string, bytes: Uint8Array): Promise<void> {
   sourceName = name;
-  session = undefined;
+  if (!folder) {
+    await tell('Choose your game folder first.');
+    return;
+  }
   if (name.toLowerCase().endsWith('.json')) {
     const text = new TextDecoder().decode(bytes);
     if (!isSnapshot(text)) {
-      info.textContent = `${name} is not a Mudbrick save.`;
+      await tell(`${name} is not a Mudbrick save.`);
       return;
     }
-    if (!folder) {
-      info.textContent = 'Pick the game folder first; a Mudbrick save needs its rules and tiles.';
-      return;
-    }
+    session?.dispose();
     const restored = restoreGame(text, engineRules(folder.rules));
     save = undefined;
     saveBytes = undefined;
     map = undefined;
     world = restored.game.world;
-    session = new PlaySession(
-      restored.game,
-      folder,
-      restored.humanSlot,
-      {
-        canvas,
-        status: byId('status'),
-        unitPanel: byId('unitPanel'),
-        cityPanel: byId('cityPanel'),
-        researchPanel: byId('researchPanel'),
-        log: byId('log'),
-      },
-      renderOptions,
-    );
+    session = openSession(restored.game, restored.humanSlot);
     attachByFile(session);
     session.log(`Loaded ${name} at turn ${restored.game.state.turn}.`);
-    redraw();
-    if (session.selected) session.centreOn(session.selected.position);
+    enterGame();
     return;
   }
   if (name.toLowerCase().endsWith('.mp')) {
     map = parseMap(bytes);
     save = undefined;
     world = undefined;
-  } else {
-    save = parseSave(bytes);
-    saveBytes = bytes;
-    map = save.map;
-    // A scenario's own folder supplies its RULES.TXT and sheets (VERIFIED: the original reads
-    // them from there when present, else from the game folder).
-    if (folder) {
-      const dir = folderOf(name, folder);
-      if (dir !== folder.prefix) applyFolder(await withScenarioFolder(folder, dir));
-    }
-    world = folder ? worldFromSave(save, folder.rules) : undefined;
+    premade = true;
+    await startWizard(false);
+    return;
   }
-  redraw();
+  session?.dispose();
+  session = undefined;
+  save = parseSave(bytes);
+  saveBytes = bytes;
+  map = save.map;
+  // A scenario's own folder supplies its RULES.TXT and sheets (VERIFIED: the original reads
+  // them from there when present, else from the game folder).
+  const dir = folderOf(name, folder);
+  if (dir !== folder.prefix) applyFolder(await withScenarioFolder(folder, dir));
+  world = worldFromSave(save, folder.rules);
+  await startPlay();
+}
+
+function chooseGameFile(): void {
+  byId<HTMLInputElement>('gameFile').click();
 }
 
 function selectValue(id: string): number {
@@ -235,7 +236,7 @@ function customSize(columns: number, rows: number): [number, number] {
 }
 
 /** "New game": a random world from the panel's settings, then play as the chosen tribe. */
-function startNewGame(): void {
+function startNewGame(opponents?: Map<number, number | null>): void {
   if (!folder) return;
   const size = byId<HTMLSelectElement>('ngSize').value;
   const [columns, rows] =
@@ -257,8 +258,8 @@ function startNewGame(): void {
     },
     difficulty: selectValue('ngDifficulty'),
     civCount: selectValue('ngCivs') || 3 + rng.nextInt(5),
-    ...(byId<HTMLInputElement>('ngOpponents').checked ? { chooseOpponent: askOpponent } : {}),
-    ...(map && byId<HTMLInputElement>('ngOnMap').checked
+    ...(opponents ? { chooseOpponent: (slot: number) => opponents.get(slot) ?? null } : {}),
+    ...(map && premade
       ? { premade: worldFromMap(map, folder.rules), startSites: map.startPositions }
       : {}),
     ...(byId<HTMLSelectElement>('ngGender').value
@@ -303,25 +304,10 @@ function startNewGame(): void {
     ...multiplayerOptions(),
   });
   game.introduceHumans();
-  session = new PlaySession(
-    game,
-    folder,
-    result.humanSlot,
-    {
-      canvas,
-      status: byId('status'),
-      unitPanel: byId('unitPanel'),
-      cityPanel: byId('cityPanel'),
-      researchPanel: byId('researchPanel'),
-      log: byId('log'),
-    },
-    renderOptions,
-  );
+  session = openSession(game, result.humanSlot);
   attachByFile(session);
   for (const n of result.notes) session.log(`${n}.`);
-  byId<HTMLDetailsElement>('newGamePanel').open = false;
-  redraw();
-  if (session.selected) session.centreOn(session.selected.position);
+  enterGame();
   void session?.playVideo('OPENING');
 }
 
@@ -372,94 +358,55 @@ async function startPlay(): Promise<void> {
     world.civs.find((c) => c.isHuman && c.slot !== 0) ??
     world.civs.find((c) => c.slot === save?.parameters.humanSlot);
   if (!human) {
-    info.textContent = 'This save has no human civilization to play.';
+    await tell('This save has no human civilization to play.');
     return;
   }
-  session = new PlaySession(
-    game,
-    folder,
-    human.slot,
-    {
-      canvas,
-      status: byId('status'),
-      unitPanel: byId('unitPanel'),
-      cityPanel: byId('cityPanel'),
-      researchPanel: byId('researchPanel'),
-      log: byId('log'),
-    },
-    renderOptions,
-  );
+  session = openSession(game, human.slot);
   for (const line of eventLines) session.log(line);
-  redraw();
-  if (session.selected) session.centreOn(session.selected.position);
+  enterGame();
 }
 
 byId<HTMLInputElement>('folder').addEventListener('change', (e) => {
   const list = (e.target as HTMLInputElement).files;
   if (!list || list.length === 0) return;
-  statusLine.textContent = 'reading folder…';
+  byId('titleNote').textContent = 'Reading your game folder…';
   loadGameFolder(list)
     .then(applyFolder)
     .catch((err: unknown) => {
-      statusLine.textContent = '';
-      showError('game folder', err);
+      byId('titleNote').textContent = err instanceof Error ? err.message : String(err);
     });
 });
 
 byId<HTMLInputElement>('gameFile').addEventListener('change', (e) => {
-  const file = (e.target as HTMLInputElement).files?.[0];
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
   if (!file) return;
   file
     .arrayBuffer()
-    .then((buf) => applyGame(file.name, new Uint8Array(buf)))
-    .catch((err: unknown) => showError(file.name, err));
+    .then((buf) => openGameFile(file.name, new Uint8Array(buf)))
+    .catch((err: unknown) => {
+      void tell(`Could not read ${file.name}: ${err instanceof Error ? err.message : String(err)}`);
+    })
+    .finally(() => {
+      input.value = '';
+    });
 });
-
-playButton.addEventListener('click', startPlay);
-newGameButton.addEventListener('click', startNewGame);
-endTurnButton.addEventListener('click', () => session?.endTurn());
-saveButton.addEventListener('click', () => {
-  if (!session) return;
-  const base = sourceName.replace(/\.[^.]+$/, '');
-  const turn = session.game.state.turn;
-  if (save && saveBytes) {
-    const bytes = saveFromGame(saveBytes, save, session.game);
-    downloadBytes(bytes, `${base}-turn${turn}.SAV`);
-    session.log(`Saved ${base}-turn${turn}.SAV (${bytes.length} bytes).`);
-  } else {
-    // A game started here: Mudbrick's own format (reload it through "Map or game").
-    const text = snapshotGame(session.game, session.humanSlot);
-    downloadBytes(new TextEncoder().encode(text), `${base}-turn${turn}.mudbrick.json`);
-    session.log(`Saved ${base}-turn${turn}.mudbrick.json.`);
-  }
-  session.refresh();
-});
-zoomSelect.addEventListener('change', redraw);
-showUnits.addEventListener('change', redraw);
-showCities.addEventListener('change', redraw);
 
 window.addEventListener('keydown', (e) => {
-  if (!session) return;
-  if ((e.key === 'z' || e.key === 'x') && !e.ctrlKey && !(e.target instanceof HTMLInputElement)) {
-    const next = zoomSelect.selectedIndex + (e.key === 'z' ? 1 : -1);
-    if (next >= 0 && next < zoomSelect.options.length) {
-      zoomSelect.selectedIndex = next;
-      zoomSelect.dispatchEvent(new Event('change'));
-    }
-    return;
-  }
-  if (session.handleKey(e)) e.preventDefault();
+  if (session?.handleKey(e)) e.preventDefault();
 });
 
 canvas.addEventListener('click', (e) => {
-  if (!session) {
-    paintAt(e.clientX, e.clientY);
-    return;
-  }
-  session.handleClick(e.clientX, e.clientY);
+  session?.handleClick(e.clientX, e.clientY);
 });
 
 // ---- the map editor (Civ2Map.exe's job): paints a `.MP` file directly
+function redrawEditor(): void {
+  if (!map) return;
+  const terrain = folder?.sheets.TERRAIN1;
+  drawMap(editCanvas, map, 1, terrain ? { image: terrain.canvas } : undefined);
+}
+
 function fillBrushes(): void {
   const brush = byId<HTMLSelectElement>('edBrush');
   if (!folder || brush.options.length > 0) return;
@@ -474,11 +421,10 @@ function fillBrushes(): void {
   folder.rules.leaders.forEach((l, i) => add(`s${i}`, `Start: ${l.plural}`));
 }
 
-function paintAt(clientX: number, clientY: number): void {
-  if (!map || !byId<HTMLDetailsElement>('editPanel').open) return;
-  const rect = canvas.getBoundingClientRect();
-  const zoom = renderOptions().zoom;
-  const hit = hitTest(map, zoom, clientX - rect.left, clientY - rect.top);
+editCanvas.addEventListener('click', (e) => {
+  if (!map) return;
+  const rect = editCanvas.getBoundingClientRect();
+  const hit = hitTest(map, 1, e.clientX - rect.left, e.clientY - rect.top);
   if (!hit) return;
   const brush = byId<HTMLSelectElement>('edBrush').value;
   const index = hit.index;
@@ -486,23 +432,25 @@ function paintAt(clientX: number, clientY: number): void {
   else if (brush === 'river') paintSquare(map, index, { river: !decodeSquare(map, index).river });
   else if (brush.startsWith('s'))
     map.startPositions[Number(brush.slice(1))] = toGameCoords(hit.c, hit.y);
-  redraw();
-}
+  redrawEditor();
+});
+
+byId<HTMLButtonElement>('edBack').addEventListener('click', () => {
+  map = undefined;
+  showScreen('title');
+});
 
 byId<HTMLButtonElement>('edNew').addEventListener('click', () => {
   const [columns, rows] = byId<HTMLSelectElement>('edSize').value.split('x').map(Number);
   map = blankMap(columns ?? 50, rows ?? 80, false, 1 + Math.floor(Math.random() * 0x7fff));
   save = undefined;
   world = undefined;
-  fillBrushes();
-  redraw();
+  redrawEditor();
 });
 
 byId<HTMLButtonElement>('edSave').addEventListener('click', () => {
   if (map) downloadBytes(serializeMap(map), 'MAP.MP');
 });
-
-byId<HTMLDetailsElement>('editPanel').addEventListener('toggle', fillBrushes);
 
 /** Play by file: the end of a turn saves the game for the next player to open. */
 function attachByFile(s: PlaySession): void {
@@ -541,14 +489,6 @@ function worldChoices(rng: Rng) {
   };
 }
 
-/** Select Computer Opponents (dialog OPPONENT): the tribe for each slot, or Random. */
-function askOpponent(slot: number, tribes: { index: number; plural: string }[]): number | null {
-  const list = tribes.map((t, i) => `${i + 1} ${t.plural}`).join(', ');
-  const answer = window.prompt(`Opponent for colour ${slot}: ${list}, or blank for random`, '');
-  const pick = tribes[Number(answer) - 1];
-  return pick ? pick.index : null;
-}
-
 /** The Select Multiplayer Features choices (dialog ADVANCEDMP) from the new game panel. */
 function multiplayerOptions() {
   const on = (id: string) => byId<HTMLInputElement>(id).checked;
@@ -571,19 +511,9 @@ function restoreFrom(text: string, seat: number): void {
   const restored = restoreGame(text, engineRules(folder.rules));
   const moving = restored.game.state.movingHuman ?? seat;
   world = restored.game.world;
-  session = new PlaySession(
+  session = openSession(
     restored.game,
-    folder,
     restored.game.state.simultaneous || moving === seat ? seat : moving,
-    {
-      canvas,
-      status: byId('status'),
-      unitPanel: byId('unitPanel'),
-      cityPanel: byId('cityPanel'),
-      researchPanel: byId('researchPanel'),
-      log: byId('log'),
-    },
-    renderOptions,
   );
   attachNet(session, seat);
   if (restored.game.joinHuman(seat)) {
@@ -592,7 +522,7 @@ function restoreFrom(text: string, seat: number): void {
   }
   if (moving === seat) session.log('Your move.');
   else session.log(`Waiting for the ${restored.game.civ(moving).name}.`);
-  saveButton.disabled = false;
+  enterGame();
 }
 
 function attachNet(s: PlaySession, seat: number): void {
@@ -609,11 +539,7 @@ function attachNet(s: PlaySession, seat: number): void {
   };
 }
 
-byId<HTMLSelectElement>('ngSize').addEventListener('change', (e) => {
-  byId('ngCustomSize').hidden = (e.target as HTMLSelectElement).value !== 'custom';
-});
-
-byId<HTMLButtonElement>('netJoin').addEventListener('click', () => {
+function join(): void {
   const url = byId<HTMLInputElement>('netUrl').value;
   const room = byId<HTMLInputElement>('netRoom').value;
   const seat = Number(byId<HTMLInputElement>('netSeat').value);
@@ -642,62 +568,245 @@ byId<HTMLButtonElement>('netJoin').addEventListener('click', () => {
       net?.sendState(snapshotGame(s.game, s.humanSlot), s.game.state.movingHuman ?? seat);
     }, 300);
   }
-});
+}
 
-if (import.meta.env.DEV) {
-  // For automated checks of screens that are slow to reach by clicking.
-  (window as unknown as { mudbrick: () => PlaySession | undefined }).mudbrick = () => session;
-  installDevLoader(byId<HTMLSpanElement>('dev'), {
-    onFolder: applyFolder,
-    onGame: (n, b) => {
-      void applyGame(n, b).catch((err: unknown) => showError(n, err));
-    },
-    onError: showError,
+/** One question from a select of the setup form, worded by the folder's own Game.txt. */
+async function askSelect(id: string, popup: string, fallback: string): Promise<boolean> {
+  const select = byId<HTMLSelectElement>(id);
+  const title = folder?.popups.get(popup)?.title ?? fallback;
+  const options = Array.from(select.options);
+  const pick = await askList(
+    title,
+    '',
+    options.map((o) => ({ label: o.textContent ?? '' })),
+    { selected: Math.max(0, select.selectedIndex), width: 400, accept: 'Next' },
+  );
+  if (pick === null) return false;
+  select.selectedIndex = pick;
+  return true;
+}
+
+/** Tick boxes and the rarer settings, on one page. */
+function askRules(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const home = byId('newGamePanel');
+    const parts = Array.from(home.querySelectorAll<HTMLElement>('label')).filter(
+      (l) =>
+        l.querySelector('input[type=checkbox]') !== null &&
+        !l.querySelector('#ngFlat, #ngOnMap, #ngRandomWorld'),
+    );
+    const start = byId('ngStart').closest('label') as HTMLElement | null;
+    const humans = byId('ngHumans').closest('label') as HTMLElement | null;
+    const finish = (ok: boolean) => {
+      for (const p of [...parts, start, humans]) if (p) home.append(p);
+      win.close();
+      resolve(ok);
+    };
+    const win = openWindow({
+      title: 'Customize Rules',
+      width: 620,
+      onCancel: () => finish(false),
+      onAccept: () => finish(true),
+    });
+    const grid = document.createElement('div');
+    grid.className = 'optionGrid';
+    for (const p of [start, humans, ...parts]) if (p) grid.append(p);
+    win.body.append(grid);
+    addButton(win, 'Next', () => finish(true));
+    addButton(win, 'Cancel', () => finish(false));
   });
 }
 
-canvas.addEventListener('mousemove', (e) => {
-  if (!map) return;
-  const rect = canvas.getBoundingClientRect();
-  const zoom = Number(zoomSelect.value);
-  const topPad = world && folder ? WORLD_TOP_PAD : 0;
-  const hit = hitTest(map, zoom, e.clientX - rect.left, e.clientY - rect.top - topPad * zoom);
-  if (!hit) return;
-  const s = decodeSquare(map, hit.index);
-  const g = toGameCoords(hit.c, hit.y);
-  const flags = [
-    s.river && 'river',
-    s.road && 'road',
-    s.railroad && 'railroad',
-    s.irrigation && 'irrigation',
-    s.farmland && 'farmland',
-    s.mine && 'mine',
-    s.fortress && 'fortress',
-    s.airbase && 'airbase',
-    s.pollution && 'pollution',
-  ]
-    .filter(Boolean)
-    .join(', ');
-  const terrain = TERRAIN_NAMES[s.terrain] ?? `terrain ${s.terrain}`;
-  let line = `square x=${g.x} y=${g.y}  ${terrain}  landmass ${s.landmassId}${flags ? `  [${flags}]` : ''}`;
-  if (world) {
-    const city = world.cityAt(g.x, g.y);
-    if (city) {
-      const owner = world.civs[city.owner]?.adjective ?? `slot ${city.owner}`;
-      line += `\n${owner} city "${city.name}" size ${city.size}`;
+/** Select Computer Opponents (dialog OPPONENT): the tribe for each colour, or Random. */
+async function askOpponents(f: GameFolder): Promise<Map<number, number | null> | null> {
+  const picks = new Map<number, number | null>();
+  for (let slot = 1; slot < 8; slot++) {
+    const tribes = f.rules.leaders.filter((l) => l.color === slot);
+    if (tribes.length === 0) continue;
+    const pick = await askList(
+      `Opponent for colour ${slot}`,
+      '',
+      [{ label: 'Random' }, ...tribes.map((t) => ({ label: t.plural }))],
+      { accept: 'Next' },
+    );
+    if (pick === null) return null;
+    picks.set(slot, pick === 0 ? null : (tribes[pick - 1]?.index ?? null));
+  }
+  return picks;
+}
+
+/** The new game questions, in the original's order. A cancel goes back to the title screen. */
+async function startWizard(customize: boolean): Promise<void> {
+  const f = folder;
+  if (!f) return;
+  byId<HTMLInputElement>('ngRandomWorld').checked = false;
+  if (!premade) {
+    if (!(await askSelect('ngSize', 'SIZEOFMAP', 'Select Size of World'))) return;
+    if (byId<HTMLSelectElement>('ngSize').value === 'custom') {
+      const columns = await askNumber('Custom World', 'Map width (20 to 250)', 50);
+      const rows = await askNumber('Custom World', 'Map height (20 to 250)', 80);
+      if (columns === null || rows === null) return;
+      byId<HTMLInputElement>('ngColumns').value = String(columns);
+      byId<HTMLInputElement>('ngRows').value = String(rows);
     }
-    const units = world.unitsAt(g.x, g.y);
-    if (units.length > 0) {
-      const names = units
-        .slice(0, 6)
-        .map((u) => {
-          const owner = world?.civs[u.owner]?.adjective ?? String(u.owner);
-          const type = folder?.rules.units[u.type]?.name ?? `type ${u.type}`;
-          return `${owner} ${type}${u.veteran ? ' (vet)' : ''}`;
-        })
-        .join(', ');
-      line += `\n${units.length} unit${units.length > 1 ? 's' : ''}: ${names}${units.length > 6 ? ', …' : ''}`;
+    if (customize) {
+      if (!(await askSelect('ngLand', 'CUSTOMLAND', 'Land Mass'))) return;
+      if (!(await askSelect('ngForm', 'CUSTOMFORM', 'Land Form'))) return;
+      if (!(await askSelect('ngClimate', 'CUSTOMCLIMATE', 'Climate'))) return;
+      if (!(await askSelect('ngTemp', 'CUSTOMTEMP', 'Temperature'))) return;
+      if (!(await askSelect('ngAge', 'CUSTOMAGE', 'Age'))) return;
     }
   }
-  info.textContent = `${headline()}\n${line}`;
+  if (!(await askSelect('ngDifficulty', 'DIFFICULTY', 'Select Difficulty Level'))) return;
+  if (!(await askSelect('ngCivs', 'ENEMIES', 'Select Level Of Competition'))) return;
+  if (!(await askSelect('ngBarb', 'BARBARITY', 'Select Level Of Barbarian Activity'))) return;
+  const rules = await askList(
+    f.popups.get('RULES')?.title ?? 'Select Game Rules',
+    '',
+    (f.popups.get('RULES')?.entries ?? ['Use Standard Rules', 'Customize Rules']).map((label) => ({
+      label,
+    })),
+    { accept: 'Next', width: 400 },
+  );
+  if (rules === null) return;
+  if (rules === 1 && !(await askRules())) return;
+  if (!(await askSelect('ngGender', 'GENDER', 'Select Gender'))) return;
+  if (!(await askSelect('ngTribe', 'TRIBE', 'Select Your Tribe'))) return;
+  const leader = f.rules.leaders[byId<HTMLSelectElement>('ngTribe').selectedIndex];
+  const female = byId<HTMLSelectElement>('ngGender').value === 'f';
+  const name = await askText(
+    f.popups.get('NAME')?.title ?? 'Please Enter Your Name',
+    'Name',
+    (female ? leader?.femaleName : undefined) ?? leader?.name ?? '',
+    { maxLength: 23 },
+  );
+  if (name === null) return;
+  byId<HTMLInputElement>('ngLeader').value = name.trim();
+  if (rules === 1 && byId<HTMLInputElement>('ngOpponents').checked) {
+    const picks = await askOpponents(f);
+    if (picks === null) return;
+    startNewGame(picks);
+    return;
+  }
+  startNewGame();
+}
+
+function showFame(): void {
+  void tell(fameLines(readFame()).join('\n') || 'No scores yet.', 'Hall of Fame');
+}
+
+function showEditor(): void {
+  showScreen('editor');
+  fillBrushes();
+  if (!map) {
+    map = blankMap(50, 80, false, 1 + Math.floor(Math.random() * 0x7fff));
+    save = undefined;
+    world = undefined;
+  }
+  redrawEditor();
+}
+
+function joinNetwork(): void {
+  const panel = byId('netPanel');
+  const home = byId('setup');
+  const done = () => {
+    home.append(panel);
+    win.close();
+  };
+  const win = openWindow({ title: 'Multiplayer Game', width: 420, onCancel: done });
+  win.body.append(panel);
+  addButton(win, 'Join', () => {
+    join();
+    done();
+  });
+  addButton(win, 'Cancel', done);
+}
+
+async function chooseFolder(): Promise<void> {
+  const note = byId('titleNote');
+  try {
+    const handle = await pickFolder();
+    if (!handle) {
+      byId<HTMLInputElement>('folder').click();
+      return;
+    }
+    note.textContent = 'Reading your game folder…';
+    applyFolder(await loadGameFolderFromFiles(await filesOf(handle)));
+  } catch (err) {
+    note.textContent = err instanceof Error ? err.message : String(err);
+  }
+}
+
+async function resumeFolder(handle: FileSystemDirectoryHandle): Promise<void> {
+  const note = byId('titleNote');
+  try {
+    if ((await handle.requestPermission({ mode: 'read' })) !== 'granted') return;
+    note.textContent = 'Reading your game folder…';
+    applyFolder(await loadGameFolderFromFiles(await filesOf(handle)));
+  } catch (err) {
+    note.textContent = err instanceof Error ? err.message : String(err);
+  }
+}
+
+let remembered: FileSystemDirectoryHandle | null = null;
+
+function renderTitle(): void {
+  const menu = byId('titleMenu');
+  menu.replaceChildren();
+  const add = (label: string, run: () => void) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.addEventListener('click', run);
+    menu.append(b);
+  };
+  const note = byId('titleNote');
+  if (!folder) {
+    if (remembered) {
+      const handle = remembered;
+      add(`Continue with ${handle.name}`, () => void resumeFolder(handle));
+    }
+    add('Choose Your Game Folder', () => void chooseFolder());
+    return;
+  }
+  note.textContent = `${folder.rules.units.length} unit types loaded from your copy.`;
+  add('Start a New Game', () => {
+    premade = false;
+    map = undefined;
+    void startWizard(false);
+  });
+  add('Start on Premade World', () => {
+    chooseGameFile();
+  });
+  add('Customize World', () => {
+    premade = false;
+    map = undefined;
+    void startWizard(true);
+  });
+  add('Load a Game', chooseGameFile);
+  add('Multiplayer Game', joinNetwork);
+  add('Map Editor', showEditor);
+  add('View Hall of Fame', showFame);
+}
+
+byId<HTMLSelectElement>('ngSize').addEventListener('change', (e) => {
+  byId('ngCustomSize').hidden = (e.target as HTMLSelectElement).value !== 'custom';
 });
+
+/** Starts: the remembered folder is offered; development reads the dev-game link at once. */
+async function boot(): Promise<void> {
+  remembered = await rememberedFolder();
+  renderTitle();
+  if (!import.meta.env.DEV) return;
+  // For automated checks of screens that are slow to reach by clicking.
+  (window as unknown as { mudbrick: () => PlaySession | undefined }).mudbrick = () => session;
+  const f = await loadGameFolderFromUrl('/dev-game/').catch(() => undefined);
+  if (!f) return;
+  applyFolder(f);
+  // ?game=NAME opens that file straight away, for screenshots and tests.
+  const name = new URLSearchParams(location.search).get('game');
+  if (!name) return;
+  const res = await fetch(`/dev-game/${name}`);
+  if (res.ok) await openGameFile(name, new Uint8Array(await res.arrayBuffer()));
+}
+
+void boot();

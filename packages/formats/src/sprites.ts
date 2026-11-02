@@ -140,6 +140,14 @@ export function improvementIcon(improvementIndex: number): Rect {
   const w = improvementIndex - 39;
   return rect(343 + 37 * (w % 7), 106 + 21 * Math.floor(w / 7), 36, 20);
 }
+/** The 14×14 row icons: column 0 food, 1 shields, 2 trade on row 1; luxury, gold, science on row 2; row 0 the same in dark. */
+export function bigIcon(column: number, row: number): Rect {
+  return rect(1 + 15 * column, 290 + 15 * row, 14, 14);
+}
+/** The 10×10 yield icons on a city's map: food, shields, trade. */
+export function smallIcon(column: number): Rect {
+  return rect(49 + 11 * column, 334, 10, 10);
+}
 export function advanceCategoryIcon(category: number, variant: number): Rect {
   return rect(343 + 37 * category, 211 + 21 * variant, 36, 20);
 }

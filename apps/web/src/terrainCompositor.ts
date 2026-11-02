@@ -52,6 +52,8 @@ const ROAD_ORDER = [1, 2, 3, 4, 5, 6, 7, 0];
 export interface DitherSet {
   /** [terrain][quadrant] → 32×16 canvas of that terrain's base tile seen through the dither mask. */
   quads: OffscreenCanvas[][];
+  /** Black seen through the same mask, per quadrant: the edge of the unexplored. */
+  black: OffscreenCanvas[];
 }
 
 /**
@@ -83,7 +85,38 @@ export function prepareDither(terrain1: Sheet): DitherSet {
     }
     quads.push(row);
   }
-  return { quads };
+  const black = QUADRANT.map((q) => {
+    const c = new OffscreenCanvas(32, 16);
+    const ctx = c.getContext('2d');
+    if (!ctx) throw new Error('2D canvas unavailable');
+    const img = ctx.createImageData(32, 16);
+    const m = terrain1.pixels;
+    for (let y = 0; y < 16; y++) {
+      for (let x = 0; x < 32; x++) {
+        const mi = ((mask.y + q.y + y) * m.width + (mask.x + q.x + x)) * 4;
+        const on = m.data[mi] === 0 && m.data[mi + 1] === 0 && m.data[mi + 2] === 0;
+        img.data[(y * 32 + x) * 4 + 3] = on ? 255 : 0;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    return c;
+  });
+  return { quads, black };
+}
+
+/** Black dither toward each unexplored diagonal neighbour, in NE, SE, SW, NW order. */
+export function drawUnexploredEdges(
+  ctx: Ctx,
+  dither: DitherSet,
+  unseen: readonly boolean[],
+  px: number,
+  py: number,
+): void {
+  unseen.forEach((hidden, q) => {
+    const quad = dither.black[q];
+    const at = QUADRANT[q];
+    if (hidden && quad && at) ctx.drawImage(quad, px + at.x, py + at.y);
+  });
 }
 
 function blit(ctx: Ctx, sheet: OffscreenCanvas, r: sprites.Rect, px: number, py: number): void {
@@ -138,7 +171,19 @@ export function drawSquareTerrain(
     }
     // River mouths where an edge-neighbour's river meets this ocean square.
     direct.forEach((n, q) => {
-      if (flagsOf(n) & SquareFlag.River) blit(ctx, terrain2.canvas, sprites.riverMouth(q), px, py);
+      if (flagsOf(n) & SquareFlag.River) {
+        // These cells carry a small number outside the diamond.
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(px + 32, py);
+        ctx.lineTo(px + 64, py + 16);
+        ctx.lineTo(px + 32, py + 32);
+        ctx.lineTo(px, py + 16);
+        ctx.closePath();
+        ctx.clip();
+        blit(ctx, terrain2.canvas, sprites.riverMouth(q), px, py);
+        ctx.restore();
+      }
     });
   }
 

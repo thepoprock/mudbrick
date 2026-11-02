@@ -289,6 +289,11 @@ export function loadGameFolder(list: FileList): Promise<GameFolder> {
   return loadFrom((name) => Promise.resolve(byName.get(name.toUpperCase())), [...byName.keys()]);
 }
 
+/** Player path with a remembered folder: its files by upper-case relative path. */
+export function loadGameFolderFromFiles(files: Map<string, File>): Promise<GameFolder> {
+  return loadFrom((name) => Promise.resolve(files.get(name.toUpperCase())), [...files.keys()]);
+}
+
 /** Development path: files served under `base` (e.g. `/dev-game/`) by the dev server. */
 export function loadGameFolderFromUrl(base: string): Promise<GameFolder> {
   return loadFrom(async (name) => {

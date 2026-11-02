@@ -48,7 +48,7 @@ Details and the reasoning: [LEGAL.md](LEGAL.md). How to contribute without break
 
 ```sh
 npm install
-npm run dev                 # browser map viewer; the terminal prints the local URL
+npm run dev                 # the game; the terminal prints the local URL
 npm test                    # unit tests (inline fixtures)
 ORIGINAL_GAME_DIR=/path/to/your/copy npm test     # also the conformance tests over the real files
 npm run check               # format + lint + typecheck + tests, exactly what CI runs
@@ -58,22 +58,24 @@ npm run render-map -- /path/to/WORLD.MP world.png # headless PNG of a map
 Requires Node 20 or newer. `ORIGINAL_GAME_DIR` is the folder of your own installation that holds
 `RULES.TXT`, the `*.MP` maps and the `*.GIF` sheets.
 
-## Playing (alpha)
+## Playing
 
 The Pages workflow (`.github/workflows/pages.yml`, run by hand once GitHub Pages is enabled for the
-repository) publishes the app at https://thepoprock.github.io/mudbrick/; it ships no game data — you
-point it at your own copy. Load your game folder and a `.SAV`/`.SCN`, then press **Play** to take over the human
-civilization — or open **New game** for a random world (size, land, climate, age, difficulty,
-civilizations, tribe, barbarians) and start at 4000 BC. **Save** writes a `.SAV` in the original
-format when one was loaded, else Mudbrick's own `.mudbrick.json`, which "Map or game" reloads. Click a unit to select it; the side panel lists the keys (arrows or the number pad
-to move, `f` fortify, `s` sleep, `g` go to, `b` build or join a city, `r`/`i`/`m`/`o` for roads,
-irrigation, mines and transforming, `F` fortress, `E` airbase, `p` clean pollution, `P` pillage,
-`D` disband, `t` trade route and `h` help wonder for caravans, diplomats and spies get a mission menu at a foreign city or next to a lone foreign unit, `Tab` next unit, `Enter` end turn). Click a city for its yields, mood and production
-menu; the research panel sets the research target.
+repository) publishes the app at https://thepoprock.github.io/mudbrick/; it ships no game data. On
+the title screen, choose the folder of your own installed copy (Chrome and Edge remember it for
+next time), then start a new game, start on a premade world, or load a saved game or scenario.
 
-Everything the player does runs through the engine's verified rules; the log says INFERRED where
-a rule has not been read from the original yet. Computer players grow and build but do not move
-units, there is no diplomacy, and games cannot be saved yet — see the roadmap.
+The screen is the familiar one: the menu bar from your copy's Menu.txt, the map, and on the right
+the world map, the status box and a log. Click a unit to select it and a city to open it. The keys
+are the menus' own: arrows or the number pad move, `b` build city, `f` fortify (fortress for
+Settlers), `s` sleep, `g` go to, `r` `i` `m` `o` road, irrigation, mine, transform, `e` airbase,
+`p` clean pollution, `h` home city, `Shift+T` tax rate, `Shift+R` revolution, `F1` to `F12` the
+advisors, `?` the Civilopedia, `v` view pieces, `z` and `x` zoom, right click to centre. `Enter`
+opens the city a unit stands in, and ends the turn once nothing is waiting; `Ctrl+N` always ends it.
+Click the status box's gold line for the tax rates and its research line for research.
+
+`Ctrl+S` writes a `.SAV` in the original format when one was loaded, else Mudbrick's own
+`.mudbrick.json`, which Load Game reads back. Everything the player does runs through the engine.
 
 ## Repository layout
 
@@ -106,16 +108,14 @@ checked). Please keep that honesty when you add to them.
 
 ## Developing
 
-`npm run dev` starts the viewer with hot reload. To avoid re-picking files after every reload,
-create a symlink to your own copy of the game at `apps/web/dev-game` (it is gitignored):
+`npm run dev` starts the game with hot reload. To avoid picking the folder at all, create a symlink to your own copy of the game at `apps/web/dev-game` (it is gitignored):
 
 ```sh
 ln -s /path/to/your/copy apps/web/dev-game
 ```
 
-The dev build then shows a "Load dev-game folder" button and an input for a game file, and
-`http://localhost:5173/?game=WWII.SCN` loads both straight away, which is handy for screenshots
-and browser tests. None of this exists in the production build. `npm run play-smoke TUTORIAL.SAV out.png http://localhost:5173 5`
+The dev build reads that folder on start, and `http://localhost:5173/?game=WWII.SCN` opens a game
+straight away, which is handy for screenshots and browser tests. None of this exists in the production build. `npm run play-smoke TUTORIAL.SAV out.png http://localhost:5173 5`
 plays a few turns headless and fails on any browser error; `npm run save-roundtrip apps/web/dev-game TUTORIAL.SAV 12`
 plays turns with the engine alone, writes the game back as a save and re-parses it.
 

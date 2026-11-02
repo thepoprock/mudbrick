@@ -4,160 +4,41 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Mudbrick</title>
-    <style>
-      :root {
-        color-scheme: dark;
-        font:
-          14px/1.4 system-ui,
-          sans-serif;
-      }
-      body {
-        margin: 0;
-        background: #14161a;
-        color: #ddd;
-        display: flex;
-        flex-direction: column;
-        height: 100vh;
-      }
-      header {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem 1.25rem;
-        align-items: center;
-        padding: 0.5rem 1rem;
-        background: #1e2228;
-        border-bottom: 1px solid #333;
-      }
-      header label {
-        display: inline-flex;
-        gap: 0.4rem;
-        align-items: center;
-      }
-      button {
-        font: inherit;
-        padding: 0.2rem 0.7rem;
-        border-radius: 4px;
-        border: 1px solid #556;
-        background: #2a3038;
-        color: #eee;
-        cursor: pointer;
-      }
-      button:disabled {
-        opacity: 0.4;
-        cursor: default;
-      }
-      #layout {
-        display: flex;
-        flex: 1;
-        min-height: 0;
-      }
-      #mapWrap {
-        flex: 1;
-        overflow: auto;
-        padding: 0.5rem;
-      }
-      canvas {
-        image-rendering: pixelated;
-        background: #000;
-        display: block;
-      }
-      aside {
-        width: 24rem;
-        min-width: 24rem;
-        overflow: auto;
-        border-left: 1px solid #333;
-        background: #181b20;
-        padding: 0.75rem;
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
-      }
-      aside section {
-        border: 1px solid #2c3139;
-        border-radius: 6px;
-        padding: 0.5rem 0.6rem;
-        background: #1c2027;
-      }
-      aside h2 {
-        font-size: 0.8rem;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        color: #9ab;
-        margin: 0 0 0.35rem;
-      }
-      .mono {
-        font-family: ui-monospace, monospace;
-        white-space: pre-wrap;
-        font-size: 12px;
-      }
-      #info {
-        color: #9fb;
-        margin: 0;
-        min-height: 3.5em;
-      }
-      #status {
-        color: #ffd;
-      }
-      #log {
-        color: #cde;
-        max-height: 14rem;
-        overflow: auto;
-      }
-      .hint {
-        color: #888;
-        font-size: 12px;
-      }
-      #statusLine {
-        color: #cb8;
-      }
-      select {
-        max-width: 100%;
-        font: inherit;
-      }
-      #newGamePanel {
-        flex-basis: 100%;
-      }
-      #newGamePanel > div {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.4rem 1rem;
-        align-items: center;
-        padding: 0.4rem 0 0.2rem 1rem;
-      }
-    </style>
   </head>
   <body>
-    <header>
-      <strong>Mudbrick</strong>
-      <label>1. Game folder <input id="folder" type="file" webkitdirectory multiple /></label>
-      <label
-        >2. Map or game
-        <input
-          id="gameFile"
-          type="file"
-          accept=".mp,.MP,.sav,.SAV,.scn,.SCN,.hot,.HOT,.net,.NET,.json"
-      /></label>
-      <button id="play" disabled title="Play the loaded game as its human civilization">
-        Play
-      </button>
-      <button id="endTurn" disabled title="End the turn (Enter)">End turn</button>
-      <button
-        id="save"
-        disabled
-        title="Download the game: a .SAV in the original format when one was loaded, else Mudbrick's own .mudbrick.json"
-      >
-        Save
-      </button>
-      <details id="netPanel">
-        <summary>Network play</summary>
-        <label>Relay <input id="netUrl" value="ws://localhost:8787" /></label>
-        <label>Room <input id="netRoom" value="game" size="8" /></label>
-        <label>Seat <input id="netSeat" value="1" size="2" /></label>
-        <button id="netJoin">Join</button>
-        <span id="netStatus" class="hint"></span>
-      </details>
-      <details id="editPanel">
-        <summary title="Paint a world and save it as a .MP file">Map editor</summary>
+    <div id="titleScreen">
+      <h1>Mudbrick</h1>
+      <div id="titleMenu"></div>
+      <p id="titleNote">
+        Mudbrick needs the art and rules from your own installed copy of the original game. Files
+        are read in your browser only. Nothing is uploaded.
+      </p>
+    </div>
+    <div id="game" hidden>
+      <div id="menuBar"></div>
+      <div id="gameMain">
+        <div id="mapWrap"><canvas id="map"></canvas></div>
+        <aside id="panel">
+          <div class="panelBox">
+            <div class="panelTitle">World</div>
+            <canvas id="minimap"></canvas>
+          </div>
+          <div id="statusBox" class="panelBox">
+            <div class="panelTitle">Status</div>
+            <div id="status"></div>
+            <div id="unitPanel"></div>
+          </div>
+          <div id="logBox" class="panelBox">
+            <div id="log"></div>
+          </div>
+        </aside>
+      </div>
+    </div>
+    <div id="cityWindow" hidden></div>
+    <div id="editor" hidden>
+      <div id="editorBar">
+        <button id="edBack">Back</button>
+
         <label
           >Size
           <select id="edSize">
@@ -172,10 +53,14 @@
           <select id="edBrush"></select>
         </label>
         <button id="edSave">Save .MP</button>
-        <span class="hint">Click the map to paint. Then use New game, ticking the box there.</span>
-      </details>
-      <details id="newGamePanel">
-        <summary title="Make a random world and start at 4000 BC">New game</summary>
+        <span class="hint">Click the map to paint. Save it, then use Start on Premade World.</span>
+      </div>
+      <div id="editorScroll"><canvas id="editCanvas"></canvas></div>
+    </div>
+    <div id="setup" hidden>
+      <input id="folder" type="file" webkitdirectory multiple />
+      <input id="gameFile" type="file" accept=".sav,.SAV,.scn,.SCN,.net,.NET,.json,.mp,.MP" />
+      <div id="newGamePanel">
         <div>
           <label
             >World
@@ -325,56 +210,13 @@
             Start
           </button>
         </div>
-      </details>
-      <label
-        >Zoom
-        <select id="zoom">
-          <option value="0.25">¼</option>
-          <option value="0.5">½</option>
-          <option value="1" selected>1</option>
-          <option value="2">2</option>
-        </select></label
-      >
-      <label><input id="showCities" type="checkbox" checked /> cities</label>
-      <label><input id="showUnits" type="checkbox" checked /> units</label>
-      <span id="statusLine"></span>
-      <span id="dev"></span>
-      <span class="hint">Files are read in your browser only. Nothing is uploaded.</span>
-    </header>
-    <div id="layout">
-      <div id="mapWrap">
-        <p id="info" class="mono">
-          Pick the folder of your own installed copy (the one with RULES.TXT), then a .MP map or a
-          .SAV/.SCN game. Press Play to take over the human civilization.
-        </p>
-        <canvas id="map" width="0" height="0"></canvas>
       </div>
-      <aside id="panel">
-        <section>
-          <h2>Empire</h2>
-          <div id="status" class="mono">Not playing.</div>
-        </section>
-        <section>
-          <h2>Selected unit</h2>
-          <div id="unitPanel" class="mono"></div>
-        </section>
-        <section>
-          <h2>City</h2>
-          <div id="cityPanel" class="mono"></div>
-        </section>
-        <section>
-          <h2>Research</h2>
-          <div id="researchPanel" class="mono"></div>
-        </section>
-        <section>
-          <h2>Log</h2>
-          <div id="log" class="mono"></div>
-        </section>
-        <p class="hint">
-          Rules marked VERIFIED were read from the original program; the log says INFERRED where a
-          rule is still a best guess. F1 to F12 are the advisors, ? the Civilopedia.
-        </p>
-      </aside>
+      <div id="netPanel">
+        <label>Relay <input id="netUrl" value="ws://localhost:8787" /></label>
+        <label>Room <input id="netRoom" value="game" size="8" /></label>
+        <label>Seat <input id="netSeat" value="1" size="2" /></label>
+        <span id="netStatus"></span>
+      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

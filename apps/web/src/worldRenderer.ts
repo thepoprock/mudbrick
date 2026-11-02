@@ -46,6 +46,18 @@ export interface WorldRenderOptions {
 
 const ditherCache = new WeakMap<GameFolder, DitherSet>();
 
+/** The dither masks of this folder's tiles, built once. */
+export function ditherFor(folder: GameFolder): DitherSet | null {
+  const terrain1 = folder.sheets.TERRAIN1;
+  if (!terrain1) return null;
+  let dither = ditherCache.get(folder);
+  if (!dither) {
+    dither = prepareDither(terrain1);
+    ditherCache.set(folder, dither);
+  }
+  return dither;
+}
+
 export function drawWorld(
   canvas: HTMLCanvasElement,
   world: World,
@@ -67,11 +79,7 @@ export function drawWorld(
   const top = WORLD_TOP_PAD;
 
   if (terrain1) {
-    let dither = ditherCache.get(folder);
-    if (!dither) {
-      dither = prepareDither(terrain1);
-      ditherCache.set(folder, dither);
-    }
+    const dither = ditherFor(folder) as DitherSet;
     for (let i = 0; i < world.area; i++) {
       const p = world.position(i);
       if (opts.viewer !== undefined && !world.isSeen(p.x, p.y, opts.viewer)) continue;
@@ -122,7 +130,7 @@ export function drawWorld(
   }
 }
 
-function drawCity(
+export function drawCity(
   ctx: CanvasRenderingContext2D,
   world: World,
   folder: GameFolder,
@@ -130,6 +138,8 @@ function drawCity(
   palace: number,
   walls: number,
   top: number,
+  /** Draw here instead of at the city's place on the world. */
+  at?: { x: number; y: number },
 ): void {
   const sheet = folder.sheets.CITIES;
   if (!sheet) return;
@@ -139,9 +149,11 @@ function drawCity(
   if (col < 3 && city.improvements[palace]) col++;
   const walled = city.improvements[walls] === true;
   const r = sprites.cityCell(row, col, walled);
-  const o = squareOrigin((city.position.x - (city.position.y & 1)) >> 1, city.position.y);
+  const o = at
+    ? { px: at.x, py: at.y }
+    : squareOrigin((city.position.x - (city.position.y & 1)) >> 1, city.position.y);
   const px = o.px;
-  const py = o.py + top - (SPRITE_H - TILE_H);
+  const py = at ? at.y : o.py + top - (SPRITE_H - TILE_H);
   ctx.drawImage(sheet.canvas, r.x, r.y, r.w, r.h, px, py, r.w, r.h);
   const flag = folder.cityFlag[row]?.[col]?.[walled ? 1 : 0];
   if (flag && civ) {
@@ -168,7 +180,7 @@ function drawCity(
   }
 }
 
-function drawUnit(
+export function drawUnit(
   ctx: CanvasRenderingContext2D,
   folder: GameFolder,
   unit: Unit,
