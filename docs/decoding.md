@@ -54,6 +54,10 @@ cancel button and the computer taking over a lost player. All are ported. So the
 of the standard game is known to be missing. It is not that every line of the window library has
 been read.
 
+A call-graph check covers the `framework` group: none of its 650 functions reads game tables, and
+the 41 that call below 0x0055a000 reach only file, rectangle and window-constructor helpers. Every
+group of `same-code` functions has at least one member opened.
+
 The locator grid is a case worth knowing. The search at 0x00484325 clears only the first 0x1200
 bytes of its 48 by 48 table of ints, half of it, so costs from earlier searches steer later ones.
 Replaying the build in the original's order with that half-cleared table matches a generated

@@ -3,7 +3,7 @@
  * game's records. Turning cheat mode on sets a flag in the game state, as the original does, and
  * the original has no score penalty for it.
  */
-import { attitudesOf, clearTreaty, setTreaty, TREATY } from './diplomacy.js';
+import { attitudesOf, clearTreaty, setTreaty, treatiesOf, TREATY } from './diplomacy.js';
 import { removeCity } from './fertility.js';
 import { computeFertility } from './fertility.js';
 import type { Game } from './game.js';
@@ -108,27 +108,38 @@ export function cheatEditKing(
     reputation?: number;
     progress?: number;
     clearResearch?: boolean;
+    clearPatience?: boolean;
     names?: { leader?: string; name?: string; adjective?: string };
     copyAdvancesFrom?: number;
   },
 ): void {
   const civ = game.civ(slot);
   if (change.treatiesWith) {
+    // VERIFIED order: strain and broken always clear; war replaces the three pacts; the last two
+    // bits are vendetta and embassy.
     const { other, flags } = change.treatiesWith;
-    const bits = [
-      TREATY.contact,
-      TREATY.ceaseFire,
-      TREATY.peace,
-      TREATY.alliance,
-      TREATY.war,
-      TREATY.vendetta,
-      TREATY.embassy,
-    ];
-    bits.forEach((bit, i) => {
-      if ((flags >> i) & 1) setTreaty(game.world, slot, other, bit);
-      else clearTreaty(game.world, slot, other, bit);
-    });
+    const on = (i: number) => ((flags >> i) & 1) === 1;
+    clearTreaty(game.world, slot, other, TREATY.strain | TREATY.broken);
+    if (on(0)) setTreaty(game.world, slot, other, TREATY.contact);
+    else clearTreaty(game.world, slot, other, TREATY.contact);
+    if (on(4)) setTreaty(game.world, slot, other, TREATY.war);
+    else {
+      clearTreaty(
+        game.world,
+        slot,
+        other,
+        TREATY.war | TREATY.ceaseFire | TREATY.peace | TREATY.alliance,
+      );
+      if (on(1)) setTreaty(game.world, slot, other, TREATY.ceaseFire);
+      if (on(2)) setTreaty(game.world, slot, other, TREATY.peace);
+      if (on(3)) setTreaty(game.world, slot, other, TREATY.alliance);
+    }
+    const t = treatiesOf(civ);
+    t[other] = ((t[other] ?? 0) & ~(TREATY.vendetta | TREATY.embassy)) >>> 0;
+    if (on(5)) t[other] = ((t[other] ?? 0) | TREATY.vendetta) >>> 0;
+    if (on(6)) t[other] = ((t[other] ?? 0) | TREATY.embassy) >>> 0;
   }
+  if (change.clearPatience) civ.talks = 0;
   if (change.attitudeTo)
     attitudesOf(civ)[change.attitudeTo.other] = Math.max(0, Math.min(100, change.attitudeTo.value));
   if (change.reputation !== undefined) civ.reputation = change.reputation;

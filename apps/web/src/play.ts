@@ -1645,7 +1645,7 @@ export class PlaySession {
     const slot = ask('Which civilization, by slot?', this.humanSlot);
     if (slot === null) return;
     const item = ask(
-      '1 treaties, 2 attitude, 3 reputation, 4 research progress, 5 clear research, 6 names, 7 copy advances',
+      '1 treaties, 2 attitude, 3 reputation, 4 research progress, 5 clear research, 6 names, 7 copy advances, 8 clear patience, 9 research goal',
       1,
     );
     const other = () => ask('Toward which civilization, by slot?', this.humanSlot);
@@ -1679,6 +1679,10 @@ export class PlaySession {
           adjective: window.prompt('Adjective', c.adjective) ?? '',
         },
       });
+    } else if (item === 8) {
+      cheatEditKing(this.game, slot, { clearPatience: true });
+    } else if (item === 9) {
+      this.showResearch();
     } else if (item === 7) {
       const o = other();
       if (o !== null) cheatEditKing(this.game, slot, { copyAdvancesFrom: o });
