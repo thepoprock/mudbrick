@@ -50,6 +50,7 @@ server.on('connection', (socket) => {
       text?: string;
       moving?: number;
       to?: number[];
+      anonymous?: boolean;
     };
     try {
       m = JSON.parse(String(data)) as typeof m;
@@ -88,7 +89,7 @@ server.on('connection', (socket) => {
     if (m.type === 'chat' && typeof m.text === 'string') {
       for (const [s, other] of room.seats) {
         if (s === seat || !m.to || m.to.includes(s))
-          send(other, { type: 'chat', seat, text: m.text });
+          send(other, { type: 'chat', seat: m.anonymous === true ? -1 : seat, text: m.text });
       }
     }
   });

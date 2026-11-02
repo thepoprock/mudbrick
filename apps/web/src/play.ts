@@ -78,6 +78,9 @@ import {
   type Game,
   cheatChangeTerrain,
   cheatCreateUnit,
+  cheatSetSquareImprovements,
+  cheatSquareImprovements,
+  cheatTerrainChain,
   cheatDestroyUnits,
   cheatEditCity,
   cheatEditUnit,
@@ -88,6 +91,7 @@ import {
   grantAdvance,
   type MovementContext,
   type ParleyItem,
+  OCEAN,
   type Point,
   type TurnEvent,
   type Unit,
@@ -224,7 +228,7 @@ export class PlaySession {
   /** Network play: this browser's seat, and the call that sends the game on. */
   seat: number | null = null;
   onTurnPassed: ((moving: number) => void) | null = null;
-  onChat: ((text: string, to: number[]) => void) | null = null;
+  onChat: ((text: string, to: number[], anonymous: boolean) => void) | null = null;
   /** Simultaneous play over the network: ask the relay for the lock, and send the state and let go. */
   onLock: (() => void) | null = null;
   onRelease: (() => void) | null = null;
@@ -1613,8 +1617,7 @@ export class PlaySession {
       const g = ask('Government, 0 to 6', 1);
       if (s !== null && g !== null) changeGovernment(this.world, this.game.civ(s), g, false);
     } else if (name.startsWith('Change Terrain') && at) {
-      const t = ask('Terrain, 0 to 10', 2);
-      if (t !== null) cheatChangeTerrain(this.game, at.x, at.y, t);
+      this.changeTerrain(at, ask);
     } else if (name.startsWith('Destroy') && at) {
       cheatDestroyUnits(this.game, at.x, at.y);
       this.selected = null;
@@ -1623,21 +1626,87 @@ export class PlaySession {
       const m = s === null ? null : ask('Gold', this.game.civ(s).treasury);
       if (s !== null && m !== null) cheatSetMoney(this.game, s, m);
     } else if (name.startsWith('Edit Unit') && unit) {
-      const h = ask('Hit points lost', unit.hitPointsLost);
-      if (h !== null) cheatEditUnit(unit, { hitPointsLost: h, veteran: !unit.veteran });
+      this.editUnit(unit, ask);
     } else if (name.startsWith('Edit King')) {
       this.editKing(ask);
     } else if (name.startsWith('Edit City') && this.openCity) {
-      const n = ask('City size', this.openCity.size);
-      const sh = ask('Shields stored', this.openCity.shieldsStored);
-      cheatEditCity(this.openCity, {
-        ...(n !== null ? { size: n } : {}),
-        ...(sh !== null ? { shields: sh } : {}),
-      });
+      this.editCity(this.openCity, ask);
     } else {
       this.log('That needs the scenario tools, which are parked, or something selected first.');
     }
     this.refresh();
+  }
+
+  /** Change Terrain At Cursor (0x005094bf): the base terrain, then the seven check boxes. */
+  private changeTerrain(at: Point, ask: (q: string, d: number) => number | null): void {
+    if (this.world.cityAt(at.x, at.y)) return;
+    const was = this.world.terrainAt(at.x, at.y);
+    const list = was === OCEAN ? [] : cheatTerrainChain(this.game, was);
+    const t = ask(
+      list.length > 1
+        ? `Terrain, 0 to 10 (the short list is ${list.join(', ')})`
+        : 'Terrain, 0 to 10',
+      was,
+    );
+    if (t === null) return;
+    cheatChangeTerrain(this.game, at.x, at.y, t);
+    if (was === OCEAN || t === OCEAN) return;
+    const b = cheatSquareImprovements(this.game, at.x, at.y);
+    const names = Object.keys(b) as (keyof typeof b)[];
+    const sum = names.reduce((n, k, i) => n + (b[k] ? 1 << i : 0), 0);
+    const v = ask(
+      'Improvements as a sum: 1 irrigation, 2 mine, 4 road, 8 railroad, 16 fortress, 32 airbase, 64 pollution',
+      sum,
+    );
+    if (v === null) return;
+    for (const [i, k] of names.entries()) b[k] = (v & (1 << i)) !== 0;
+    cheatSetSquareImprovements(this.game, at.x, at.y, b);
+  }
+
+  /** Edit Unit (0x0050ad7f): the dialog's items, chosen by number. */
+  private editUnit(unit: Unit, ask: (q: string, d: number) => number | null): void {
+    const item = ask(
+      '1 toggle veteran, 2 restore moves, 3 hit points lost, 4 home city, 5 toggle fortified, 6 commodity',
+      1,
+    );
+    if (item === 1) cheatEditUnit(this.game, unit, { toggleVeteran: true });
+    else if (item === 2) cheatEditUnit(this.game, unit, { restoreMoves: true });
+    else if (item === 3) {
+      const h = ask('Hit points lost', unit.hitPointsLost);
+      if (h !== null) cheatEditUnit(this.game, unit, { hitPointsLost: h });
+    } else if (item === 4) {
+      const own = this.world.cities.filter((c) => c.owner === unit.owner);
+      const list = own.map((c) => `${c.id} ${c.name}`).join(', ');
+      const h = ask(`Home city by number, -1 for none: ${list}`, unit.homeCity ?? -1);
+      if (h === -1) cheatEditUnit(this.game, unit, { homeCity: null });
+      else if (own.some((c) => c.id === h)) cheatEditUnit(this.game, unit, { homeCity: h });
+    } else if (item === 5) cheatEditUnit(this.game, unit, { toggleFortified: true });
+    else if (item === 6) {
+      const c = ask('Commodity, 0 to 15, or -1 for none', unit.commodity ?? -1);
+      if (c !== null) cheatEditUnit(this.game, unit, { commodity: c < 0 ? 0xff : c });
+    }
+  }
+
+  /** Edit City (0x0050b507): the dialog's items, chosen by number. */
+  private editCity(city: City, ask: (q: string, d: number) => number | null): void {
+    const item = ask(
+      '1 size, 2 clear wonders, 3 clear disorder and celebration, 4 copy improvements, 5 shields, 6 toggle objective',
+      1,
+    );
+    if (item === 1) {
+      const n = ask('City size', city.size);
+      if (n !== null) cheatEditCity(city, { size: n });
+    } else if (item === 2) cheatEditCity(city, { clearWonders: true });
+    else if (item === 3) cheatEditCity(city, { clearOrderFlags: true });
+    else if (item === 4) {
+      const list = this.world.cities.filter((c) => c !== city);
+      const n = ask(`Copy from: ${list.map((c) => `${c.id} ${c.name}`).join(', ')}`, -1);
+      const from = list.find((c) => c.id === n);
+      if (from) cheatEditCity(city, { copyImprovementsFrom: from });
+    } else if (item === 5) {
+      const n = ask('Shields stored', city.shieldsStored);
+      if (n !== null) cheatEditCity(city, { shields: n });
+    } else if (item === 6) cheatEditCity(city, { toggleObjective: true });
   }
 
   /** Edit King (0x0050ba78): the dialog's items, chosen by number. */
@@ -2497,7 +2566,9 @@ export class PlaySession {
         hasTreaty(this.world, c.slot, this.humanSlot, TREATY.chatIntercept)
       )
         to.push(c.slot);
-    this.onChat(text, to);
+    // VERIFIED (0x0048fb53, box 0x40d at 0x004ec448): the sender can leave their name off.
+    const anonymous = window.confirm('Send without your name?');
+    this.onChat(text, to, anonymous);
   }
 
   /** Retire (0x004af61c): the power graph, then the score, and the game ends. */

@@ -41,7 +41,7 @@ export class NetLink {
     this.socket.send(JSON.stringify({ type: 'unlock' }));
   }
 
-  chat(text: string, to: number[]): void {
-    this.socket.send(JSON.stringify({ type: 'chat', text, to }));
+  chat(text: string, to: number[], anonymous = false): void {
+    this.socket.send(JSON.stringify({ type: 'chat', text, to, anonymous }));
   }
 }

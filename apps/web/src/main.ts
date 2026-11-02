@@ -600,7 +600,7 @@ function attachNet(s: PlaySession, seat: number): void {
   s.humanSlot = seat;
   s.takeSeat();
   s.onTurnPassed = (moving) => net?.sendState(snapshotGame(s.game, moving), moving);
-  s.onChat = (text, to) => net?.chat(text, to);
+  s.onChat = (text, to, anonymous) => net?.chat(text, to, anonymous);
   if (!s.game.state.byFile) s.game.state.networkGame = true;
   s.onLock = () => net?.lock();
   s.onRelease = () => {
@@ -631,7 +631,7 @@ byId<HTMLButtonElement>('netJoin').addEventListener('click', () => {
     }
     if (m.type === 'error') byId('netStatus').textContent = m.message ?? 'error';
     if (m.type === 'chat') {
-      session?.log(`Seat ${m.seat}: ${m.text}`);
+      session?.log(m.seat === -1 ? `Unsigned: ${m.text}` : `Seat ${m.seat}: ${m.text}`);
       session?.refresh();
     }
   });

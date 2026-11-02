@@ -37,12 +37,16 @@ identical in shape to another, and 353 C and MFC runtime functions. None holds a
 same-code and runtime batches, repeated boilerplate lines such as debug asserts and cleanup calls
 were filtered out of the display.
 
-One gap is open. Earlier passes opened long functions through a filter that drops drawing calls,
-and bodies over 1,800 characters in the last of those passes showed only their first 30 lines. Up
-to 218 functions below 0x0055a000 may be affected, 82 of them rule functions, with about 839 KB
-possibly unseen. The list is being read to the end. Until that is done, the claim below stands
-only for what has been read. The network packet code is not ported, since the relay does that job
-differently.
+The gap left by the earlier passes is closed. Those passes opened long functions through a filter
+that drops drawing calls, and bodies over 1,800 characters in the last of them showed only their
+first 30 lines. All 218 functions below 0x0055a000 that this could affect were then read from
+line 31 to the end, with drawing calls filtered out and runs of empty `case` labels collapsed. They
+hold windows, screens, file loaders and writers, editors, the popup system and network setup. They
+added no new rule of the standard game. What they did add is the rest of the Cheat menu dialogs:
+Edit City, Edit Unit and Change Terrain At Cursor, and the anonymous chat box. Those are ported.
+The other 269 long functions outside that log were read in earlier passes; this cannot be proved
+line by line, since no log of those displays was kept. The network packet code is not ported,
+since the relay does that job differently.
 
 The original's random numbers are the C library generator at 0x00591da0, seeded from the clock at
 startup (0x0057b6f6). VERIFIED. The port keeps its own generator, so games reproduce from a seed on

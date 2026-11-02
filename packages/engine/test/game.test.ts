@@ -5,7 +5,12 @@ import { adjustAttitude, hasTreaty, lastWarTurnsOf, setTreaty, TREATY } from '..
 import {
   cheatCreateUnit,
   cheatDestroyUnits,
+  cheatChangeTerrain,
   cheatEditCity,
+  cheatEditUnit,
+  cheatSetSquareImprovements,
+  cheatSquareImprovements,
+  cheatTerrainChain,
   cheatKillCivilization,
   cheatSetMoney,
   cheatEditKing,
@@ -18,7 +23,15 @@ import { researchChoices, researchableAdvances } from '../src/outcome.js';
 import { applyCityMood, researchableAdvances } from '../src/outcome.js';
 import { Rng } from '../src/rng.js';
 import { GOVERNMENT, IMPROVEMENT, type EngineRules } from '../src/rules.js';
-import { CITY_CENTRE_INDEX, World, type City, type Civ, type Unit } from '../src/world.js';
+import {
+  CITY_CENTRE_INDEX,
+  OCEAN,
+  SquareFlag,
+  World,
+  type City,
+  type Civ,
+  type Unit,
+} from '../src/world.js';
 
 const special = (food: number, shields: number, trade: number) => ({ food, shields, trade });
 const flags = () => ({
@@ -689,6 +702,63 @@ describe('open games and cheats', () => {
     for (let t = 0; t < turns; t++) chatSpyTurn(world, game.rules, spy, ctx, []);
     expect(spy.chatSpy).toBeUndefined();
     expect(hasTreaty(world, civ.slot, 3, TREATY.chatIntercept)).toBe(false);
+  });
+
+  it('Edit City and Edit Unit carry every item of the dialogs', () => {
+    const { game, civ, city } = setup();
+    const other = { ...city, id: 99, improvements: [...city.improvements] };
+    other.improvements[1] = false;
+    other.improvements[4] = true;
+    other.improvements[40] = true;
+    city.improvements[41] = true;
+    city.inDisorder = true;
+    cheatEditCity(city, {
+      copyImprovementsFrom: other,
+      clearWonders: true,
+      clearOrderFlags: true,
+      toggleObjective: true,
+    });
+    expect(city.improvements[1]).toBe(true); // keeps its own Palace state
+    expect(city.improvements[4]).toBe(true);
+    expect(city.improvements[40]).toBe(false);
+    expect(city.improvements[41]).toBe(false);
+    expect(city.inDisorder).toBe(false);
+    expect(city.objective).toBe(true);
+    const unit = cheatCreateUnit(game, 0, civ.slot, 3, 3);
+    unit.movesSpent = 3;
+    cheatEditUnit(game, unit, { toggleVeteran: true, restoreMoves: true, toggleFortified: true });
+    expect(unit.veteran).toBe(true);
+    expect(unit.movesSpent).toBe(0);
+    expect(unit.fortified).toBe(true);
+    cheatEditUnit(game, unit, { toggleFortified: true, homeCity: null });
+    expect(unit.fortified).toBe(false);
+    expect(unit.order).toBe(null);
+    expect(unit.homeCity).toBe(null);
+  });
+
+  it('Change Terrain keeps land masses and writes the seven check boxes', () => {
+    const { world, game } = setup();
+    world.terrain[world.index(4, 6)] = OCEAN;
+    for (const n of world.neighbours(4, 6)) {
+      if (n) world.landmass[world.index(n.x, n.y)] = 5;
+      if (n) world.terrain[world.index(n.x, n.y)] = 2;
+    }
+    cheatChangeTerrain(game, 4, 6, 2);
+    expect(world.landmass[world.index(4, 6)]).toBe(5);
+    const b = cheatSquareImprovements(game, 4, 6);
+    cheatSetSquareImprovements(game, 4, 6, {
+      ...b,
+      irrigation: true,
+      mine: true,
+      railroad: true,
+      fortress: true,
+      airbase: true,
+    });
+    expect(world.hasFlag(4, 6, SquareFlag.Farmland)).toBe(true);
+    expect(world.hasFlag(4, 6, SquareFlag.Road)).toBe(true);
+    expect(world.hasFlag(4, 6, SquareFlag.Fortress)).toBe(false);
+    expect(cheatSquareImprovements(game, 4, 6).airbase).toBe(true);
+    expect(cheatTerrainChain(game, 2)[0]).toBe(2);
   });
 
   it('Edit King copies advances and sets treaties', () => {

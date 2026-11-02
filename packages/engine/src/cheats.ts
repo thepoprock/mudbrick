@@ -15,7 +15,8 @@ import { removeCity } from './fertility.js';
 import { computeFertility } from './fertility.js';
 import type { Game } from './game.js';
 import { lookAround } from './sight.js';
-import type { City, Unit } from './world.js';
+import { ORDER } from './terraform.js';
+import { OCEAN, SquareFlag, type City, type Unit } from './world.js';
 
 export function cheatCreateUnit(
   game: Game,
@@ -71,9 +72,88 @@ export function cheatKillCivilization(game: Game, slot: number): void {
   game.state.destroyedCivilizations = (game.state.destroyedCivilizations ?? 0) + 1;
 }
 
-/** Change Terrain At Cursor (0x005094bf). */
+/**
+ * Change Terrain At Cursor, base terrain (VERIFIED 0x005094bf). A city square is left alone. When
+ * a square crosses between land and ocean it takes the lowest land mass number among its neighbours
+ * of the new kind, 63 when it has none; becoming ocean also clears the no-special bit.
+ */
 export function cheatChangeTerrain(game: Game, x: number, y: number, terrain: number): void {
-  game.world.terrain[game.world.index(x, y)] = terrain;
+  const world = game.world;
+  if (world.cityAt(x, y)) return;
+  const i = world.index(x, y);
+  const was = world.terrain[i];
+  if (was === terrain) return;
+  world.terrain[i] = terrain;
+  if (terrain === OCEAN) world.setFlag(x, y, SquareFlag.NoSpecial, false);
+  if (terrain === OCEAN || was === OCEAN) {
+    let lowest = 63;
+    for (const n of world.neighbours(x, y)) {
+      if (!n || (world.terrainAt(n.x, n.y) === OCEAN) !== (terrain === OCEAN)) continue;
+      lowest = Math.min(lowest, (world.landmass[world.index(n.x, n.y)] ?? 0) & 63);
+    }
+    world.landmass[i] = lowest;
+  }
+  computeFertility(world, game.rules);
+}
+
+/**
+ * The irrigate column followed from a land terrain, which is the short list Change Terrain offers
+ * first (VERIFIED 0x005094bf); the dialog's other button opens all eleven.
+ */
+export function cheatTerrainChain(game: Game, terrain: number): number[] {
+  const out = [terrain];
+  for (let t = game.rules.terrain[terrain]?.irrigate; t?.kind === 'becomes';) {
+    if (out.includes(t.terrainIndex)) break;
+    out.push(t.terrainIndex);
+    t = game.rules.terrain[t.terrainIndex]?.irrigate;
+  }
+  return out;
+}
+
+/** The square's improvements as Change Terrain's seven check boxes (VERIFIED 0x005094bf). */
+export interface CheatSquareImprovements {
+  irrigation: boolean;
+  mine: boolean;
+  road: boolean;
+  railroad: boolean;
+  fortress: boolean;
+  airbase: boolean;
+  pollution: boolean;
+}
+
+export function cheatSquareImprovements(game: Game, x: number, y: number): CheatSquareImprovements {
+  const has = (f: SquareFlag) => game.world.hasFlag(x, y, f);
+  const farm = has(SquareFlag.Farmland);
+  return {
+    irrigation: has(SquareFlag.Irrigation) || farm,
+    mine: has(SquareFlag.Mine) || farm,
+    road: has(SquareFlag.Road),
+    railroad: has(SquareFlag.Railroad),
+    fortress: has(SquareFlag.Fortress) && !has(SquareFlag.Airbase),
+    airbase: has(SquareFlag.Airbase),
+    pollution: has(SquareFlag.Pollution),
+  };
+}
+
+/**
+ * Write the check boxes back (VERIFIED 0x005094bf). In the original's bits both irrigation and
+ * mine make farmland, a railroad brings its road, and an airbase wins over a fortress.
+ */
+export function cheatSetSquareImprovements(
+  game: Game,
+  x: number,
+  y: number,
+  v: CheatSquareImprovements,
+): void {
+  const set = (f: SquareFlag, on: boolean) => game.world.setFlag(x, y, f, on);
+  set(SquareFlag.Farmland, v.irrigation && v.mine);
+  set(SquareFlag.Irrigation, v.irrigation && !v.mine);
+  set(SquareFlag.Mine, v.mine && !v.irrigation);
+  set(SquareFlag.Road, v.road || v.railroad);
+  set(SquareFlag.Railroad, v.railroad);
+  set(SquareFlag.Fortress, v.fortress && !v.airbase);
+  set(SquareFlag.Airbase, v.airbase);
+  set(SquareFlag.Pollution, v.pollution);
   computeFertility(game.world, game.rules);
 }
 
@@ -87,19 +167,64 @@ export function cheatSetMoney(game: Game, slot: number, amount: number): void {
   game.civ(slot).treasury = Math.max(0, Math.min(30000, amount));
 }
 
-/** Edit Unit (0x0050ad7f). */
+/**
+ * Edit Unit (VERIFIED 0x0050ad7f): toggle veteran, restore its moves, set hit points, home city
+ * (null for none), toggle Fortified on a land unit, and a caravan's commodity (0xFF for none).
+ */
 export function cheatEditUnit(
+  game: Game,
   unit: Unit,
-  change: { veteran?: boolean; hitPointsLost?: number },
+  change: {
+    toggleVeteran?: boolean;
+    restoreMoves?: boolean;
+    hitPointsLost?: number;
+    homeCity?: number | null;
+    toggleFortified?: boolean;
+    commodity?: number;
+  },
 ): void {
-  if (change.veteran !== undefined) unit.veteran = change.veteran;
+  const rule = game.rules.units[unit.type];
+  if (change.toggleVeteran) unit.veteran = !unit.veteran;
+  if (change.restoreMoves) unit.movesSpent = 0;
   if (change.hitPointsLost !== undefined) unit.hitPointsLost = Math.max(0, change.hitPointsLost);
+  if (change.homeCity !== undefined) unit.homeCity = change.homeCity;
+  if (change.toggleFortified && rule?.domain === 0) {
+    const on = unit.order !== ORDER.fortified;
+    unit.order = on ? ORDER.fortified : null;
+    unit.fortified = on;
+  }
+  if (change.commodity !== undefined && rule?.role === 7) unit.commodity = change.commodity;
 }
 
-/** Edit City (0x0050b507). */
-export function cheatEditCity(city: City, change: { size?: number; shields?: number }): void {
+/**
+ * Edit City (VERIFIED 0x0050b507): size, clear its wonders, clear disorder and celebration, copy
+ * another city's improvements while keeping its own Palace state, shields, and toggle objective.
+ */
+export function cheatEditCity(
+  city: City,
+  change: {
+    size?: number;
+    shields?: number;
+    clearWonders?: boolean;
+    clearOrderFlags?: boolean;
+    copyImprovementsFrom?: City;
+    toggleObjective?: boolean;
+  },
+): void {
   if (change.size !== undefined) city.size = Math.max(1, Math.min(99, change.size));
   if (change.shields !== undefined) city.shieldsStored = Math.max(0, change.shields);
+  if (change.clearWonders) for (let i = 39; i <= 66; i++) city.improvements[i] = false;
+  if (change.clearOrderFlags) {
+    city.inDisorder = false;
+    city.celebrating = false;
+  }
+  const from = change.copyImprovementsFrom;
+  if (from && from !== city)
+    for (let i = 2; i <= 38; i++) city.improvements[i] = from.improvements[i] === true;
+  if (change.toggleObjective) {
+    if (city.objective) delete city.objective;
+    else city.objective = true;
+  }
 }
 
 /**
