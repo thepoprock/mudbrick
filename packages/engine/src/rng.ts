@@ -6,8 +6,9 @@
  * replays, multiplayer and regression tests possible.
  *
  * Algorithm: xoshiro128** (Blackman & Vigna, 2018), seeded with splitmix32. 32-bit arithmetic
- * only, so it behaves identically in every JavaScript engine. This is OUR generator; the
- * original game's generator is a separate question for the executable analysis.
+ * only, so it behaves identically in every JavaScript engine. This is OUR generator. The
+ * original uses the C library's rand (VERIFIED 0x00591da0), seeded from the clock, and the port
+ * does not reproduce its sequences.
  */
 
 export interface RngState {

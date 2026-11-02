@@ -30,34 +30,29 @@ write down the rule in your own words, cite the address, and mark it VERIFIED or
 
 ## Where the decode stands
 
-Every function in `docs/engine/function-status.tsv` has a `category`:
+Every one of the 5,140 functions in `docs/engine/function-status.tsv` has now been displayed and
+read at least in part. The `kind` column says what each function is. The last pass read 611 window,
+graphics, sound and file library functions, 144 small forwarders and helpers, 1,937 functions
+identical in shape to another, and 353 C and MFC runtime functions. None holds a game rule. In the
+same-code and runtime batches, repeated boilerplate lines such as debug asserts and cleanup calls
+were filtered out of the display.
 
-| Category    | Functions |     Bytes | Meaning                                                                                  |
-| ----------- | --------- | --------: | ---------------------------------------------------------------------------------------- |
-| `read`      | 2,095     | 1,358,932 | Opened one by one and compared with the rules                                            |
-| `same-code` | 1,937     |    63,086 | Identical in shape to another function: constructors, list handlers, message wrappers    |
-| `framework` | 611       |   183,130 | The window, graphics, sound and file library above 0x0055a000; seen as a one-line digest |
-| `library`   | 353       |    79,619 | The C and MFC runtime, not the game's own                                                |
-| `thunk`     | 144       |     6,914 | One line forwarding to another function                                                  |
+One gap is open. Earlier passes opened long functions through a filter that drops drawing calls,
+and bodies over 1,800 characters in the last of those passes showed only their first 30 lines. Up
+to 218 functions below 0x0055a000 may be affected, 82 of them rule functions, with about 839 KB
+possibly unseen. The list is being read to the end. Until that is done, the claim below stands
+only for what has been read. The network packet code is not ported, since the relay does that job
+differently.
 
-Long framework bodies in the `read` group were opened through a filter that drops drawing calls,
-and bodies over 1,800 characters in the last pass show only their first 30 lines. All functions
-below 0x0055a000 that differ in shape were opened. The `framework` functions, 650 at the time, were sorted by
-what they touch and judged from a digest of their strings and calls, with any that looked like
-game code opened in full. They are image decoders, blitters, window, sound and timer code. The
-1,937 `same-code` functions match another function once addresses and numbers are abstracted.
-The network packet code is not ported, since the relay does that job differently.
+The original's random numbers are the C library generator at 0x00591da0, seeded from the clock at
+startup (0x0057b6f6). VERIFIED. The port keeps its own generator, so games reproduce from a seed on
+every machine; it does not reproduce the original's sequences.
 
 That pass found rules the earlier searches missed: the locator grid for long trips, map size
 rules, custom map limits, passwords, the Hall of Fame, Find Commodity, custom tribes, the Parley
 cancel button and the computer taking over a lost player. All are ported. So the claim is: no rule
 of the standard game is known to be missing. It is not that every line of the window library has
 been read.
-
-A call-graph check covers the `framework` group: none of the 650 it then held reads game tables, and
-the 41 that call below 0x0055a000 reach only file, rectangle and window-constructor helpers. Of
-those 650, 39 have since been opened, which leaves 611. Every
-group of `same-code` functions has at least one member opened.
 
 The locator grid is a case worth knowing. The search at 0x00484325 clears only the first 0x1200
 bytes of its 48 by 48 table of ints, half of it, so costs from earlier searches steer later ones.
