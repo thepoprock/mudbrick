@@ -20,8 +20,9 @@ Not yet: the scenario editors.
 
 Music plays from your own CD tracks (`track02.wav` and so on) in the game folder. Films need `scripts/convert-videos.ts`, because browsers cannot play the original format.
 
-**The decode is not finished.** [docs/decoding.md](docs/decoding.md) says how far it has got and how
-to help.
+**To understand the original program,** start with [docs/roadmap.md](docs/roadmap.md): a guided
+tour, and a name and description for each of its 5,140 functions that a Ghidra script applies to
+your own copy. [docs/decoding.md](docs/decoding.md) says how the decode was done and how to help.
 
 ## Why
 

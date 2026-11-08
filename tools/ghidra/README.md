@@ -17,14 +17,15 @@ this repository; the scripts only read what you point them at.
      -scriptPath tools/ghidra -postScript DecompileOne.java 0x0052d472 attack.c
    ```
 
-| script              | arguments         | prints                                                         |
-| ------------------- | ----------------- | -------------------------------------------------------------- |
-| DumpFunctions.java  | out.tsv           | every function: address, size, name, callers, callees          |
-| DecompileOne.java   | address out.c     | the decompiled C of one function                               |
-| FindStringRefs.java | substring…        | defined strings containing a substring and who references them |
-| RefsToAddrs.java    | address…          | functions referencing each data address; those using ≥ 3       |
-| FindScalar.java     | value…            | instructions carrying a given immediate (e.g. RNG constants)   |
-| CallersOf.java      | function-address… | callers of a function, including through thunks                |
+| script                | arguments         | prints                                                                                                                      |
+| --------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| DumpFunctions.java    | out.tsv           | every function: address, size, name, callers, callees                                                                       |
+| DecompileOne.java     | address out.c     | the decompiled C of one function                                                                                            |
+| FindStringRefs.java   | substring…        | defined strings containing a substring and who references them                                                              |
+| RefsToAddrs.java      | address…          | functions referencing each data address; those using ≥ 3                                                                    |
+| FindScalar.java       | value…            | instructions carrying a given immediate (e.g. RNG constants)                                                                |
+| CallersOf.java        | function-address… | callers of a function, including through thunks                                                                             |
+| ApplyFunctionMap.java | function-map.tsv  | names and comments every function from `docs/functions/function-map.tsv` and labels the main tables (see `docs/roadmap.md`) |
 
 Addresses in `docs/engine/exe-notes.md` are for the Multiplayer Gold Edition executable with
 SHA-256 `f5196e31…b04c40` (see `docs/research/inventory.sha256`). Other editions differ.

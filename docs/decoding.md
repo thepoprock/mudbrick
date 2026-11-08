@@ -1,7 +1,8 @@
 # Decoding the original
 
 The port is built from a full reading of the original program. This page says how to take part and
-what is left. `docs/engine/function-status.tsv` lists every function in the executable.
+what is left. For a guided tour of the program and a name and description for every function, see
+[roadmap.md](roadmap.md) and [functions/function-map.tsv](functions/function-map.tsv). `docs/engine/function-status.tsv` lists every function in the executable.
 
 ## The list
 
@@ -11,8 +12,8 @@ what is left. `docs/engine/function-status.tsv` lists every function in the exec
 | size    | bytes of machine code                                                                |
 | kind    | sorted automatically by what it touches: rules, screen, interface, network, runtime, |
 |         | library or helper. A first sort, not a verdict: open the function before trusting it |
-| status  | `read`: decompiled and looked at for the port, possibly only in part. `named`: its   |
-|         | address appears in the notes. `unread`: nobody has opened it yet                     |
+| status  | `read`: opened one by one. `swept`: displayed in the batch pass over library, same-  |
+|         | code, runtime and forwarder functions. `named`: its address appears in the notes     |
 | callers | how many functions call it                                                           |
 | touches | which game tables it reads or writes                                                 |
 

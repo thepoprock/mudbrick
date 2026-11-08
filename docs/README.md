@@ -7,6 +7,10 @@ confirm they are looking at the same bytes. The legal basis for this work is in
 
 Labels: **VERIFIED** = checked against the files, the game or a test; **INFERRED** = not yet.
 
+**New here? Start with [roadmap.md](roadmap.md).** It explains how the original program is put
+together, and with [functions/function-map.tsv](functions/function-map.tsv) and a Ghidra script it
+gives every one of its 5,140 functions a name and a description.
+
 ## File formats (`formats/`)
 
 | document                                   | covers                                                                             | parser                                                                 |
